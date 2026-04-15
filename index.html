@@ -495,10 +495,6 @@ function goBack() {
 function onSearchInput() {
   const val = document.getElementById('search-input').value;
   document.getElementById('btn-clear').style.display = val ? 'block' : 'none';
-  clearTimeout(searchTimeout);
-  if (val.length >= 2) {
-    searchTimeout = setTimeout(() => doSearch(), 400);
-  }
 }
 
 function clearSearch() {
