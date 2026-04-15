@@ -498,6 +498,13 @@ function goToSearch() {
   document.getElementById('search-input').focus();
 }
 
+// ── NORMALIZE (insensibil la diacritice) ─────────────────────────
+function normQuery(s) {
+  s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  [['ș','s'],['Ș','S'],['ț','t'],['Ț','T'],['ş','s'],['Ş','S'],['ţ','t'],['Ţ','T']].forEach(([a,b])=>{ s=s.split(a).join(b); });
+  return s.toLowerCase();
+}
+
 // ── SEARCH ───────────────────────────────────────────────────────
 function onSearchInput() {
   const val = document.getElementById('search-input').value;
@@ -516,10 +523,11 @@ async function doSearch() {
 
   showLoading(true);
   try {
-    const enc = encodeURIComponent(`%${query}%`);
-    const url = `${SUPABASE_URL}/rest/v1/produse`
+    const enc     = encodeURIComponent(`%${query}%`);
+    const encNorm = encodeURIComponent(`%${normQuery(query)}%`);
+    const url = `${window.SUPABASE_URL}/rest/v1/produse`
               + `?select=cod_art,cod_bare,nume_art,um`
-              + `&or=(nume_art.ilike.${enc},cod_art.ilike.${enc},cod_bare.ilike.${enc})`
+              + `&or=(search_text.ilike.${encNorm},cod_art.ilike.${enc},cod_bare.ilike.${enc})`
               + `&limit=100`;
 
     const resp = await fetch(url, { headers: HEADERS });
