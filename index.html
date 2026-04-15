@@ -522,6 +522,12 @@ async function doSearch() {
     const resp = await fetch(url, { headers: HEADERS });
     const data = await resp.json();
 
+    // Verifica erori Supabase
+    if (!resp.ok || !Array.isArray(data)) {
+      const msg = data?.message || data?.error || data?.hint || JSON.stringify(data);
+      throw new Error(msg);
+    }
+
     // Deduplica pe cod_art
     const seen = {};
     for (const row of data) {
