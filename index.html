@@ -517,10 +517,10 @@ async function doSearch() {
   showLoading(true);
   try {
     const enc = encodeURIComponent(`%${query}%`);
-    const url = `${SUPABASE_URL}/rest/v1/balanta`
+    const url = `${SUPABASE_URL}/rest/v1/produse`
               + `?select=cod_art,cod_bare,nume_art,um`
               + `&or=(nume_art.ilike.${enc},cod_art.ilike.${enc},cod_bare.ilike.${enc})`
-              + `&limit=200`;
+              + `&limit=100`;
 
     const resp = await fetch(url, { headers: HEADERS });
     const data = await resp.json();
@@ -543,7 +543,8 @@ async function doSearch() {
     renderResults(query, produse);
     showScreen('results');
   } catch (e) {
-    showToast('Eroare conexiune: ' + e.message);
+    const msg = e.message.includes('timeout') ? 'Conexiune lentă — încearcă din nou' : 'Eroare conexiune. Verifică internetul.';
+    showToast(msg);
   } finally {
     showLoading(false);
   }
