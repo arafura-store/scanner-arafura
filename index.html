@@ -232,6 +232,14 @@
       flex-shrink: 0;
     }
     .product-info { flex: 1; min-width: 0; }
+    .product-furnizor {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue);
+      margin-top: 3px;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
     .product-name {
       font-size: 16px;
       font-weight: 600;
@@ -538,7 +546,7 @@ async function doSearch() {
     const enc     = encodeURIComponent(`%${query}%`);
     const encNorm = encodeURIComponent(`%${normQuery(query)}%`);
     const url = `${window.SUPABASE_URL}/rest/v1/produse`
-              + `?select=cod_art,cod_bare,nume_art,um`
+              + `?select=cod_art,cod_bare,nume_art,um,furnizor`
               + `&or=(search_text.ilike.${encNorm},cod_art.ilike.${enc},cod_bare.ilike.${enc})`
               + `&limit=100`;
 
@@ -599,6 +607,7 @@ function renderResults(query, produse) {
       <div class="product-icon">${icon}</div>
       <div class="product-info">
         <div class="product-name">${escHtml(p.nume_art || '—')}</div>
+        ${p.furnizor ? `<div class="product-furnizor">${escHtml(p.furnizor)}</div>` : ''}
         <div class="product-meta">
           <span class="product-cod">COD: ${escHtml(p.cod_art)}</span>
           ${p.um ? `<span class="product-um">${escHtml(p.um)}</span>` : ''}
