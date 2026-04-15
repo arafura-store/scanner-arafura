@@ -1,12 +1,13 @@
 // ── SERVICE WORKER — Scanner Produse ARAFURA ──────────────────────
 // Versiune cache — schimba acest string la fiecare deploy pentru a forta update
-const CACHE_VERSION = 'arafura-scanner-v1';
+const CACHE_VERSION = 'arafura-scanner-v2';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js',
 ];
+// config.js NU se cacheaza — se incarca mereu fresh din retea
 
 // ── INSTALL: cacheeaza toate resursele ────────────────────────────
 self.addEventListener('install', event => {
@@ -36,6 +37,12 @@ self.addEventListener('fetch', event => {
 
   // Pentru Supabase — mereu network (nu cacheeaza date live)
   if (url.hostname.includes('supabase.co')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  // Pentru config.js — mereu network (credentiale, nu se cacheaza)
+  if (url.pathname.endsWith('config.js')) {
     event.respondWith(fetch(event.request));
     return;
   }
