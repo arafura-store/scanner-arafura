@@ -648,24 +648,43 @@ function showBarcode(product) {
     area.appendChild(lbl);
 
   } else {
-    // Fara cod de bare — afiseaza codul intern mare
-    const noEl = document.createElement('div');
-    noEl.className = 'barcode-no-ean';
-    noEl.innerHTML = `<div class="barcode-no-ean-icon">📋</div>
-      <div style="font-size:15px; margin-bottom:16px;">Produsul nu are cod EAN-13</div>`;
+    // Fara cod EAN-13 — genereaza CODE128 din codul intern
+    const frame = document.createElement('div');
+    frame.className = 'barcode-frame';
 
-    const codEl = document.createElement('div');
-    codEl.className = 'barcode-cod-intern';
-    codEl.textContent = product.cod_art;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'barcode-svg';
+    frame.appendChild(svg);
 
-    const lblEl = document.createElement('div');
-    lblEl.className = 'barcode-label';
-    lblEl.style.marginTop = '10px';
-    lblEl.textContent = 'Cod intern — folosiți căutarea manuală';
+    const numEl = document.createElement('div');
+    numEl.className = 'barcode-number';
+    numEl.textContent = product.cod_art;
+    frame.appendChild(numEl);
 
-    area.appendChild(noEl);
-    area.appendChild(codEl);
-    area.appendChild(lblEl);
+    area.appendChild(frame);
+
+    try {
+      JsBarcode(svg, product.cod_art, {
+        format:       'CODE128',
+        width:        2.5,
+        height:       100,
+        displayValue: false,
+        margin:       10,
+        background:   '#ffffff',
+        lineColor:    '#000000',
+      });
+      const lbl = document.createElement('div');
+      lbl.className = 'barcode-label';
+      lbl.textContent = 'Cod intern — apropiați scanerul de ecran';
+      area.appendChild(lbl);
+    } catch(e) {
+      // Fallback text daca nici CODE128 nu merge
+      frame.innerHTML = `<div class="barcode-no-ean">
+        <div class="barcode-no-ean-icon">📋</div>
+        <div style="font-size:15px; margin-bottom:16px;">Produsul nu are cod de bare</div>
+      </div>
+      <div class="barcode-cod-intern">${escHtml(product.cod_art)}</div>`;
+    }
   }
 
   showScreen('barcode');
