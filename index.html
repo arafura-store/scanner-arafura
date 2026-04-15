@@ -518,6 +518,15 @@ function goToSearch() {
   document.getElementById('search-input').focus();
 }
 
+// ── CURATA NUME FURNIZOR ─────────────────────────────────────────
+function cleanFurnizor(s) {
+  if (!s) return '';
+  return s
+    .replace(/\b(SRL|SA|RA|SNC|SCS|PFA|II|IF|SARL|SA\.?|S\.R\.L\.?|R\.A\.?)\b\.?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // ── NORMALIZE (insensibil la diacritice) ─────────────────────────
 function normQuery(s) {
   s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -607,7 +616,7 @@ function renderResults(query, produse) {
       <div class="product-icon">${icon}</div>
       <div class="product-info">
         <div class="product-name">${escHtml(p.nume_art || '—')}</div>
-        ${p.furnizor ? `<div class="product-furnizor">${escHtml(p.furnizor)}</div>` : ''}
+        ${p.furnizor ? `<div class="product-furnizor">${escHtml(cleanFurnizor(p.furnizor))}</div>` : ''}
         <div class="product-meta">
           <span class="product-cod">COD: ${escHtml(p.cod_art)}</span>
           ${p.um ? `<span class="product-um">${escHtml(p.um)}</span>` : ''}
