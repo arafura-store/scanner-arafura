@@ -373,6 +373,34 @@
       color: var(--sub);
       text-align: center;
     }
+    /* ── FOTO ──────────────────────────────── */
+    .product-foto {
+      width: 48px; height: 48px;
+      border-radius: 10px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .barcode-foto {
+      width: 100%;
+      max-width: 300px;
+      max-height: 250px;
+      object-fit: contain;
+      border-radius: 12px;
+      border: 2px solid var(--border);
+    }
+    .btn-foto {
+      padding: 14px 30px;
+      font-size: 16px;
+      font-weight: 600;
+      background: #e8f0fe;
+      border: 2px solid var(--blue);
+      border-radius: var(--radius);
+      cursor: pointer;
+      color: var(--blue);
+    }
+    .btn-foto:active { background: #c5d9f7; }
+    .foto-input { display: none; }
+
     .btn-brightness {
       padding: 14px 30px;
       font-size: 16px;
@@ -482,8 +510,13 @@
     <span class="product-cod" id="bc-cod"></span>
     <span class="product-um"  id="bc-um"></span>
   </div>
+  <div id="bc-foto-container"></div>
   <div class="barcode-area" id="bc-area"></div>
-  <button class="btn-brightness" onclick="toggleBrightness()">☀️ Luminozitate maximă</button>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+    <button class="btn-foto" id="btn-foto" onclick="document.getElementById('foto-input').click()">📷 Adaugă foto</button>
+    <button class="btn-brightness" onclick="toggleBrightness()">☀️ Luminozitate maximă</button>
+  </div>
+  <input type="file" accept="image/*" capture="environment" class="foto-input" id="foto-input" onchange="uploadFoto(this)">
 </div>
 
 <script>
@@ -603,7 +636,7 @@ async function doSearch() {
     }
 
     const url = `${window.SUPABASE_URL}/rest/v1/produse`
-              + `?select=cod_art,cod_bare,nume_art,um,furnizor`
+              + `?select=cod_art,cod_bare,nume_art,um,furnizor,foto_url`
               + `&${filter}`
               + `&limit=500`;
 
@@ -697,8 +730,11 @@ function createProductCard(p) {
   const icon = getProductIcon(p.nume_art);
   const card = document.createElement('div');
   card.className = 'product-card';
+  const imgOrIcon = p.foto_url
+    ? `<img class="product-foto" src="${escHtml(p.foto_url)}" alt="" onerror="this.outerHTML='<div class=\\'product-icon\\'>${icon}</div>'">`
+    : `<div class="product-icon">${icon}</div>`;
   card.innerHTML = `
-    <div class="product-icon">${icon}</div>
+    ${imgOrIcon}
     <div class="product-info">
       <div class="product-name">${escHtml(p.nume_art || '—')}</div>
       ${p.furnizor ? `<div class="product-furnizor">${escHtml(cleanFurnizor(p.furnizor))}</div>` : ''}
@@ -713,11 +749,101 @@ function createProductCard(p) {
   return card;
 }
 
+// ── FOTO URL HELPER ──────────────────────────────────────────────
+function getFotoUrl(cod_art) {
+  return `${window.SUPABASE_URL}/storage/v1/object/public/produse-foto/${cod_art}.jpg`;
+}
+
+// ── UPLOAD FOTO ──────────────────────────────────────────────────
+let currentProduct = null;
+
+async function uploadFoto(input) {
+  if (!input.files || !input.files[0] || !currentProduct) return;
+  const file = input.files[0];
+  const cod = currentProduct.cod_art;
+
+  showLoading(true);
+  try {
+    // Comprima imaginea inainte de upload
+    const compressed = await compressImage(file, 800, 0.7);
+    const path = `${cod}.jpg`;
+
+    // Upsert: sterge daca exista, apoi uploadeaza
+    await fetch(`${window.SUPABASE_URL}/storage/v1/object/produse-foto/${path}`, {
+      method: 'DELETE', headers: HEADERS
+    });
+
+    const resp = await fetch(`${window.SUPABASE_URL}/storage/v1/object/produse-foto/${path}`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'image/jpeg' },
+      body: compressed
+    });
+
+    if (resp.ok) {
+      // Actualizeaza foto_url in baza de date
+      const fotoUrl = getFotoUrl(cod);
+      await fetch(`${window.SUPABASE_URL}/rest/v1/produse?cod_art=eq.${encodeURIComponent(cod)}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ foto_url: fotoUrl })
+      });
+
+      // Afiseaza poza
+      const container = document.getElementById('bc-foto-container');
+      container.innerHTML = `<img class="barcode-foto" src="${fotoUrl}?t=${Date.now()}" alt="Foto produs">`;
+      document.getElementById('btn-foto').innerHTML = '📷 Schimbă foto';
+      showToast('Foto salvată!');
+    } else {
+      const err = await resp.json();
+      throw new Error(err.message || 'Upload failed');
+    }
+  } catch (e) {
+    showToast('Eroare upload: ' + e.message);
+  } finally {
+    showLoading(false);
+    input.value = '';
+  }
+}
+
+function compressImage(file, maxSize, quality) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+          else       { w = Math.round(w * maxSize / h); h = maxSize; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 // ── SHOW BARCODE ──────────────────────────────────────────────────
 function showBarcode(product) {
+  currentProduct = product;
   document.getElementById('bc-name').textContent = product.nume_art || '—';
   document.getElementById('bc-cod').textContent  = 'COD: ' + product.cod_art;
   document.getElementById('bc-um').textContent   = product.um || '';
+
+  // Afiseaza foto daca exista
+  const fotoContainer = document.getElementById('bc-foto-container');
+  if (product.foto_url) {
+    fotoContainer.innerHTML = `<img class="barcode-foto" src="${product.foto_url}" alt="Foto produs"
+      onerror="this.parentElement.innerHTML=''">`;
+    document.getElementById('btn-foto').innerHTML = '📷 Schimbă foto';
+  } else {
+    fotoContainer.innerHTML = '';
+    document.getElementById('btn-foto').innerHTML = '📷 Adaugă foto';
+  }
 
   const area = document.getElementById('bc-area');
   area.innerHTML = '';
