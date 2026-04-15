@@ -552,11 +552,25 @@ async function doSearch() {
 
   showLoading(true);
   try {
-    const enc     = encodeURIComponent(`%${query}%`);
-    const encNorm = encodeURIComponent(`%${normQuery(query)}%`);
+    const qNorm = normQuery(query);
+    const words = qNorm.split(/\s+/).filter(w => w.length > 0);
+
+    let filter;
+    if (words.length === 1) {
+      // Un singur cuvant: cauta in search_text, cod_art, cod_bare
+      const enc     = encodeURIComponent(`%${query}%`);
+      const encNorm = encodeURIComponent(`%${qNorm}%`);
+      filter = `or=(search_text.ilike.${encNorm},cod_art.ilike.${enc},cod_bare.ilike.${enc})`;
+    } else {
+      // Mai multe cuvinte: TOATE trebuie sa apara in search_text (AND)
+      const andParts = words.map(w => `search_text.ilike.${encodeURIComponent('%' + w + '%')}`).join(',');
+      const enc      = encodeURIComponent(`%${query}%`);
+      filter = `and=(${andParts})&or=(cod_art.ilike.${enc},cod_bare.ilike.${enc},and(${andParts}))`;
+    }
+
     const url = `${window.SUPABASE_URL}/rest/v1/produse`
               + `?select=cod_art,cod_bare,nume_art,um,furnizor`
-              + `&or=(search_text.ilike.${encNorm},cod_art.ilike.${enc},cod_bare.ilike.${enc})`
+              + `&${filter}`
               + `&limit=100`;
 
     const resp = await fetch(url, { headers: HEADERS });
