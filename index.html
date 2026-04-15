@@ -534,6 +534,21 @@ function normQuery(s) {
   return s.toLowerCase();
 }
 
+// ── STEM ROMANESC (taie terminatii comune) ──────────────────────
+function stemRo(word) {
+  if (word.length <= 3) return word;
+  const endings = ['urilor','elor','ilor','ului','urile','arile','atele',
+                    'uri','ele','ile','ate','ata','ari','are','ere','ire','iei',
+                    'ul','ea','ia','ii','le','or',
+                    'a','e','i','u'];
+  for (const end of endings) {
+    if (word.endsWith(end) && word.length - end.length >= 3) {
+      return word.slice(0, -end.length);
+    }
+  }
+  return word;
+}
+
 // ── SEARCH ───────────────────────────────────────────────────────
 function onSearchInput() {
   const val = document.getElementById('search-input').value;
@@ -554,16 +569,18 @@ async function doSearch() {
   try {
     const qNorm = normQuery(query);
     const words = qNorm.split(/\s+/).filter(w => w.length > 0);
+    // Stem fiecare cuvant pt a gasi si forme diferite (agrafa->agraf matches agrafe)
+    const stems = words.map(w => stemRo(w));
 
     let filter;
     if (words.length === 1) {
-      // Un singur cuvant: cauta in search_text, cod_art, cod_bare
+      // Un singur cuvant: cauta stem in search_text, exact in cod_art, cod_bare
       const enc     = encodeURIComponent(`%${query}%`);
-      const encNorm = encodeURIComponent(`%${qNorm}%`);
-      filter = `or=(search_text.ilike.${encNorm},cod_art.ilike.${enc},cod_bare.ilike.${enc})`;
+      const encStem = encodeURIComponent(`%${stems[0]}%`);
+      filter = `or=(search_text.ilike.${encStem},cod_art.ilike.${enc},cod_bare.ilike.${enc})`;
     } else {
-      // Mai multe cuvinte: TOATE trebuie sa apara in search_text (AND)
-      const andParts = words.map(w => `search_text.ilike.${encodeURIComponent('%' + w + '%')}`).join(',');
+      // Mai multe cuvinte: TOATE stem-urile trebuie sa apara in search_text (AND)
+      const andParts = stems.map(w => `search_text.ilike.${encodeURIComponent('%' + w + '%')}`).join(',');
       const enc      = encodeURIComponent(`%${query}%`);
       filter = `and=(${andParts})&or=(cod_art.ilike.${enc},cod_bare.ilike.${enc},and(${andParts}))`;
     }
