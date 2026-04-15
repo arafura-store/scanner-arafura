@@ -588,10 +588,13 @@ async function doSearch() {
     const url = `${window.SUPABASE_URL}/rest/v1/produse`
               + `?select=cod_art,cod_bare,nume_art,um,furnizor`
               + `&${filter}`
-              + `&limit=100`;
+              + `&limit=500`;
 
-    const resp = await fetch(url, { headers: HEADERS });
+    const resp = await fetch(url, { headers: {...HEADERS, 'Prefer': 'count=exact'} });
     const data = await resp.json();
+    // Numarul total de potriviri din header (poate fi mai mare decat cele returnate)
+    const rangeHeader = resp.headers.get('content-range');
+    const totalCount = rangeHeader ? parseInt(rangeHeader.split('/')[1]) : null;
 
     // Verifica erori Supabase
     if (!resp.ok || !Array.isArray(data)) {
@@ -619,7 +622,7 @@ async function doSearch() {
       return scoreB - scoreA;  // mai multe potriviri exacte = primul
     });
 
-    renderResults(query, produse);
+    renderResults(query, produse, totalCount);
     showScreen('results');
   } catch (e) {
     const msg = e.message.includes('timeout') ? 'Conexiune lentă — încearcă din nou' : 'Eroare conexiune. Verifică internetul.';
@@ -630,11 +633,12 @@ async function doSearch() {
 }
 
 // ── RENDER RESULTS ────────────────────────────────────────────────
-function renderResults(query, produse) {
+function renderResults(query, produse, totalCount) {
   document.getElementById('results-query-text').textContent = query;
+  const count = totalCount != null ? totalCount : produse.length;
   document.getElementById('results-count').textContent =
-    produse.length === 0 ? 'Niciun rezultat' :
-    produse.length === 1 ? '1 produs' : `${produse.length} produse`;
+    count === 0 ? 'Niciun rezultat' :
+    count === 1 ? '1 produs' : `${count} produse`;
 
   const list = document.getElementById('results-list');
   list.innerHTML = '';
