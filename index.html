@@ -448,7 +448,10 @@
     <span class="product-um"  id="bc-um"></span>
   </div>
   <div class="barcode-area" id="bc-area"></div>
-  <button class="btn-brightness" onclick="toggleBrightness()">☀️ Luminozitate maximă</button>
+  <div style="display:flex; gap:12px; width:100%; max-width:500px; margin-top:8px;">
+    <button class="btn-brightness" onclick="toggleBrightness()" style="flex:1;">☀️ Luminozitate maximă</button>
+    <button onclick="goToSearch()" style="flex:1; padding:14px 20px; font-size:16px; font-weight:600; background:#1a73e8; color:white; border:none; border-radius:14px; cursor:pointer;">🔍 Caută alt produs</button>
+  </div>
 </div>
 
 <script>
@@ -489,6 +492,11 @@ function showScreen(name) {
 function goBack() {
   if (currentScreen === 'barcode')  showScreen('results');
   else if (currentScreen === 'results') showScreen('search');
+}
+
+function goToSearch() {
+  showScreen('search');
+  document.getElementById('search-input').focus();
 }
 
 // ── SEARCH ───────────────────────────────────────────────────────
