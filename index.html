@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Scanner Produse — ARAFURA</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a73e8">
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --blue:    #1a73e8;
+      --blue2:   #1557b0;
+      --green:   #1e8449;
+      --red:     #c0392b;
+      --bg:      #f4f6f9;
+      --card:    #ffffff;
+      --text:    #1a1a2e;
+      --sub:     #6b7280;
+      --border:  #e5e7eb;
+      --radius:  14px;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ─────────────────────────────── */
+    .header {
+      background: var(--blue);
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      flex-shrink: 0;
+    }
+    .header-logo {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+    .header-sub {
+      font-size: 13px;
+      opacity: .8;
+    }
+    .header-back {
+      background: rgba(255,255,255,.2);
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 18px;
+      cursor: pointer;
+      display: none;
+    }
+    .header-back:active { background: rgba(255,255,255,.35); }
+
+    /* ── SCREENS ────────────────────────────── */
+    .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+    .screen.active { display: flex; }
+
+    /* ── SCREEN 1: SEARCH ───────────────────── */
+    #screen-search {
+      justify-content: center;
+      align-items: center;
+      padding: 30px 24px;
+      gap: 24px;
+    }
+    .search-icon { font-size: 64px; }
+    .search-title {
+      font-size: 26px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text);
+    }
+    .search-subtitle {
+      font-size: 15px;
+      color: var(--sub);
+      text-align: center;
+    }
+    .search-box {
+      width: 100%;
+      max-width: 600px;
+      position: relative;
+    }
+    .search-input {
+      width: 100%;
+      padding: 18px 60px 18px 20px;
+      font-size: 20px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      outline: none;
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      transition: border-color .2s;
+    }
+    .search-input:focus { border-color: var(--blue); }
+    .search-input::placeholder { color: #bbb; }
+    .btn-clear {
+      position: absolute;
+      right: 16px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none;
+      font-size: 22px; color: #bbb;
+      cursor: pointer; display: none;
+    }
+    .search-buttons {
+      display: flex;
+      gap: 14px;
+      width: 100%;
+      max-width: 600px;
+    }
+    .btn-search {
+      flex: 1;
+      padding: 16px;
+      font-size: 18px;
+      font-weight: 600;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-search:active { background: var(--blue2); }
+    .btn-voice {
+      padding: 16px 20px;
+      font-size: 24px;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all .15s;
+      position: relative;
+    }
+    .btn-voice.listening {
+      background: #fee2e2;
+      border-color: var(--red);
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(192,57,43,.3); }
+      50%       { box-shadow: 0 0 0 10px rgba(192,57,43,0); }
+    }
+    .voice-hint {
+      font-size: 13px;
+      color: var(--sub);
+      text-align: center;
+    }
+
+    /* ── SCREEN 2: RESULTS ──────────────────── */
+    #screen-results { padding: 0; }
+    .results-bar {
+      padding: 12px 18px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .results-query {
+      font-size: 15px;
+      color: var(--sub);
+    }
+    .results-query strong { color: var(--text); }
+    .results-count {
+      font-size: 14px;
+      color: var(--sub);
+      background: var(--bg);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .results-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .product-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      border: 2px solid transparent;
+      transition: border-color .15s, box-shadow .15s;
+      -webkit-user-select: none;
+    }
+    .product-card:active {
+      border-color: var(--blue);
+      box-shadow: 0 2px 12px rgba(26,115,232,.15);
+    }
+    .product-icon {
+      width: 48px; height: 48px;
+      background: #e8f0fe;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .product-info { flex: 1; min-width: 0; }
+    .product-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+      word-break: break-word;
+    }
+    .product-meta {
+      display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap;
+    }
+    .product-cod {
+      font-size: 12px;
+      color: var(--sub);
+      background: var(--bg);
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .product-um {
+      font-size: 12px;
+      color: var(--green);
+      background: #e8f5e9;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .product-barcode-badge {
+      font-size: 12px;
+      color: #7c3aed;
+      background: #ede9fe;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .product-arrow {
+      font-size: 20px;
+      color: #d1d5db;
+      flex-shrink: 0;
+    }
+    .no-results {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--sub);
+    }
+    .no-results-icon { font-size: 52px; margin-bottom: 12px; }
+    .no-results-text { font-size: 18px; font-weight: 600; }
+    .no-results-sub  { font-size: 14px; margin-top: 6px; }
+
+    /* ── SCREEN 3: BARCODE ──────────────────── */
+    #screen-barcode {
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      background: white;
+    }
+    .barcode-product-name {
+      font-size: 20px;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text);
+      line-height: 1.3;
+      max-width: 100%;
+    }
+    .barcode-metas {
+      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    }
+    .barcode-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+    }
+    .barcode-frame {
+      background: white;
+      border: 3px solid #1a1a2e;
+      border-radius: 16px;
+      padding: 20px 24px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 500px;
+    }
+    #barcode-svg {
+      width: 100%;
+      max-width: 480px;
+    }
+    .barcode-number {
+      font-size: 18px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 3px;
+      color: var(--text);
+      font-weight: 700;
+    }
+    .barcode-no-ean {
+      text-align: center;
+      color: var(--sub);
+      padding: 30px;
+    }
+    .barcode-no-ean-icon { font-size: 52px; margin-bottom: 10px; }
+    .barcode-cod-intern {
+      background: var(--bg);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: 4px;
+      color: var(--text);
+      width: 100%;
+      max-width: 400px;
+    }
+    .barcode-label {
+      font-size: 12px;
+      color: var(--sub);
+      text-align: center;
+    }
+    .btn-brightness {
+      padding: 14px 30px;
+      font-size: 16px;
+      font-weight: 600;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      color: var(--text);
+    }
+    .btn-brightness:active { background: #e5e7eb; }
+
+    /* ── LOADING ────────────────────────────── */
+    .loading {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading.active { display: flex; }
+    .loading-spinner {
+      width: 52px; height: 52px;
+      border: 5px solid rgba(255,255,255,.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── TOAST ──────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 30px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e;
+      color: white;
+      padding: 12px 22px;
+      border-radius: 24px;
+      font-size: 15px;
+      z-index: 200;
+      transition: transform .3s ease;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header" id="header">
+  <button class="header-back" id="btn-back" onclick="goBack()">←</button>
+  <div>
+    <div class="header-logo">ARAFURA</div>
+    <div class="header-sub" id="header-sub">Căutare produse</div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading" id="loading"><div class="loading-spinner"></div></div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ══ SCREEN 1: SEARCH ══ -->
+<div class="screen active" id="screen-search">
+  <div class="search-icon">🔍</div>
+  <div>
+    <div class="search-title">Caută produs</div>
+    <div class="search-subtitle">Introdu numele sau codul intern</div>
+  </div>
+  <div class="search-box">
+    <input
+      class="search-input"
+      id="search-input"
+      type="text"
+      placeholder="ex: pix, dosar, 932786..."
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+      inputmode="search"
+      oninput="onSearchInput()"
+      onkeydown="if(event.key==='Enter') doSearch()"
+    >
+    <button class="btn-clear" id="btn-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div class="search-buttons">
+    <button class="btn-search" onclick="doSearch()">🔎 Caută</button>
+    <button class="btn-voice" id="btn-voice" onclick="toggleVoice()" title="Caută cu vocea">🎤</button>
+  </div>
+  <div class="voice-hint" id="voice-hint">Apasă 🎤 și spune numele produsului</div>
+</div>
+
+<!-- ══ SCREEN 2: RESULTS ══ -->
+<div class="screen" id="screen-results">
+  <div class="results-bar">
+    <div class="results-query">Rezultate pentru: <strong id="results-query-text"></strong></div>
+    <div class="results-count" id="results-count"></div>
+  </div>
+  <div class="results-list" id="results-list"></div>
+</div>
+
+<!-- ══ SCREEN 3: BARCODE ══ -->
+<div class="screen" id="screen-barcode">
+  <div class="barcode-product-name" id="bc-name"></div>
+  <div class="barcode-metas">
+    <span class="product-cod" id="bc-cod"></span>
+    <span class="product-um"  id="bc-um"></span>
+  </div>
+  <div class="barcode-area" id="bc-area"></div>
+  <button class="btn-brightness" onclick="toggleBrightness()">☀️ Luminozitate maximă</button>
+</div>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────
+// SUPABASE_URL si SUPABASE_KEY sunt incarcate din config.js
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+
+// ── STATE ─────────────────────────────────────────────────────────
+let currentScreen = 'search';
+let recognition   = null;
+let isListening   = false;
+let brightMax     = false;
+let searchTimeout = null;
+
+// ── NAVIGATION ───────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  currentScreen = name;
+
+  const backBtn  = document.getElementById('btn-back');
+  const headerSub = document.getElementById('header-sub');
+
+  if (name === 'search') {
+    backBtn.style.display = 'none';
+    headerSub.textContent = 'Căutare produse';
+    // Restore brightness
+    if (brightMax) toggleBrightness();
+  } else if (name === 'results') {
+    backBtn.style.display = 'block';
+    headerSub.textContent = 'Rezultate căutare';
+  } else if (name === 'barcode') {
+    backBtn.style.display = 'block';
+    headerSub.textContent = 'Cod de bare';
+  }
+}
+
+function goBack() {
+  if (currentScreen === 'barcode')  showScreen('results');
+  else if (currentScreen === 'results') showScreen('search');
+}
+
+// ── SEARCH ───────────────────────────────────────────────────────
+function onSearchInput() {
+  const val = document.getElementById('search-input').value;
+  document.getElementById('btn-clear').style.display = val ? 'block' : 'none';
+  clearTimeout(searchTimeout);
+  if (val.length >= 2) {
+    searchTimeout = setTimeout(() => doSearch(), 400);
+  }
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('btn-clear').style.display = 'none';
+  document.getElementById('search-input').focus();
+}
+
+async function doSearch() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) { showToast('Introdu un termen de căutare'); return; }
+
+  showLoading(true);
+  try {
+    const enc = encodeURIComponent(`%${query}%`);
+    const url = `${SUPABASE_URL}/rest/v1/balanta`
+              + `?select=cod_art,cod_bare,nume_art,um`
+              + `&or=(nume_art.ilike.${enc},cod_art.ilike.${enc},cod_bare.ilike.${enc})`
+              + `&limit=200`;
+
+    const resp = await fetch(url, { headers: HEADERS });
+    const data = await resp.json();
+
+    // Deduplica pe cod_art
+    const seen = {};
+    for (const row of data) {
+      if (!seen[row.cod_art] || (row.cod_bare && !seen[row.cod_art].cod_bare)) {
+        seen[row.cod_art] = row;
+      }
+    }
+    const produse = Object.values(seen);
+
+    renderResults(query, produse);
+    showScreen('results');
+  } catch (e) {
+    showToast('Eroare conexiune: ' + e.message);
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ── RENDER RESULTS ────────────────────────────────────────────────
+function renderResults(query, produse) {
+  document.getElementById('results-query-text').textContent = query;
+  document.getElementById('results-count').textContent =
+    produse.length === 0 ? 'Niciun rezultat' :
+    produse.length === 1 ? '1 produs' : `${produse.length} produse`;
+
+  const list = document.getElementById('results-list');
+  list.innerHTML = '';
+
+  if (produse.length === 0) {
+    list.innerHTML = `
+      <div class="no-results">
+        <div class="no-results-icon">😕</div>
+        <div class="no-results-text">Niciun produs găsit</div>
+        <div class="no-results-sub">Încearcă alt termen de căutare</div>
+      </div>`;
+    return;
+  }
+
+  for (const p of produse) {
+    const hasCodBare = p.cod_bare && p.cod_bare.trim() !== '';
+    const icon = getProductIcon(p.nume_art);
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <div class="product-icon">${icon}</div>
+      <div class="product-info">
+        <div class="product-name">${escHtml(p.nume_art || '—')}</div>
+        <div class="product-meta">
+          <span class="product-cod">COD: ${escHtml(p.cod_art)}</span>
+          ${p.um ? `<span class="product-um">${escHtml(p.um)}</span>` : ''}
+          ${hasCodBare ? `<span class="product-barcode-badge">📊 EAN-13</span>` : ''}
+        </div>
+      </div>
+      <div class="product-arrow">›</div>`;
+    card.onclick = () => showBarcode(p);
+    list.appendChild(card);
+  }
+}
+
+// ── SHOW BARCODE ──────────────────────────────────────────────────
+function showBarcode(product) {
+  document.getElementById('bc-name').textContent = product.nume_art || '—';
+  document.getElementById('bc-cod').textContent  = 'COD: ' + product.cod_art;
+  document.getElementById('bc-um').textContent   = product.um || '';
+
+  const area = document.getElementById('bc-area');
+  area.innerHTML = '';
+
+  const codBare = (product.cod_bare || '').trim();
+
+  if (codBare) {
+    // Afiseaza EAN-13
+    const frame = document.createElement('div');
+    frame.className = 'barcode-frame';
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.id = 'barcode-svg';
+    frame.appendChild(svg);
+
+    const numEl = document.createElement('div');
+    numEl.className = 'barcode-number';
+    numEl.textContent = codBare;
+    frame.appendChild(numEl);
+
+    area.appendChild(frame);
+
+    try {
+      JsBarcode(svg, codBare, {
+        format:      'EAN13',
+        width:       3,
+        height:      110,
+        displayValue: false,
+        margin:      10,
+        background:  '#ffffff',
+        lineColor:   '#000000',
+      });
+    } catch(e) {
+      // Fallback Code128 daca nu e EAN-13 valid
+      try {
+        JsBarcode(svg, codBare, {
+          format:  'CODE128',
+          width:   2.5,
+          height:  100,
+          displayValue: false,
+          margin:  10,
+        });
+      } catch(e2) {
+        frame.innerHTML = `<div class="barcode-no-ean">
+          <div class="barcode-no-ean-icon">⚠️</div>
+          <div>Cod de bare invalid: ${escHtml(codBare)}</div>
+        </div>`;
+      }
+    }
+
+    const lbl = document.createElement('div');
+    lbl.className = 'barcode-label';
+    lbl.textContent = 'Apropie scanerul de ecran';
+    area.appendChild(lbl);
+
+  } else {
+    // Fara cod de bare — afiseaza codul intern mare
+    const noEl = document.createElement('div');
+    noEl.className = 'barcode-no-ean';
+    noEl.innerHTML = `<div class="barcode-no-ean-icon">📋</div>
+      <div style="font-size:15px; margin-bottom:16px;">Produsul nu are cod EAN-13</div>`;
+
+    const codEl = document.createElement('div');
+    codEl.className = 'barcode-cod-intern';
+    codEl.textContent = product.cod_art;
+
+    const lblEl = document.createElement('div');
+    lblEl.className = 'barcode-label';
+    lblEl.style.marginTop = '10px';
+    lblEl.textContent = 'Cod intern — folosiți căutarea manuală';
+
+    area.appendChild(noEl);
+    area.appendChild(codEl);
+    area.appendChild(lblEl);
+  }
+
+  showScreen('barcode');
+}
+
+// ── VOICE SEARCH ─────────────────────────────────────────────────
+function initVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'ro-RO';
+  r.continuous = false;
+  r.interimResults = false;
+  r.onresult = (e) => {
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('search-input').value = transcript;
+    document.getElementById('btn-clear').style.display = 'block';
+    stopListening();
+    doSearch();
+  };
+  r.onerror = (e) => {
+    stopListening();
+    if (e.error === 'no-speech') showToast('Nu am auzit nimic, încearcă din nou');
+    else showToast('Eroare microfon: ' + e.error);
+  };
+  r.onend = () => stopListening();
+  return r;
+}
+
+function toggleVoice() {
+  if (!recognition) recognition = initVoice();
+  if (!recognition) { showToast('Vocea nu este suportată pe acest browser'); return; }
+  if (isListening) { stopListening(); return; }
+  isListening = true;
+  document.getElementById('btn-voice').classList.add('listening');
+  document.getElementById('btn-voice').textContent = '🔴';
+  document.getElementById('voice-hint').textContent = 'Ascult... vorbește acum!';
+  try { recognition.start(); }
+  catch(e) { stopListening(); }
+}
+
+function stopListening() {
+  isListening = false;
+  document.getElementById('btn-voice').classList.remove('listening');
+  document.getElementById('btn-voice').textContent = '🎤';
+  document.getElementById('voice-hint').textContent = 'Apasă 🎤 și spune numele produsului';
+  try { recognition && recognition.abort(); } catch(e){}
+}
+
+// ── BRIGHTNESS ───────────────────────────────────────────────────
+function toggleBrightness() {
+  brightMax = !brightMax;
+  document.body.style.background   = brightMax ? '#ffffff' : '';
+  document.getElementById('screen-barcode').style.background = brightMax ? '#ffffff' : 'white';
+  document.querySelector('.btn-brightness').textContent =
+    brightMax ? '🔆 Luminozitate normală' : '☀️ Luminozitate maximă';
+  // Incearca setarea luminozitatii ecranului (necesita permisiune pe unele dispozitive)
+  if (brightMax && screen.orientation) {
+    try { screen.orientation.lock('portrait').catch(()=>{}); } catch(e){}
+  }
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────
+function showLoading(v) {
+  document.getElementById('loading').classList.toggle('active', v);
+}
+
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function escHtml(str) {
+  return String(str || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getProductIcon(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('carte') || n.includes('libris') || n.includes('caiet'))  return '📚';
+  if (n.includes('pix') || n.includes('stilou') || n.includes('creion'))   return '✏️';
+  if (n.includes('dosar') || n.includes('biblioraft'))                      return '📁';
+  if (n.includes('hartie') || n.includes('coala') || n.includes('bloc'))   return '📄';
+  if (n.includes('foarfec') || n.includes('cutter'))                        return '✂️';
+  if (n.includes('calculator') || n.includes('laptop') || n.includes('pc'))return '💻';
+  if (n.includes('clema') || n.includes('capse') || n.includes('banda'))   return '📎';
+  if (n.includes('marker') || n.includes('text'))                           return '🖊️';
+  if (n.includes('agenda') || n.includes('planner'))                        return '📒';
+  if (n.includes('sac') || n.includes('punga'))                             return '🛍️';
+  return '📦';
+}
+
+// Prevent zoom on double tap
+document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+
+// ── SERVICE WORKER ────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Verifica daca exista un update disponibil
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // Update disponibil — afiseaza banner
+          showUpdateBanner();
+        }
+      });
+    });
+  }).catch(e => console.warn('SW error:', e));
+
+  // Cand SW-ul nou a preluat controlul — reincarca pagina
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) { refreshing = true; window.location.reload(); }
+  });
+}
+
+function showUpdateBanner() {
+  const banner = document.createElement('div');
+  banner.style.cssText = `
+    position:fixed; top:0; left:0; right:0; z-index:999;
+    background:#1e8449; color:white;
+    padding:14px 20px; font-size:15px; font-weight:600;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  `;
+  banner.innerHTML = `
+    <span>🔄 Update disponibil!</span>
+    <button onclick="applyUpdate()" style="
+      background:white; color:#1e8449;
+      border:none; padding:8px 16px;
+      border-radius:8px; font-weight:700;
+      font-size:14px; cursor:pointer;
+    ">Actualizează acum</button>
+  `;
+  document.body.prepend(banner);
+}
+
+function applyUpdate() {
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if (reg && reg.waiting) {
+      reg.waiting.postMessage('SKIP_WAITING');
+    }
+  });
+}
+</script>
+</body>
+</html>
