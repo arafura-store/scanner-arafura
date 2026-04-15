@@ -608,6 +608,17 @@ async function doSearch() {
     }
     const produse = Object.values(seen);
 
+    // Sorteaza: mai intai potrivire exacta, apoi potrivire partiala (stem)
+    const qWords = qNorm.split(/\s+/).filter(w => w.length > 0);
+    produse.sort((a, b) => {
+      const na = normQuery(a.nume_art || '');
+      const nb = normQuery(b.nume_art || '');
+      // Scor: cate cuvinte originale apar exact in nume (nu doar stem-ul)
+      const scoreA = qWords.filter(w => na.includes(w)).length;
+      const scoreB = qWords.filter(w => nb.includes(w)).length;
+      return scoreB - scoreA;  // mai multe potriviri exacte = primul
+    });
+
     renderResults(query, produse);
     showScreen('results');
   } catch (e) {
