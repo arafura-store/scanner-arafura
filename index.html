@@ -56,17 +56,20 @@
       font-size: 13px;
       opacity: .8;
     }
-    .header-back {
-      background: rgba(255,255,255,.2);
-      border: none;
-      color: white;
-      padding: 8px 14px;
-      border-radius: 8px;
-      font-size: 18px;
-      cursor: pointer;
+    .header-btn-search {
       display: none;
+      margin-left: auto;
+      background: rgba(255,255,255,.22);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      white-space: nowrap;
     }
-    .header-back:active { background: rgba(255,255,255,.35); }
+    .header-btn-search:active { background: rgba(255,255,255,.38); }
 
     /* ── SCREENS ────────────────────────────── */
     .screen { display: none; flex-direction: column; flex: 1; overflow: hidden; }
@@ -389,11 +392,11 @@
 
 <!-- HEADER -->
 <div class="header" id="header">
-  <button class="header-back" id="btn-back" onclick="goBack()">←</button>
   <div>
     <div class="header-logo">ARAFURA</div>
     <div class="header-sub" id="header-sub">Căutare produse</div>
   </div>
+  <button class="header-btn-search" id="btn-new-search" onclick="goToSearch()">🔍 Caută alt produs</button>
 </div>
 
 <!-- LOADING -->
@@ -448,10 +451,7 @@
     <span class="product-um"  id="bc-um"></span>
   </div>
   <div class="barcode-area" id="bc-area"></div>
-  <div style="display:flex; gap:12px; width:100%; max-width:500px; margin-top:8px;">
-    <button class="btn-brightness" onclick="toggleBrightness()" style="flex:1;">☀️ Luminozitate maximă</button>
-    <button onclick="goToSearch()" style="flex:1; padding:14px 20px; font-size:16px; font-weight:600; background:#1a73e8; color:white; border:none; border-radius:14px; cursor:pointer;">🔍 Caută alt produs</button>
-  </div>
+  <button class="btn-brightness" onclick="toggleBrightness()">☀️ Luminozitate maximă</button>
 </div>
 
 <script>
@@ -472,19 +472,18 @@ function showScreen(name) {
   document.getElementById('screen-' + name).classList.add('active');
   currentScreen = name;
 
-  const backBtn  = document.getElementById('btn-back');
+  const btnSearch = document.getElementById('btn-new-search');
   const headerSub = document.getElementById('header-sub');
 
   if (name === 'search') {
-    backBtn.style.display = 'none';
+    btnSearch.style.display = 'none';
     headerSub.textContent = 'Căutare produse';
-    // Restore brightness
     if (brightMax) toggleBrightness();
   } else if (name === 'results') {
-    backBtn.style.display = 'block';
+    btnSearch.style.display = 'block';
     headerSub.textContent = 'Rezultate căutare';
   } else if (name === 'barcode') {
-    backBtn.style.display = 'block';
+    btnSearch.style.display = 'block';
     headerSub.textContent = 'Cod de bare';
   }
 }
