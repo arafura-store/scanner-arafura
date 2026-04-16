@@ -614,15 +614,14 @@ function renderDetaliiComplet(r, isManager) {
     }
   }
   html += '</div>';
-  const today = new Date().toISOString().slice(0, 10);
   html += `<div class="tranz-add no-print">
     <select id="co-tip-${angId}">
       <option value="concediu">Odihnă</option>
       <option value="medical">Medical</option>
     </select>
-    <input type="date" value="${today}" id="co-start-${angId}">
+    <input type="date" id="co-start-${angId}" placeholder="De la">
     <span style="font-size:13px;">→</span>
-    <input type="date" value="${today}" id="co-end-${angId}">
+    <input type="date" id="co-end-${angId}" placeholder="Până la">
     <button onclick="event.stopPropagation(); adaugaConcediu(${angId}, '${angNume}')">Adaugă concediu</button>
   </div>`;
   html += '</div>';
@@ -683,11 +682,10 @@ function renderTranzItem(t) {
 }
 
 function renderAddForm(angId, angNume, tip) {
-  const today = new Date().toISOString().slice(0, 10);
   const label = tip === 'avans' ? 'Adaugă avans' : 'Adaugă împrumut';
   return `<div class="tranz-add no-print">
-    <input type="number" step="0.01" placeholder="Suma" id="tranz-suma-${tip}-${angId}">
-    <input type="date" value="${today}" id="tranz-data-${tip}-${angId}">
+    <input type="number" step="0.01" placeholder="Suma RON" id="tranz-suma-${tip}-${angId}">
+    <input type="date" id="tranz-data-${tip}-${angId}">
     <input type="text" placeholder="Descriere" id="tranz-desc-${tip}-${angId}">
     <button onclick="event.stopPropagation(); adaugaTranzactie(${angId}, '${angNume}', '${tip}')">${label}</button>
   </div>`;
