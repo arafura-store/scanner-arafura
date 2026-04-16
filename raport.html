@@ -11,6 +11,7 @@
       --blue: #1a73e8;
       --green: #1e8449;
       --red: #c0392b;
+      --orange: #e67e22;
       --bg: #f4f6f9;
       --card: #ffffff;
       --text: #1a1a2e;
@@ -50,7 +51,7 @@
 
     .summary {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 14px;
       margin-bottom: 20px;
     }
@@ -61,11 +62,13 @@
       box-shadow: 0 1px 4px rgba(0,0,0,.06);
     }
     .summary-card .label { font-size: 13px; color: var(--sub); }
-    .summary-card .value { font-size: 28px; font-weight: 800; margin-top: 4px; }
+    .summary-card .value { font-size: 26px; font-weight: 800; margin-top: 4px; }
     .summary-card .value.blue { color: var(--blue); }
     .summary-card .value.green { color: var(--green); }
     .summary-card .value.red { color: var(--red); }
+    .summary-card .value.orange { color: var(--orange); }
 
+    .table-wrap { overflow-x: auto; }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -73,18 +76,18 @@
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 1px 4px rgba(0,0,0,.06);
-      font-size: 14px;
+      font-size: 13px;
     }
     th {
       background: var(--blue);
       color: white;
-      padding: 12px 10px;
+      padding: 10px 8px;
       text-align: left;
-      font-size: 13px;
+      font-size: 12px;
       white-space: nowrap;
     }
     td {
-      padding: 10px;
+      padding: 8px;
       border-bottom: 1px solid var(--border);
     }
     tr:last-child td { border-bottom: none; }
@@ -104,15 +107,19 @@
       font-weight: 700;
       border-top: 2px solid var(--blue);
     }
+    .input-cell {
+      width: 80px;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: right;
+      background: #fffef0;
+    }
+    .input-cell:focus { border-color: var(--blue); outline: none; background: white; }
+    .rest-plata { color: var(--green); font-weight: 700; }
+    .rest-negativ { color: var(--red); }
 
-    .detail-section {
-      margin-top: 30px;
-    }
-    .detail-section h2 {
-      font-size: 18px;
-      margin-bottom: 14px;
-      color: var(--text);
-    }
     .detail-table { margin-bottom: 30px; }
     .day-sat { background: #fef9c3; }
     .day-sun { background: #fee2e2; }
@@ -136,11 +143,33 @@
       cursor: pointer;
     }
     .btn-export:hover { background: #166a3a; }
+    .btn-save {
+      padding: 10px 20px;
+      background: var(--orange);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .manager-stores {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+    }
+    .store-badge {
+      background: var(--bg);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    .store-badge strong { color: var(--blue); }
 
     @media print {
-      body { padding: 0; }
-      .header button, .header select { display: none; }
+      body { padding: 0; font-size: 11px; }
+      .header button, .header select, .btn-save { display: none; }
       .no-print { display: none; }
+      .input-cell { border: none; background: transparent; }
     }
   </style>
 </head>
@@ -152,6 +181,7 @@
     <select id="sel-luna"></select>
     <select id="sel-an"></select>
     <button onclick="genereazaRaport()">Generează</button>
+    <button class="btn-save" id="btn-save" onclick="salveazaFinanciar()" style="display:none">Salvează avansuri</button>
     <button class="btn-export" onclick="window.print()">Printează</button>
   </div>
 </div>
@@ -162,7 +192,11 @@
 const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
 const API = window.SUPABASE_URL + '/rest/v1';
 
-// Populeaza selectoarele
+let raportCurent = null;
+let financiarCurent = {};
+let lunaSelectata = 0;
+let anSelectat = 0;
+
 const luni = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 const selLuna = document.getElementById('sel-luna');
 const selAn = document.getElementById('sel-an');
@@ -197,29 +231,31 @@ async function fetchAll(url) {
 }
 
 async function genereazaRaport() {
-  const luna = parseInt(selLuna.value);
-  const an = parseInt(selAn.value);
+  lunaSelectata = parseInt(selLuna.value);
+  anSelectat = parseInt(selAn.value);
   const content = document.getElementById('content');
   content.innerHTML = '<div class="loading">Se generează raportul...</div>';
 
   try {
-    // Fetch angajati
     const angajati = await fetchAll(`${API}/angajati?select=*&activ=eq.true&order=nume.asc`);
 
-    // Prima si ultima zi a lunii
-    const primaZi = `${an}-${String(luna+1).padStart(2,'0')}-01`;
-    const ultimaZiDate = new Date(an, luna+1, 0);
-    const ultimaZi = `${an}-${String(luna+1).padStart(2,'0')}-${String(ultimaZiDate.getDate()).padStart(2,'0')}`;
+    const primaZi = `${anSelectat}-${String(lunaSelectata+1).padStart(2,'0')}-01`;
+    const ultimaZiDate = new Date(anSelectat, lunaSelectata+1, 0);
+    const ultimaZi = `${anSelectat}-${String(lunaSelectata+1).padStart(2,'0')}-${String(ultimaZiDate.getDate()).padStart(2,'0')}`;
 
-    // Fetch pontaje
     const pontaje = await fetchAll(`${API}/pontaj?select=*&data=gte.${primaZi}&data=lte.${ultimaZi}&order=data.asc,created_at.asc`);
-
-    // Fetch concedii care se suprapun cu luna
     const concedii = await fetchAll(`${API}/concedii?select=*&data_start=lte.${ultimaZi}&data_end=gte.${primaZi}&aprobat=not.eq.false`);
 
-    // Calculeaza raportul
-    const raport = calculeazaRaport(angajati, pontaje, concedii, an, luna);
-    afiseazaRaport(raport, an, luna);
+    // Fetch financiar (avansuri, imprumuturi)
+    const financiar = await fetchAll(`${API}/financiar?select=*&luna=eq.${lunaSelectata+1}&an=eq.${anSelectat}`);
+    financiarCurent = {};
+    for (const f of financiar) {
+      financiarCurent[f.angajat_id] = f;
+    }
+
+    raportCurent = calculeazaRaport(angajati, pontaje, concedii, anSelectat, lunaSelectata);
+    afiseazaRaport(raportCurent, anSelectat, lunaSelectata);
+    document.getElementById('btn-save').style.display = 'inline-block';
 
   } catch (e) {
     content.innerHTML = `<div class="loading">Eroare: ${e.message}</div>`;
@@ -234,46 +270,44 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
     const pontajeAng = pontaje.filter(p => p.angajat_id === ang.id);
     const concediiAng = concedii.filter(c => c.angajat_id === ang.id);
 
-    // Zilele de concediu (set de date string)
     const zileConcediu = new Set();
     for (const c of concediiAng) {
       const start = new Date(c.data_start);
       const end = new Date(c.data_end);
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const ds = d.toISOString().slice(0, 10);
-        // Doar zilele din luna curenta
         if (d.getFullYear() === an && d.getMonth() === luna) {
           zileConcediu.add(ds);
         }
       }
     }
 
-    let oreLucrateLV = 0;    // ore lucrate luni-vineri
-    let oreLucrateWE = 0;    // ore lucrate weekend
+    let oreLucrateLV = 0;
+    let oreLucrateWE = 0;
     let zileLucrateLV = 0;
     let zileLucrateWE = 0;
     let oreConcediu = 0;
     let zileConcediuNr = 0;
     const detaliiZile = [];
 
-    // Grupeaza pontajele pe zile
+    // Ore pe magazine (pt manager)
+    const orePeMagazin = {};
+
     const pontajePeZi = {};
     for (const p of pontajeAng) {
       if (!pontajePeZi[p.data]) pontajePeZi[p.data] = [];
       pontajePeZi[p.data].push(p);
     }
 
-    // Parcurge fiecare zi a lunii
     for (let z = 1; z <= nrZile; z++) {
       const data = new Date(an, luna, z);
       const dataStr = data.toISOString().slice(0, 10);
-      const ziSapt = data.getDay(); // 0=dum, 6=sam
+      const ziSapt = data.getDay();
       const esteWE = (ziSapt === 0 || ziSapt === 6);
       const esteSam = ziSapt === 6;
       const esteDum = ziSapt === 0;
 
       if (zileConcediu.has(dataStr)) {
-        // Zi de concediu
         let oreCO = 0;
         if (esteSam) oreCO = ang.ore_sambata || 0;
         else if (esteDum) oreCO = ang.ore_duminica || 0;
@@ -287,11 +321,14 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
           multiplicator: 1, suma: oreCO * (ang.tarif_ora || 0)
         });
       } else if (pontajePeZi[dataStr]) {
-        // Zi lucrata
         let oreZi = 0;
         for (const p of pontajePeZi[dataStr]) {
           if (p.ora_intrare && p.ora_iesire) {
-            oreZi += (new Date(p.ora_iesire) - new Date(p.ora_intrare)) / 3600000;
+            const ore = (new Date(p.ora_iesire) - new Date(p.ora_intrare)) / 3600000;
+            oreZi += ore;
+            // Ore pe magazin
+            const mag = p.magazin || 'Necunoscut';
+            orePeMagazin[mag] = (orePeMagazin[mag] || 0) + ore;
           }
         }
         oreZi = Math.round(oreZi * 100) / 100;
@@ -315,6 +352,11 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
     const sumCO = esteFix ? 0 : oreConcediu * (ang.tarif_ora || 0);
     const totalSuma = esteFix ? ang.salariu_fix : (sumLV + sumWE + sumCO);
 
+    const fin = financiarCurent[ang.id] || {};
+    const avans = fin.avans || 0;
+    const imprumut = fin.imprumut || 0;
+    const restPlata = totalSuma - avans - imprumut;
+
     rezultate.push({
       angajat: ang,
       oreLucrateLV: Math.round(oreLucrateLV * 100) / 100,
@@ -327,7 +369,10 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
       sumWE: Math.round(sumWE * 100) / 100,
       sumCO: Math.round(sumCO * 100) / 100,
       totalSuma: Math.round(totalSuma * 100) / 100,
-      detaliiZile
+      avans, imprumut,
+      restPlata: Math.round(restPlata * 100) / 100,
+      detaliiZile,
+      orePeMagazin
     });
   }
 
@@ -341,47 +386,53 @@ function numeZi(zi) {
 function afiseazaRaport(raport, an, luna) {
   const content = document.getElementById('content');
 
-  // Totaluri
   const totalSalarii = raport.reduce((s, r) => s + r.totalSuma, 0);
+  const totalAvans = raport.reduce((s, r) => s + r.avans, 0);
+  const totalImprumut = raport.reduce((s, r) => s + r.imprumut, 0);
+  const totalRest = raport.reduce((s, r) => s + r.restPlata, 0);
   const totalOreLV = raport.reduce((s, r) => s + r.oreLucrateLV, 0);
   const totalOreWE = raport.reduce((s, r) => s + r.oreLucrateWE, 0);
-  const totalOreCO = raport.reduce((s, r) => s + r.oreConcediu, 0);
 
   let html = `
     <div class="summary">
       <div class="summary-card">
-        <div class="label">Total salarii</div>
+        <div class="label">Total salarii brut</div>
         <div class="value blue">${totalSalarii.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
       </div>
       <div class="summary-card">
-        <div class="label">Ore lucrate L-V</div>
-        <div class="value green">${totalOreLV.toFixed(1)}h</div>
+        <div class="label">Total avansuri</div>
+        <div class="value orange">${totalAvans.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
       </div>
       <div class="summary-card">
-        <div class="label">Ore weekend (x2)</div>
-        <div class="value red">${totalOreWE.toFixed(1)}h</div>
+        <div class="label">Total împrumuturi</div>
+        <div class="value red">${totalImprumut.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
       </div>
       <div class="summary-card">
-        <div class="label">Ore concediu</div>
-        <div class="value">${totalOreCO.toFixed(1)}h</div>
+        <div class="label">Rest de plată (lichidare)</div>
+        <div class="value green">${totalRest.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Ore L-V / Weekend</div>
+        <div class="value">${totalOreLV.toFixed(1)}h / ${totalOreWE.toFixed(1)}h</div>
       </div>
     </div>
 
+    <div class="table-wrap">
     <table>
       <thead>
         <tr>
           <th>Angajat</th>
           <th>Tarif/h</th>
-          <th class="num">Zile L-V</th>
           <th class="num">Ore L-V</th>
           <th class="num">Suma L-V</th>
-          <th class="num">Zile WE</th>
           <th class="num">Ore WE</th>
           <th class="num">Suma WE (x2)</th>
           <th class="num">Zile CO</th>
-          <th class="num">Ore CO</th>
           <th class="num">Suma CO</th>
           <th class="num bold">TOTAL</th>
+          <th class="num">Avans</th>
+          <th class="num">Împrumut</th>
+          <th class="num bold">REST PLATĂ</th>
         </tr>
       </thead>
       <tbody>`;
@@ -390,25 +441,38 @@ function afiseazaRaport(raport, an, luna) {
     const isManager = r.angajat.nume === 'BARABULEA MADALINA';
     const isFix = !!r.angajat.salariu_fix;
     const tipLabel = isManager ? ' <span style="color:#999; font-size:11px;">MANAGER</span>' :
-                     isFix ? ' <span style="color:#1a73e8; font-size:11px;">SALARIU FIX</span>' : '';
+                     isFix ? ' <span style="color:#1a73e8; font-size:11px;">FIX</span>' : '';
+
+    const restCls = r.restPlata < 0 ? 'rest-negativ' : 'rest-plata';
+    const finAvans = financiarCurent[r.angajat.id]?.avans || 0;
+    const finImprumut = financiarCurent[r.angajat.id]?.imprumut || 0;
+
     html += `
         <tr style="cursor:pointer" onclick="toggleDetalii('det-${r.angajat.id}')">
           <td class="bold">${r.angajat.nume}${tipLabel}</td>
           <td class="num">${isFix ? 'FIX' : (r.angajat.tarif_ora || '—')}</td>
-          <td class="num">${r.zileLucrateLV || '—'}</td>
           <td class="num">${r.oreLucrateLV || '—'}</td>
           <td class="num">${isFix ? '—' : (r.sumLV ? r.sumLV.toFixed(2) : '—')}</td>
-          <td class="num">${r.zileLucrateWE || '—'}</td>
           <td class="num">${r.oreLucrateWE || '—'}</td>
           <td class="num">${isFix ? '—' : (r.sumWE ? r.sumWE.toFixed(2) : '—')}</td>
           <td class="num">${r.zileConcediuNr || '—'}</td>
-          <td class="num">${r.oreConcediu || '—'}</td>
           <td class="num">${isFix ? '—' : (r.sumCO ? r.sumCO.toFixed(2) : '—')}</td>
-          <td class="num bold">${r.totalSuma ? r.totalSuma.toFixed(2) + ' RON' : '—'}</td>
+          <td class="num bold">${r.totalSuma.toFixed(2)}</td>
+          <td class="num" onclick="event.stopPropagation()">
+            <input class="input-cell" type="number" step="0.01" value="${finAvans || ''}"
+              placeholder="0" data-ang="${r.angajat.id}" data-field="avans"
+              onchange="updateRest(${r.angajat.id})">
+          </td>
+          <td class="num" onclick="event.stopPropagation()">
+            <input class="input-cell" type="number" step="0.01" value="${finImprumut || ''}"
+              placeholder="0" data-ang="${r.angajat.id}" data-field="imprumut"
+              onchange="updateRest(${r.angajat.id})">
+          </td>
+          <td class="num bold ${restCls}" id="rest-${r.angajat.id}">${r.restPlata.toFixed(2)} RON</td>
         </tr>
         <tr id="det-${r.angajat.id}" style="display:none">
           <td colspan="12" style="padding:0;">
-            ${renderDetalii(r)}
+            ${isManager ? renderDetaliiManager(r) : renderDetalii(r)}
           </td>
         </tr>`;
   }
@@ -416,28 +480,128 @@ function afiseazaRaport(raport, an, luna) {
   // Rand total
   html += `
         <tr class="total-row">
-          <td class="bold">TOTAL</td>
-          <td></td>
-          <td class="num">${raport.reduce((s,r) => s + r.zileLucrateLV, 0)}</td>
+          <td class="bold" colspan="2">TOTAL</td>
           <td class="num">${totalOreLV.toFixed(1)}</td>
-          <td class="num">${raport.reduce((s,r) => s + r.sumLV, 0).toFixed(2)}</td>
-          <td class="num">${raport.reduce((s,r) => s + r.zileLucrateWE, 0)}</td>
+          <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumLV,0).toFixed(2)}</td>
           <td class="num">${totalOreWE.toFixed(1)}</td>
-          <td class="num">${raport.reduce((s,r) => s + r.sumWE, 0).toFixed(2)}</td>
-          <td class="num">${raport.reduce((s,r) => s + r.zileConcediuNr, 0)}</td>
-          <td class="num">${totalOreCO.toFixed(1)}</td>
-          <td class="num">${raport.reduce((s,r) => s + r.sumCO, 0).toFixed(2)}</td>
-          <td class="num bold">${totalSalarii.toFixed(2)} RON</td>
+          <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumWE,0).toFixed(2)}</td>
+          <td class="num">${raport.reduce((s,r)=>s+r.zileConcediuNr,0)}</td>
+          <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumCO,0).toFixed(2)}</td>
+          <td class="num bold">${totalSalarii.toFixed(2)}</td>
+          <td class="num bold" id="total-avans">${totalAvans.toFixed(2)}</td>
+          <td class="num bold" id="total-imprumut">${totalImprumut.toFixed(2)}</td>
+          <td class="num bold rest-plata" id="total-rest">${totalRest.toFixed(2)} RON</td>
         </tr>`;
 
-  html += '</tbody></table>';
+  html += '</tbody></table></div>';
 
   content.innerHTML = html;
 }
 
-function renderDetalii(r) {
-  if (r.detaliiZile.length === 0) return '<div style="padding:16px; color:#999;">Nicio activitate în această lună</div>';
+function updateRest(angId) {
+  const r = raportCurent.find(x => x.angajat.id === angId);
+  if (!r) return;
 
+  const avansInput = document.querySelector(`input[data-ang="${angId}"][data-field="avans"]`);
+  const imprumutInput = document.querySelector(`input[data-ang="${angId}"][data-field="imprumut"]`);
+  const avans = parseFloat(avansInput.value) || 0;
+  const imprumut = parseFloat(imprumutInput.value) || 0;
+  const rest = r.totalSuma - avans - imprumut;
+
+  const restEl = document.getElementById(`rest-${angId}`);
+  restEl.textContent = rest.toFixed(2) + ' RON';
+  restEl.className = `num bold ${rest < 0 ? 'rest-negativ' : 'rest-plata'}`;
+
+  // Recalculeaza totaluri
+  let totalAvans = 0, totalImprumut = 0, totalRest = 0;
+  for (const rr of raportCurent) {
+    const ai = document.querySelector(`input[data-ang="${rr.angajat.id}"][data-field="avans"]`);
+    const ii = document.querySelector(`input[data-ang="${rr.angajat.id}"][data-field="imprumut"]`);
+    const a = ai ? (parseFloat(ai.value) || 0) : 0;
+    const i = ii ? (parseFloat(ii.value) || 0) : 0;
+    totalAvans += a;
+    totalImprumut += i;
+    totalRest += rr.totalSuma - a - i;
+  }
+  document.getElementById('total-avans').textContent = totalAvans.toFixed(2);
+  document.getElementById('total-imprumut').textContent = totalImprumut.toFixed(2);
+  const totalRestEl = document.getElementById('total-rest');
+  totalRestEl.textContent = totalRest.toFixed(2) + ' RON';
+}
+
+async function salveazaFinanciar() {
+  const luna = lunaSelectata + 1;
+  const an = anSelectat;
+
+  for (const r of raportCurent) {
+    const avansInput = document.querySelector(`input[data-ang="${r.angajat.id}"][data-field="avans"]`);
+    const imprumutInput = document.querySelector(`input[data-ang="${r.angajat.id}"][data-field="imprumut"]`);
+    const avans = parseFloat(avansInput?.value) || 0;
+    const imprumut = parseFloat(imprumutInput?.value) || 0;
+
+    if (avans === 0 && imprumut === 0 && !financiarCurent[r.angajat.id]) continue;
+
+    const body = { angajat_id: r.angajat.id, luna, an, avans, imprumut };
+
+    if (financiarCurent[r.angajat.id]) {
+      // Update
+      await fetch(`${API}/financiar?id=eq.${financiarCurent[r.angajat.id].id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ avans, imprumut })
+      });
+    } else {
+      // Insert
+      const resp = await fetch(`${API}/financiar`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json();
+      if (Array.isArray(data) && data.length > 0) {
+        financiarCurent[r.angajat.id] = data[0];
+      }
+    }
+  }
+
+  alert('Avansuri și împrumuturi salvate!');
+}
+
+function renderDetaliiManager(r) {
+  // Manager: arata ore pe fiecare magazin
+  let html = '<div style="padding:16px;">';
+  html += '<strong style="font-size:14px;">Ore pe magazine:</strong>';
+  html += '<div class="manager-stores">';
+
+  const stores = Object.entries(r.orePeMagazin).sort((a,b) => b[1] - a[1]);
+  const totalOre = stores.reduce((s, [,h]) => s + h, 0);
+
+  if (stores.length === 0) {
+    html += '<span style="color:#999;">Nicio activitate</span>';
+  } else {
+    for (const [mag, ore] of stores) {
+      html += `<div class="store-badge"><strong>${mag}</strong>: ${ore.toFixed(1)}h</div>`;
+    }
+    html += `<div class="store-badge" style="background:#e8f0fe;"><strong>TOTAL</strong>: ${totalOre.toFixed(1)}h</div>`;
+  }
+
+  html += '</div>';
+
+  // Plus detalii zilnice
+  if (r.detaliiZile.length > 0) {
+    html += '<div style="margin-top:16px;">' + renderDetaliiTable(r) + '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderDetalii(r) {
+  if (r.detaliiZile.length === 0) return '<div style="padding:16px; color:#999;">Nicio activitate</div>';
+  return renderDetaliiTable(r);
+}
+
+function renderDetaliiTable(r) {
   let html = `<table class="detail-table" style="margin:0; box-shadow:none; font-size:13px;">
     <thead><tr>
       <th>Data</th><th>Zi</th><th>Tip</th><th class="num">Ore</th>
@@ -452,9 +616,10 @@ function renderDetalii(r) {
     let detalii = '';
     if (z.pontaje) {
       detalii = z.pontaje.map(p => {
+        const mag = p.magazin ? `[${p.magazin}] ` : '';
         const i = p.ora_intrare ? new Date(p.ora_intrare).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '?';
         const o = p.ora_iesire ? new Date(p.ora_iesire).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : 'in curs';
-        return `${i}→${o}`;
+        return `${mag}${i}→${o}`;
       }).join(', ');
     }
 
@@ -463,9 +628,9 @@ function renderDetalii(r) {
       <td>${numeZi(z.zi)}</td>
       <td>${tipLabel}</td>
       <td class="num">${z.ore.toFixed(1)}</td>
-      <td class="num">${z.tarif}</td>
-      <td class="num">x${z.multiplicator}</td>
-      <td class="num bold">${z.suma.toFixed(2)}</td>
+      <td class="num">${z.tarif || '—'}</td>
+      <td class="num">${z.tarif ? 'x' + z.multiplicator : '—'}</td>
+      <td class="num bold">${z.suma ? z.suma.toFixed(2) : '—'}</td>
       <td style="font-size:12px; color:#666;">${detalii}</td>
     </tr>`;
   }
