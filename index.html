@@ -646,33 +646,8 @@
     <button class="btn-pontaj btn-iesire" id="btn-iesire" onclick="pontareIesire()">
       🚪 Am plecat
     </button>
-    <button class="btn-pontaj btn-concediu" onclick="showScreen('pontaj-concediu')">
-      🏖️ Cer concediu
-    </button>
   </div>
   <button class="btn-pontaj-back" onclick="goToSearch()">← Înapoi la căutare</button>
-</div>
-
-<!-- ══ SCREEN 6: PONTAJ CONCEDIU ══ -->
-<div class="screen" id="screen-pontaj-concediu">
-  <div class="search-icon">🏖️</div>
-  <div>
-    <div class="search-title">Cerere concediu</div>
-    <div class="search-subtitle" id="concediu-nume"></div>
-  </div>
-  <div class="concediu-form">
-    <label class="concediu-label">De la:</label>
-    <input type="date" class="search-input concediu-date" id="concediu-start">
-    <label class="concediu-label">Până la:</label>
-    <input type="date" class="search-input concediu-date" id="concediu-end">
-    <label class="concediu-label">Tip:</label>
-    <select class="search-input" id="concediu-tip" style="padding:14px 20px;">
-      <option value="concediu">Concediu de odihnă</option>
-      <option value="medical">Concediu medical</option>
-    </select>
-    <button class="btn-search" onclick="trimitereConcediu()" style="margin-top:10px;">Trimite cererea</button>
-    <button class="btn-pontaj-back" onclick="showScreen('pontaj-actiuni')">← Înapoi</button>
-  </div>
 </div>
 
 <!-- ══ SCREEN 2: RESULTS ══ -->

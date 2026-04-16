@@ -251,6 +251,8 @@ const API = window.SUPABASE_URL + '/rest/v1';
 
 let raportCurent = null;
 let tranzactiiCurent = {};  // angajat_id -> [tranzactii]
+let concediiCurent = {};    // angajat_id -> [concedii]
+let angajatiCurent = [];
 let lunaSelectata = 0;
 let anSelectat = 0;
 
@@ -294,7 +296,8 @@ async function genereazaRaport() {
   content.innerHTML = '<div class="loading">Se generează raportul...</div>';
 
   try {
-    const angajati = await fetchAll(`${API}/angajati?select=*&activ=eq.true&order=nume.asc`);
+    angajatiCurent = await fetchAll(`${API}/angajati?select=*&activ=eq.true&order=nume.asc`);
+    const angajati = angajatiCurent;
 
     const primaZi = `${anSelectat}-${String(lunaSelectata+1).padStart(2,'0')}-01`;
     const ultimaZiDate = new Date(anSelectat, lunaSelectata+1, 0);
@@ -302,6 +305,13 @@ async function genereazaRaport() {
 
     const pontaje = await fetchAll(`${API}/pontaj?select=*&data=gte.${primaZi}&data=lte.${ultimaZi}&order=data.asc,created_at.asc`);
     const concedii = await fetchAll(`${API}/concedii?select=*&data_start=lte.${ultimaZi}&data_end=gte.${primaZi}&aprobat=not.eq.false`);
+
+    // Stocheaza concedii per angajat
+    concediiCurent = {};
+    for (const c of concedii) {
+      if (!concediiCurent[c.angajat_id]) concediiCurent[c.angajat_id] = [];
+      concediiCurent[c.angajat_id].push(c);
+    }
 
     // Fetch tranzactii luna curenta
     const tranzactii = await fetchAll(`${API}/tranzactii?select=*&luna=eq.${lunaSelectata+1}&an=eq.${anSelectat}&order=data.asc`);
@@ -586,6 +596,39 @@ function renderDetaliiComplet(r, isManager) {
   html += renderAddForm(r.angajat.id, r.angajat.nume, 'imprumut');
   html += '</div>';
 
+  // Concedii
+  const concediiAng = concediiCurent[r.angajat.id] || [];
+  html += `<div class="tranz-section"><h4>Concedii (${r.zileConcediuNr} zile)</h4>`;
+  html += `<div class="tranz-list">`;
+  if (concediiAng.length === 0) {
+    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun concediu</div>';
+  } else {
+    for (const c of concediiAng) {
+      const tipLabel = c.tip === 'medical' ? 'Medical' : 'Odihnă';
+      const tipColor = c.tip === 'medical' ? 'var(--red)' : 'var(--blue)';
+      html += `<div class="tranz-item">
+        <span class="tranz-data">${c.data_start} → ${c.data_end}</span>
+        <span class="tranz-suma" style="color:${tipColor}">${tipLabel}</span>
+        <span class="tranz-desc">${c.tip === 'medical' ? 'Concediu medical' : 'Concediu de odihnă'}</span>
+        <button class="tranz-del no-print" onclick="event.stopPropagation(); stergeConcediu(${c.id})" title="Șterge">✕</button>
+      </div>`;
+    }
+  }
+  html += '</div>';
+  // Formular adaugare concediu
+  const today = new Date().toISOString().slice(0, 10);
+  html += `<div class="tranz-add no-print">
+    <select id="co-tip-${r.angajat.id}">
+      <option value="concediu">Odihnă</option>
+      <option value="medical">Medical</option>
+    </select>
+    <input type="date" value="${today}" id="co-start-${r.angajat.id}">
+    <span style="font-size:13px;">→</span>
+    <input type="date" value="${today}" id="co-end-${r.angajat.id}">
+    <button onclick="event.stopPropagation(); adaugaConcediu(${r.angajat.id}, '${r.angajat.nume}')">Adaugă concediu</button>
+  </div>`;
+  html += '</div>';
+
   // Sumar financiar
   html += `<div class="tranz-total">
     <span>Salariu: <strong>${r.totalSuma.toFixed(2)} RON</strong></span>
@@ -653,6 +696,46 @@ async function adaugaTranzactie(angId, angNume, tip) {
       // Regenereaza raportul
       genereazaRaport();
     }
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function adaugaConcediu(angId, angNume) {
+  const tip = document.getElementById(`co-tip-${angId}`).value;
+  const dataStart = document.getElementById(`co-start-${angId}`).value;
+  const dataEnd = document.getElementById(`co-end-${angId}`).value;
+
+  if (!dataStart || !dataEnd) { alert('Completează datele'); return; }
+  if (dataEnd < dataStart) { alert('Data de sfârșit trebuie să fie după cea de început'); return; }
+
+  try {
+    await fetch(`${API}/concedii`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        angajat_id: angId,
+        angajat_nume: angNume,
+        data_start: dataStart,
+        data_end: dataEnd,
+        tip: tip,
+        aprobat: true
+      })
+    });
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function stergeConcediu(id) {
+  if (!confirm('Sigur vrei să ștergi acest concediu?')) return;
+  try {
+    await fetch(`${API}/concedii?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: HEADERS
+    });
+    genereazaRaport();
   } catch (e) {
     alert('Eroare: ' + e.message);
   }
