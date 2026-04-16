@@ -1012,9 +1012,12 @@ async function onPinInput() {
     pontajRecords = Array.isArray(pontaje) ? pontaje : [];
     pontajUltimul = pontajRecords.length > 0 ? pontajRecords[pontajRecords.length - 1] : null;
 
-    const azi = new Date().toLocaleDateString('ro-RO', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    const now = new Date();
+    const azi = now.toLocaleDateString('ro-RO', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    const esteWeekend = (now.getDay() === 0 || now.getDay() === 6);
     document.getElementById('pontaj-salut').textContent = `Bună, ${pontajAngajat.nume}!`;
-    document.getElementById('pontaj-magazin').textContent = `${storeName} — ${azi}`;
+    document.getElementById('pontaj-magazin').innerHTML = `${storeName} — ${azi}` +
+      (esteWeekend ? '<br><span style="color:#e67e22; font-weight:700; font-size:15px;">⭐ WEEKEND — plată dublă</span>' : '');
     updatePontajStatus();
     showScreen('pontaj-actiuni');
     document.getElementById('pin-input').value = '';
@@ -1093,7 +1096,8 @@ async function pontareIntrare() {
         angajat_nume: pontajAngajat.nume,
         magazin: storeName,
         data: today,
-        ora_intrare: now
+        ora_intrare: now,
+        weekend: (new Date().getDay() === 0 || new Date().getDay() === 6)
       })
     });
     const data = await resp.json();
