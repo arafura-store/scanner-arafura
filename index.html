@@ -1357,13 +1357,15 @@ function initVoice() {
   r.onresult = (e) => {
     const result = e.results[0];
     const transcript = result[0].transcript;
-    // Afiseaza textul in timp real
     document.getElementById('search-input').value = transcript;
     document.getElementById('btn-clear').style.display = 'block';
-    // Cauta doar cand rezultatul e final
     if (result.isFinal) {
       stopListening();
       doSearch();
+    } else {
+      // Arata buton "Cauta acum" pentru rezultat rapid
+      document.getElementById('voice-hint').innerHTML =
+        '<button onclick="stopListening(); doSearch();" style="padding:10px 24px; font-size:16px; font-weight:700; background:#1a73e8; color:white; border:none; border-radius:10px; cursor:pointer;">🔎 Caută acum</button>';
     }
   };
   r.onerror = (e) => {
