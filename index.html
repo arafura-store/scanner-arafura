@@ -1352,13 +1352,19 @@ function initVoice() {
   const r = new SR();
   r.lang = 'ro-RO';
   r.continuous = false;
-  r.interimResults = false;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
   r.onresult = (e) => {
-    const transcript = e.results[0][0].transcript;
+    const result = e.results[0];
+    const transcript = result[0].transcript;
+    // Afiseaza textul in timp real
     document.getElementById('search-input').value = transcript;
     document.getElementById('btn-clear').style.display = 'block';
-    stopListening();
-    doSearch();
+    // Cauta doar cand rezultatul e final
+    if (result.isFinal) {
+      stopListening();
+      doSearch();
+    }
   };
   r.onerror = (e) => {
     stopListening();
