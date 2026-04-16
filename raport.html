@@ -309,10 +309,11 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
       }
     }
 
-    const sumLV = oreLucrateLV * (ang.tarif_ora || 0);
-    const sumWE = oreLucrateWE * (ang.tarif_ora || 0) * 2;
-    const sumCO = oreConcediu * (ang.tarif_ora || 0);
-    const totalSuma = sumLV + sumWE + sumCO;
+    const esteFix = !!ang.salariu_fix;
+    const sumLV = esteFix ? 0 : oreLucrateLV * (ang.tarif_ora || 0);
+    const sumWE = esteFix ? 0 : oreLucrateWE * (ang.tarif_ora || 0) * 2;
+    const sumCO = esteFix ? 0 : oreConcediu * (ang.tarif_ora || 0);
+    const totalSuma = esteFix ? ang.salariu_fix : (sumLV + sumWE + sumCO);
 
     rezultate.push({
       angajat: ang,
@@ -386,20 +387,23 @@ function afiseazaRaport(raport, an, luna) {
       <tbody>`;
 
   for (const r of raport) {
-    const isManager = !r.angajat.tarif_ora;
+    const isManager = r.angajat.nume === 'BARABULEA MADALINA';
+    const isFix = !!r.angajat.salariu_fix;
+    const tipLabel = isManager ? ' <span style="color:#999; font-size:11px;">MANAGER</span>' :
+                     isFix ? ' <span style="color:#1a73e8; font-size:11px;">SALARIU FIX</span>' : '';
     html += `
         <tr style="cursor:pointer" onclick="toggleDetalii('det-${r.angajat.id}')">
-          <td class="bold">${r.angajat.nume}${isManager ? ' <span style="color:#999; font-size:11px;">MANAGER</span>' : ''}</td>
-          <td class="num">${r.angajat.tarif_ora || '—'}</td>
+          <td class="bold">${r.angajat.nume}${tipLabel}</td>
+          <td class="num">${isFix ? 'FIX' : (r.angajat.tarif_ora || '—')}</td>
           <td class="num">${r.zileLucrateLV || '—'}</td>
           <td class="num">${r.oreLucrateLV || '—'}</td>
-          <td class="num">${r.sumLV ? r.sumLV.toFixed(2) : '—'}</td>
+          <td class="num">${isFix ? '—' : (r.sumLV ? r.sumLV.toFixed(2) : '—')}</td>
           <td class="num">${r.zileLucrateWE || '—'}</td>
           <td class="num">${r.oreLucrateWE || '—'}</td>
-          <td class="num">${r.sumWE ? r.sumWE.toFixed(2) : '—'}</td>
+          <td class="num">${isFix ? '—' : (r.sumWE ? r.sumWE.toFixed(2) : '—')}</td>
           <td class="num">${r.zileConcediuNr || '—'}</td>
           <td class="num">${r.oreConcediu || '—'}</td>
-          <td class="num">${r.sumCO ? r.sumCO.toFixed(2) : '—'}</td>
+          <td class="num">${isFix ? '—' : (r.sumCO ? r.sumCO.toFixed(2) : '—')}</td>
           <td class="num bold">${r.totalSuma ? r.totalSuma.toFixed(2) + ' RON' : '—'}</td>
         </tr>
         <tr id="det-${r.angajat.id}" style="display:none">
