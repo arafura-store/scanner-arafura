@@ -668,7 +668,6 @@
     <label class="concediu-label">Tip:</label>
     <select class="search-input" id="concediu-tip" style="padding:14px 20px;">
       <option value="concediu">Concediu de odihnă</option>
-      <option value="zi libera">Zi liberă</option>
       <option value="medical">Concediu medical</option>
     </select>
     <button class="btn-search" onclick="trimitereConcediu()" style="margin-top:10px;">Trimite cererea</button>
@@ -980,7 +979,8 @@ function createProductCard(p) {
 
 // ── PONTAJ ───────────────────────────────────────────────────────
 let pontajAngajat = null;   // angajatul curent logat pt pontaj
-let pontajRecord  = null;   // pontajul de azi (daca exista)
+let pontajRecords = [];     // toate pontajele de azi
+let pontajUltimul = null;   // ultimul record (cel activ)
 
 async function onPinInput() {
   const pin = document.getElementById('pin-input').value;
@@ -988,7 +988,6 @@ async function onPinInput() {
 
   showLoading(true);
   try {
-    // Cauta angajatul dupa PIN
     const resp = await fetch(
       `${window.SUPABASE_URL}/rest/v1/angajati?pin=eq.${pin}&activ=eq.true&select=id,nume`,
       { headers: HEADERS }
@@ -1003,16 +1002,16 @@ async function onPinInput() {
 
     pontajAngajat = data[0];
 
-    // Verifica daca are deja pontaj azi
+    // Ia TOATE pontajele de azi (poate fi mai multe intrari/iesiri)
     const today = new Date().toISOString().slice(0, 10);
     const respP = await fetch(
-      `${window.SUPABASE_URL}/rest/v1/pontaj?angajat_id=eq.${pontajAngajat.id}&data=eq.${today}&magazin=eq.${encodeURIComponent(storeName)}&select=*&order=created_at.desc&limit=1`,
+      `${window.SUPABASE_URL}/rest/v1/pontaj?angajat_id=eq.${pontajAngajat.id}&data=eq.${today}&select=*&order=created_at.asc`,
       { headers: HEADERS }
     );
     const pontaje = await respP.json();
-    pontajRecord = (Array.isArray(pontaje) && pontaje.length > 0) ? pontaje[0] : null;
+    pontajRecords = Array.isArray(pontaje) ? pontaje : [];
+    pontajUltimul = pontajRecords.length > 0 ? pontajRecords[pontajRecords.length - 1] : null;
 
-    // Afiseaza ecranul de actiuni
     document.getElementById('pontaj-salut').textContent = `Bună, ${pontajAngajat.nume}!`;
     document.getElementById('pontaj-magazin').textContent = storeName;
     updatePontajStatus();
@@ -1027,27 +1026,57 @@ async function onPinInput() {
   }
 }
 
+function formatOra(iso) {
+  return new Date(iso).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+}
+
+function calcTotalOre(records) {
+  let totalMin = 0;
+  for (const r of records) {
+    if (r.ora_intrare && r.ora_iesire) {
+      totalMin += (new Date(r.ora_iesire) - new Date(r.ora_intrare)) / 60000;
+    }
+  }
+  const h = Math.floor(totalMin / 60);
+  const m = Math.round(totalMin % 60);
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+}
+
 function updatePontajStatus() {
   const status = document.getElementById('pontaj-status');
   const btnI = document.getElementById('btn-intrare');
   const btnE = document.getElementById('btn-iesire');
 
-  if (!pontajRecord) {
-    status.innerHTML = 'Nu ești pontat/ă azi';
-    btnI.disabled = false;
-    btnE.disabled = true;
-  } else if (pontajRecord.ora_intrare && !pontajRecord.ora_iesire) {
-    const ora = new Date(pontajRecord.ora_intrare).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
-    status.innerHTML = `✅ Intrat/ă la <strong>${ora}</strong>`;
-    btnI.disabled = true;
-    btnE.disabled = false;
-  } else if (pontajRecord.ora_intrare && pontajRecord.ora_iesire) {
-    const oraI = new Date(pontajRecord.ora_intrare).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
-    const oraE = new Date(pontajRecord.ora_iesire).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
-    status.innerHTML = `✅ ${oraI} → 🚪 ${oraE} — Pontare completă`;
-    btnI.disabled = true;
-    btnE.disabled = true;
+  // Starea curenta: ultimul record are iesire sau nu?
+  const esteInMagazin = pontajUltimul && pontajUltimul.ora_intrare && !pontajUltimul.ora_iesire;
+
+  btnI.disabled = esteInMagazin;
+  btnE.disabled = !esteInMagazin;
+
+  // Construieste istoricul zilei
+  let html = '';
+  if (pontajRecords.length === 0) {
+    html = 'Nu ești pontat/ă azi';
+  } else {
+    html = '<div style="text-align:left; font-size:14px;">';
+    for (const r of pontajRecords) {
+      const oraI = formatOra(r.ora_intrare);
+      const mag = r.magazin || '';
+      if (r.ora_iesire) {
+        const oraE = formatOra(r.ora_iesire);
+        html += `✅ ${oraI} → 🚪 ${oraE} <span style="color:#999; font-size:12px;">${mag}</span><br>`;
+      } else {
+        html += `✅ ${oraI} — <strong>în magazin</strong> <span style="color:#999; font-size:12px;">${mag}</span><br>`;
+      }
+    }
+    // Total ore lucrate (doar intervalele complete)
+    const complete = pontajRecords.filter(r => r.ora_intrare && r.ora_iesire);
+    if (complete.length > 0) {
+      html += `<br><strong>Total lucrat: ${calcTotalOre(complete)}</strong>`;
+    }
+    html += '</div>';
   }
+  status.innerHTML = html;
 }
 
 async function pontareIntrare() {
@@ -1068,7 +1097,8 @@ async function pontareIntrare() {
     });
     const data = await resp.json();
     if (Array.isArray(data) && data.length > 0) {
-      pontajRecord = data[0];
+      pontajRecords.push(data[0]);
+      pontajUltimul = data[0];
       updatePontajStatus();
       showToast('Pontare intrare salvată!');
     } else {
@@ -1082,19 +1112,22 @@ async function pontareIntrare() {
 }
 
 async function pontareIesire() {
-  if (!pontajRecord) return;
+  if (!pontajUltimul) return;
   showLoading(true);
   try {
     const now = new Date().toISOString();
     const resp = await fetch(
-      `${window.SUPABASE_URL}/rest/v1/pontaj?id=eq.${pontajRecord.id}`, {
+      `${window.SUPABASE_URL}/rest/v1/pontaj?id=eq.${pontajUltimul.id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
       body: JSON.stringify({ ora_iesire: now })
     });
     const data = await resp.json();
     if (Array.isArray(data) && data.length > 0) {
-      pontajRecord = data[0];
+      // Actualizeaza recordul in lista
+      const idx = pontajRecords.findIndex(r => r.id === data[0].id);
+      if (idx >= 0) pontajRecords[idx] = data[0];
+      pontajUltimul = data[0];
       updatePontajStatus();
       showToast('Pontare ieșire salvată!');
     }
