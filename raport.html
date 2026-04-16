@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raport Pontaj — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #1a73e8;
+      --green: #1e8449;
+      --red: #c0392b;
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1a1a2e;
+      --sub: #6b7280;
+      --border: #e5e7eb;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+    }
+    .header {
+      background: var(--blue);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .header h1 { font-size: 22px; font-weight: 800; }
+    .header-controls { display: flex; gap: 10px; align-items: center; }
+    .header select, .header button {
+      padding: 10px 16px;
+      font-size: 15px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .header select { background: rgba(255,255,255,.2); color: white; }
+    .header select option { color: #333; }
+    .header button { background: white; color: var(--blue); font-weight: 700; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .summary-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .summary-card .label { font-size: 13px; color: var(--sub); }
+    .summary-card .value { font-size: 28px; font-weight: 800; margin-top: 4px; }
+    .summary-card .value.blue { color: var(--blue); }
+    .summary-card .value.green { color: var(--green); }
+    .summary-card .value.red { color: var(--red); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      font-size: 14px;
+    }
+    th {
+      background: var(--blue);
+      color: white;
+      padding: 12px 10px;
+      text-align: left;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0f4ff; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .bold { font-weight: 700; }
+    .weekend-badge {
+      background: #fef3c7;
+      color: #92400e;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .total-row td {
+      background: #e8f0fe;
+      font-weight: 700;
+      border-top: 2px solid var(--blue);
+    }
+
+    .detail-section {
+      margin-top: 30px;
+    }
+    .detail-section h2 {
+      font-size: 18px;
+      margin-bottom: 14px;
+      color: var(--text);
+    }
+    .detail-table { margin-bottom: 30px; }
+    .day-sat { background: #fef9c3; }
+    .day-sun { background: #fee2e2; }
+    .day-co { background: #dbeafe; font-style: italic; }
+
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--sub);
+      font-size: 18px;
+    }
+
+    .btn-export {
+      padding: 10px 20px;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-export:hover { background: #166a3a; }
+
+    @media print {
+      body { padding: 0; }
+      .header button, .header select { display: none; }
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARAFURA — Raport Pontaj</h1>
+  <div class="header-controls">
+    <select id="sel-luna"></select>
+    <select id="sel-an"></select>
+    <button onclick="genereazaRaport()">Generează</button>
+    <button class="btn-export" onclick="window.print()">Printează</button>
+  </div>
+</div>
+
+<div id="content"><div class="loading">Selectează luna și apasă Generează</div></div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+
+// Populeaza selectoarele
+const luni = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+const selLuna = document.getElementById('sel-luna');
+const selAn = document.getElementById('sel-an');
+const now = new Date();
+
+luni.forEach((l, i) => {
+  const opt = document.createElement('option');
+  opt.value = i; opt.textContent = l;
+  if (i === now.getMonth()) opt.selected = true;
+  selLuna.appendChild(opt);
+});
+
+for (let y = 2026; y >= 2024; y--) {
+  const opt = document.createElement('option');
+  opt.value = y; opt.textContent = y;
+  if (y === now.getFullYear()) opt.selected = true;
+  selAn.appendChild(opt);
+}
+
+async function fetchAll(url) {
+  const all = [];
+  let offset = 0;
+  while (true) {
+    const resp = await fetch(`${url}&limit=1000&offset=${offset}`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    all.push(...data);
+    offset += 1000;
+    if (data.length < 1000) break;
+  }
+  return all;
+}
+
+async function genereazaRaport() {
+  const luna = parseInt(selLuna.value);
+  const an = parseInt(selAn.value);
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">Se generează raportul...</div>';
+
+  try {
+    // Fetch angajati
+    const angajati = await fetchAll(`${API}/angajati?select=*&activ=eq.true&order=nume.asc`);
+
+    // Prima si ultima zi a lunii
+    const primaZi = `${an}-${String(luna+1).padStart(2,'0')}-01`;
+    const ultimaZiDate = new Date(an, luna+1, 0);
+    const ultimaZi = `${an}-${String(luna+1).padStart(2,'0')}-${String(ultimaZiDate.getDate()).padStart(2,'0')}`;
+
+    // Fetch pontaje
+    const pontaje = await fetchAll(`${API}/pontaj?select=*&data=gte.${primaZi}&data=lte.${ultimaZi}&order=data.asc,created_at.asc`);
+
+    // Fetch concedii care se suprapun cu luna
+    const concedii = await fetchAll(`${API}/concedii?select=*&data_start=lte.${ultimaZi}&data_end=gte.${primaZi}&aprobat=not.eq.false`);
+
+    // Calculeaza raportul
+    const raport = calculeazaRaport(angajati, pontaje, concedii, an, luna);
+    afiseazaRaport(raport, an, luna);
+
+  } catch (e) {
+    content.innerHTML = `<div class="loading">Eroare: ${e.message}</div>`;
+  }
+}
+
+function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
+  const rezultate = [];
+  const nrZile = new Date(an, luna + 1, 0).getDate();
+
+  for (const ang of angajati) {
+    const pontajeAng = pontaje.filter(p => p.angajat_id === ang.id);
+    const concediiAng = concedii.filter(c => c.angajat_id === ang.id);
+
+    // Zilele de concediu (set de date string)
+    const zileConcediu = new Set();
+    for (const c of concediiAng) {
+      const start = new Date(c.data_start);
+      const end = new Date(c.data_end);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const ds = d.toISOString().slice(0, 10);
+        // Doar zilele din luna curenta
+        if (d.getFullYear() === an && d.getMonth() === luna) {
+          zileConcediu.add(ds);
+        }
+      }
+    }
+
+    let oreLucrateLV = 0;    // ore lucrate luni-vineri
+    let oreLucrateWE = 0;    // ore lucrate weekend
+    let zileLucrateLV = 0;
+    let zileLucrateWE = 0;
+    let oreConcediu = 0;
+    let zileConcediuNr = 0;
+    const detaliiZile = [];
+
+    // Grupeaza pontajele pe zile
+    const pontajePeZi = {};
+    for (const p of pontajeAng) {
+      if (!pontajePeZi[p.data]) pontajePeZi[p.data] = [];
+      pontajePeZi[p.data].push(p);
+    }
+
+    // Parcurge fiecare zi a lunii
+    for (let z = 1; z <= nrZile; z++) {
+      const data = new Date(an, luna, z);
+      const dataStr = data.toISOString().slice(0, 10);
+      const ziSapt = data.getDay(); // 0=dum, 6=sam
+      const esteWE = (ziSapt === 0 || ziSapt === 6);
+      const esteSam = ziSapt === 6;
+      const esteDum = ziSapt === 0;
+
+      if (zileConcediu.has(dataStr)) {
+        // Zi de concediu
+        let oreCO = 0;
+        if (esteSam) oreCO = ang.ore_sambata || 0;
+        else if (esteDum) oreCO = ang.ore_duminica || 0;
+        else oreCO = ang.ore_luni_vineri || 0;
+
+        oreConcediu += oreCO;
+        zileConcediuNr++;
+        detaliiZile.push({
+          data: dataStr, zi: ziSapt, tip: 'concediu',
+          ore: oreCO, tarif: ang.tarif_ora || 0,
+          multiplicator: 1, suma: oreCO * (ang.tarif_ora || 0)
+        });
+      } else if (pontajePeZi[dataStr]) {
+        // Zi lucrata
+        let oreZi = 0;
+        for (const p of pontajePeZi[dataStr]) {
+          if (p.ora_intrare && p.ora_iesire) {
+            oreZi += (new Date(p.ora_iesire) - new Date(p.ora_intrare)) / 3600000;
+          }
+        }
+        oreZi = Math.round(oreZi * 100) / 100;
+
+        const mult = esteWE ? 2 : 1;
+        if (esteWE) { oreLucrateWE += oreZi; zileLucrateWE++; }
+        else { oreLucrateLV += oreZi; zileLucrateLV++; }
+
+        detaliiZile.push({
+          data: dataStr, zi: ziSapt, tip: esteWE ? 'weekend' : 'lucru',
+          ore: oreZi, tarif: ang.tarif_ora || 0,
+          multiplicator: mult, suma: oreZi * (ang.tarif_ora || 0) * mult,
+          pontaje: pontajePeZi[dataStr]
+        });
+      }
+    }
+
+    const sumLV = oreLucrateLV * (ang.tarif_ora || 0);
+    const sumWE = oreLucrateWE * (ang.tarif_ora || 0) * 2;
+    const sumCO = oreConcediu * (ang.tarif_ora || 0);
+    const totalSuma = sumLV + sumWE + sumCO;
+
+    rezultate.push({
+      angajat: ang,
+      oreLucrateLV: Math.round(oreLucrateLV * 100) / 100,
+      oreLucrateWE: Math.round(oreLucrateWE * 100) / 100,
+      zileLucrateLV,
+      zileLucrateWE,
+      oreConcediu,
+      zileConcediuNr,
+      sumLV: Math.round(sumLV * 100) / 100,
+      sumWE: Math.round(sumWE * 100) / 100,
+      sumCO: Math.round(sumCO * 100) / 100,
+      totalSuma: Math.round(totalSuma * 100) / 100,
+      detaliiZile
+    });
+  }
+
+  return rezultate;
+}
+
+function numeZi(zi) {
+  return ['Dum','Lun','Mar','Mie','Joi','Vin','Sam'][zi];
+}
+
+function afiseazaRaport(raport, an, luna) {
+  const content = document.getElementById('content');
+
+  // Totaluri
+  const totalSalarii = raport.reduce((s, r) => s + r.totalSuma, 0);
+  const totalOreLV = raport.reduce((s, r) => s + r.oreLucrateLV, 0);
+  const totalOreWE = raport.reduce((s, r) => s + r.oreLucrateWE, 0);
+  const totalOreCO = raport.reduce((s, r) => s + r.oreConcediu, 0);
+
+  let html = `
+    <div class="summary">
+      <div class="summary-card">
+        <div class="label">Total salarii</div>
+        <div class="value blue">${totalSalarii.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Ore lucrate L-V</div>
+        <div class="value green">${totalOreLV.toFixed(1)}h</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Ore weekend (x2)</div>
+        <div class="value red">${totalOreWE.toFixed(1)}h</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Ore concediu</div>
+        <div class="value">${totalOreCO.toFixed(1)}h</div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Angajat</th>
+          <th>Tarif/h</th>
+          <th class="num">Zile L-V</th>
+          <th class="num">Ore L-V</th>
+          <th class="num">Suma L-V</th>
+          <th class="num">Zile WE</th>
+          <th class="num">Ore WE</th>
+          <th class="num">Suma WE (x2)</th>
+          <th class="num">Zile CO</th>
+          <th class="num">Ore CO</th>
+          <th class="num">Suma CO</th>
+          <th class="num bold">TOTAL</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+  for (const r of raport) {
+    const isManager = !r.angajat.tarif_ora;
+    html += `
+        <tr style="cursor:pointer" onclick="toggleDetalii('det-${r.angajat.id}')">
+          <td class="bold">${r.angajat.nume}${isManager ? ' <span style="color:#999; font-size:11px;">MANAGER</span>' : ''}</td>
+          <td class="num">${r.angajat.tarif_ora || '—'}</td>
+          <td class="num">${r.zileLucrateLV || '—'}</td>
+          <td class="num">${r.oreLucrateLV || '—'}</td>
+          <td class="num">${r.sumLV ? r.sumLV.toFixed(2) : '—'}</td>
+          <td class="num">${r.zileLucrateWE || '—'}</td>
+          <td class="num">${r.oreLucrateWE || '—'}</td>
+          <td class="num">${r.sumWE ? r.sumWE.toFixed(2) : '—'}</td>
+          <td class="num">${r.zileConcediuNr || '—'}</td>
+          <td class="num">${r.oreConcediu || '—'}</td>
+          <td class="num">${r.sumCO ? r.sumCO.toFixed(2) : '—'}</td>
+          <td class="num bold">${r.totalSuma ? r.totalSuma.toFixed(2) + ' RON' : '—'}</td>
+        </tr>
+        <tr id="det-${r.angajat.id}" style="display:none">
+          <td colspan="12" style="padding:0;">
+            ${renderDetalii(r)}
+          </td>
+        </tr>`;
+  }
+
+  // Rand total
+  html += `
+        <tr class="total-row">
+          <td class="bold">TOTAL</td>
+          <td></td>
+          <td class="num">${raport.reduce((s,r) => s + r.zileLucrateLV, 0)}</td>
+          <td class="num">${totalOreLV.toFixed(1)}</td>
+          <td class="num">${raport.reduce((s,r) => s + r.sumLV, 0).toFixed(2)}</td>
+          <td class="num">${raport.reduce((s,r) => s + r.zileLucrateWE, 0)}</td>
+          <td class="num">${totalOreWE.toFixed(1)}</td>
+          <td class="num">${raport.reduce((s,r) => s + r.sumWE, 0).toFixed(2)}</td>
+          <td class="num">${raport.reduce((s,r) => s + r.zileConcediuNr, 0)}</td>
+          <td class="num">${totalOreCO.toFixed(1)}</td>
+          <td class="num">${raport.reduce((s,r) => s + r.sumCO, 0).toFixed(2)}</td>
+          <td class="num bold">${totalSalarii.toFixed(2)} RON</td>
+        </tr>`;
+
+  html += '</tbody></table>';
+
+  content.innerHTML = html;
+}
+
+function renderDetalii(r) {
+  if (r.detaliiZile.length === 0) return '<div style="padding:16px; color:#999;">Nicio activitate în această lună</div>';
+
+  let html = `<table class="detail-table" style="margin:0; box-shadow:none; font-size:13px;">
+    <thead><tr>
+      <th>Data</th><th>Zi</th><th>Tip</th><th class="num">Ore</th>
+      <th class="num">Tarif</th><th class="num">Mult.</th><th class="num">Suma</th><th>Detalii</th>
+    </tr></thead><tbody>`;
+
+  for (const z of r.detaliiZile) {
+    const cls = z.tip === 'weekend' ? 'day-sat' : (z.tip === 'concediu' ? 'day-co' : '');
+    const tipLabel = z.tip === 'weekend' ? '<span class="weekend-badge">WEEKEND x2</span>' :
+                     z.tip === 'concediu' ? 'CONCEDIU' : 'Lucru';
+
+    let detalii = '';
+    if (z.pontaje) {
+      detalii = z.pontaje.map(p => {
+        const i = p.ora_intrare ? new Date(p.ora_intrare).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '?';
+        const o = p.ora_iesire ? new Date(p.ora_iesire).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : 'in curs';
+        return `${i}→${o}`;
+      }).join(', ');
+    }
+
+    html += `<tr class="${cls}">
+      <td>${z.data}</td>
+      <td>${numeZi(z.zi)}</td>
+      <td>${tipLabel}</td>
+      <td class="num">${z.ore.toFixed(1)}</td>
+      <td class="num">${z.tarif}</td>
+      <td class="num">x${z.multiplicator}</td>
+      <td class="num bold">${z.suma.toFixed(2)}</td>
+      <td style="font-size:12px; color:#666;">${detalii}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+function toggleDetalii(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+</script>
+</body>
+</html>
