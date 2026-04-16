@@ -584,6 +584,9 @@
   <div class="search-buttons">
     <button class="btn-search" onclick="saveStore()">Salvează</button>
   </div>
+  <div style="margin-top:16px; font-size:12px; color:#999; text-align:center;">
+    ID dispozitiv: <strong id="device-id-display" style="user-select:all;"></strong>
+  </div>
 </div>
 
 <!-- ══ SCREEN 1: SEARCH ══ -->
@@ -752,18 +755,56 @@ let isListening   = false;
 let brightMax     = false;
 let searchTimeout = null;
 let storeName     = localStorage.getItem('arafura_magazin') || '';
+let deviceId      = localStorage.getItem('arafura_device_id') || '';
+let deviceAutorizat = false;
+
+// ── DEVICE ID ────────────────────────────────────────────────────
+function genDeviceId() {
+  return 'DEV-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 6);
+}
 
 // ── SETUP MAGAZIN ────────────────────────────────────────────────
-function initStore() {
+async function initStore() {
+  // Genereaza device_id daca nu exista
+  if (!deviceId) {
+    deviceId = genDeviceId();
+    localStorage.setItem('arafura_device_id', deviceId);
+  }
+
   if (!storeName) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('screen-setup').classList.add('active');
-  } else {
-    document.getElementById('header-sub').textContent = storeName;
+    // Afiseaza device ID pentru inregistrare
+    document.getElementById('device-id-display').textContent = deviceId;
+    return;
+  }
+
+  document.getElementById('header-sub').textContent = storeName;
+
+  // Verifica daca dispozitivul e autorizat
+  try {
+    const resp = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/dispozitive?device_id=eq.${encodeURIComponent(deviceId)}&activ=eq.true&select=id,magazin`,
+      { headers: HEADERS }
+    );
+    const data = await resp.json();
+    deviceAutorizat = Array.isArray(data) && data.length > 0;
+  } catch(e) {
+    deviceAutorizat = false;
+  }
+
+  // Ascunde/arata butoanele de condica si sesizari
+  updateHomeButtons();
+}
+
+function updateHomeButtons() {
+  const homeButtons = document.querySelector('.home-buttons');
+  if (homeButtons) {
+    homeButtons.style.display = deviceAutorizat ? 'flex' : 'none';
   }
 }
 
-function saveStore() {
+async function saveStore() {
   const sel = document.getElementById('select-magazin').value;
   if (!sel) { showToast('Selectează un magazin'); return; }
   storeName = sel;
@@ -771,6 +812,19 @@ function saveStore() {
   document.getElementById('header-sub').textContent = sel;
   showScreen('search');
   showToast('Magazin salvat: ' + sel);
+
+  // Verifica autorizare device
+  try {
+    const resp = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/dispozitive?device_id=eq.${encodeURIComponent(deviceId)}&activ=eq.true&select=id`,
+      { headers: HEADERS }
+    );
+    const data = await resp.json();
+    deviceAutorizat = Array.isArray(data) && data.length > 0;
+  } catch(e) {
+    deviceAutorizat = false;
+  }
+  updateHomeButtons();
 }
 
 // ── LOG CAUTARE ──────────────────────────────────────────────────
@@ -794,7 +848,10 @@ function showScreen(name) {
 
   // Butonul de pontare: ascunde pe ecranele de pontaj
   const homeButtons = document.querySelector('.home-buttons');
-  if (homeButtons) homeButtons.style.display = (name.startsWith('pontaj') || name.startsWith('sesizare')) ? 'none' : 'flex';
+  if (homeButtons) {
+    if (!deviceAutorizat) homeButtons.style.display = 'none';
+    else homeButtons.style.display = (name.startsWith('pontaj') || name.startsWith('sesizare')) ? 'none' : 'flex';
+  }
 
   if (name === 'search') {
     btnSearch.style.display = 'none';
@@ -807,6 +864,7 @@ function showScreen(name) {
     btnSearch.style.display = 'block';
     headerSub.textContent = 'Cod de bare';
   } else if (name === 'sesizare-pin') {
+    if (!deviceAutorizat) { showToast('Dispozitiv neautorizat'); showScreen('search'); return; }
     btnSearch.style.display = 'none';
     headerSub.textContent = 'Sesizări';
     document.getElementById('sesizare-pin-input').value = '';
@@ -815,6 +873,7 @@ function showScreen(name) {
     btnSearch.style.display = 'none';
     headerSub.textContent = 'Sesizare — ' + (sesizareAngajat ? sesizareAngajat.nume : '');
   } else if (name === 'pontaj-pin') {
+    if (!deviceAutorizat) { showToast('Dispozitiv neautorizat'); showScreen('search'); return; }
     btnSearch.style.display = 'none';
     headerSub.textContent = 'Condica';
     document.getElementById('pin-input').value = '';
