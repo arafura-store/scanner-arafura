@@ -405,8 +405,19 @@
       letter-spacing: .5px;
     }
     .btn-pontare-home:active { background: var(--blue2); }
-    .btn-sesizare-home { background: var(--orange) !important; box-shadow: 0 4px 16px rgba(230,126,34,.4) !important; }
-    .btn-sesizare-home:active { background: #d35400 !important; }
+    .btn-sesizare-home {
+      padding: 18px 28px;
+      font-size: 18px;
+      font-weight: 800;
+      background: #e67e22;
+      color: white;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(230,126,34,.4);
+      letter-spacing: .5px;
+    }
+    .btn-sesizare-home:active { background: #d35400; }
 
     .pontaj-status {
       background: var(--bg);
@@ -618,7 +629,7 @@
   <div class="voice-hint" id="voice-hint">Apasă 🎤 și spune numele produsului</div>
   <div class="home-buttons">
     <button class="btn-pontare-home" onclick="showScreen('pontaj-pin')">📋 Condica</button>
-    <button class="btn-pontare-home btn-sesizare-home" onclick="showScreen('sesizare-pin')">⚠️ Sesizări</button>
+    <button class="btn-sesizare-home" onclick="showScreen('sesizare-pin')">⚠️ Sesizări</button>
   </div>
 </div>
 
