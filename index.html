@@ -388,17 +388,19 @@
       position: fixed;
       bottom: 20px;
       right: 20px;
-      padding: 14px 22px;
-      font-size: 16px;
-      font-weight: 700;
-      background: var(--card);
-      border: 2px solid var(--border);
+      padding: 18px 32px;
+      font-size: 20px;
+      font-weight: 800;
+      background: var(--blue);
+      color: white;
+      border: none;
       border-radius: 50px;
       cursor: pointer;
-      box-shadow: 0 2px 12px rgba(0,0,0,.12);
+      box-shadow: 0 4px 16px rgba(26,115,232,.4);
       z-index: 50;
+      letter-spacing: .5px;
     }
-    .btn-pontare-home:active { background: var(--bg); }
+    .btn-pontare-home:active { background: var(--blue2); }
 
     .pontaj-status {
       background: var(--bg);
@@ -605,14 +607,14 @@
     <button class="btn-voice" id="btn-voice" onclick="toggleVoice()" title="Caută cu vocea">🎤</button>
   </div>
   <div class="voice-hint" id="voice-hint">Apasă 🎤 și spune numele produsului</div>
-  <button class="btn-pontare-home" onclick="showScreen('pontaj-pin')">🕐 Pontare</button>
+  <button class="btn-pontare-home" onclick="showScreen('pontaj-pin')">📋 Condica</button>
 </div>
 
 <!-- ══ SCREEN 4: PONTAJ PIN ══ -->
 <div class="screen" id="screen-pontaj-pin">
   <div class="search-icon">🔐</div>
   <div>
-    <div class="search-title">Pontare</div>
+    <div class="search-title">Condica</div>
     <div class="search-subtitle">Introdu PIN-ul tău (4 cifre)</div>
   </div>
   <div class="search-box">
@@ -647,7 +649,7 @@
       🚪 Am plecat
     </button>
   </div>
-  <button class="btn-pontaj-back" onclick="goToSearch()">← Înapoi la căutare</button>
+  <button class="btn-pontaj-back" onclick="showScreen('pontaj-pin')">← Alt angajat</button>
 </div>
 
 <!-- ══ SCREEN 2: RESULTS ══ -->
@@ -743,12 +745,12 @@ function showScreen(name) {
     headerSub.textContent = 'Cod de bare';
   } else if (name === 'pontaj-pin') {
     btnSearch.style.display = 'none';
-    headerSub.textContent = 'Pontare';
+    headerSub.textContent = 'Condica';
     document.getElementById('pin-input').value = '';
     setTimeout(() => document.getElementById('pin-input').focus(), 100);
   } else if (name === 'pontaj-actiuni') {
     btnSearch.style.display = 'none';
-    headerSub.textContent = 'Pontare — ' + (pontajAngajat ? pontajAngajat.nume : '');
+    headerSub.textContent = 'Condica — ' + (pontajAngajat ? pontajAngajat.nume : '');
   } else if (name === 'pontaj-concediu') {
     btnSearch.style.display = 'none';
     headerSub.textContent = 'Cerere concediu';
