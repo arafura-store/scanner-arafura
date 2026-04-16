@@ -568,6 +568,8 @@ function afiseazaRaport(raport, an, luna) {
 }
 
 function renderDetaliiComplet(r, isManager) {
+  const angId = r.angajat.id;
+  const angNume = r.angajat.nume;
   let html = '<div class="tranz-panel">';
 
   // Manager: ore pe magazine
@@ -587,39 +589,8 @@ function renderDetaliiComplet(r, isManager) {
     html += '</div></div>';
   }
 
-  // Tranzactii financiare
-  const tranz = tranzactiiCurent[r.angajat.id] || [];
-  const avansuri = tranz.filter(t => t.tip === 'avans');
-  const imprumuturi = tranz.filter(t => t.tip === 'imprumut');
-
-  html += '<div class="tranz-section"><h4>Avansuri <span style="color:var(--orange);">(${r.avans.toFixed(2)} RON)</span></h4>';
-  html += '<div class="tranz-list" id="tranz-avans-${r.angajat.id}">';
-  if (avansuri.length === 0) {
-    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun avans</div>';
-  } else {
-    for (const t of avansuri) {
-      html += renderTranzItem(t);
-    }
-  }
-  html += '</div>';
-  html += renderAddForm(r.angajat.id, r.angajat.nume, 'avans');
-  html += '</div>';
-
-  html += '<div class="tranz-section"><h4>Împrumuturi <span style="color:var(--red);">(${r.imprumut.toFixed(2)} RON)</span></h4>';
-  html += '<div class="tranz-list" id="tranz-imprumut-${r.angajat.id}">';
-  if (imprumuturi.length === 0) {
-    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun împrumut</div>';
-  } else {
-    for (const t of imprumuturi) {
-      html += renderTranzItem(t);
-    }
-  }
-  html += '</div>';
-  html += renderAddForm(r.angajat.id, r.angajat.nume, 'imprumut');
-  html += '</div>';
-
   // Concedii
-  const concediiAng = concediiCurent[r.angajat.id] || [];
+  const concediiAng = concediiCurent[angId] || [];
   const totalZileCO = r.zileConcediuOdihnaNr + r.zileConcediuMedicalNr;
   html += `<div class="tranz-section"><h4>Concedii (${totalZileCO} zile: ${r.zileConcediuOdihnaNr} odihnă, ${r.zileConcediuMedicalNr} medical)</h4>`;
   html += `<div class="tranz-list">`;
@@ -630,27 +601,58 @@ function renderDetaliiComplet(r, isManager) {
       const tipLabel = c.tip === 'medical' ? 'Medical' : 'Odihnă';
       const tipColor = c.tip === 'medical' ? 'var(--red)' : 'var(--blue)';
       const sumaCM = parseFloat(c.suma_medical) || 0;
+      let descHtml = c.tip === 'medical' ? 'Concediu medical' : 'Concediu de odihnă';
+      if (c.tip === 'medical') {
+        descHtml += ` — <input type="number" step="0.01" value="${sumaCM || ''}" placeholder="Suma CM" style="width:90px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; text-align:right; font-size:12px;" onchange="event.stopPropagation(); updateSumaMedical(${c.id}, this.value)"> RON`;
+      }
       html += `<div class="tranz-item">
         <span class="tranz-data">${c.data_start} → ${c.data_end}</span>
         <span class="tranz-suma" style="color:${tipColor}">${tipLabel}</span>
-        <span class="tranz-desc">${c.tip === 'medical' ? 'Concediu medical' : 'Concediu de odihnă'}${c.tip === 'medical' ? ` — <input type="number" step="0.01" value="${sumaCM || ''}" placeholder="Suma CM" style="width:90px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; text-align:right; font-size:12px;" onchange="event.stopPropagation(); updateSumaMedical(${c.id}, this.value)"> RON` : ''}</span>
+        <span class="tranz-desc">${descHtml}</span>
         <button class="tranz-del no-print" onclick="event.stopPropagation(); stergeConcediu(${c.id})" title="Șterge">✕</button>
       </div>`;
     }
   }
   html += '</div>';
-  // Formular adaugare concediu
   const today = new Date().toISOString().slice(0, 10);
   html += `<div class="tranz-add no-print">
-    <select id="co-tip-${r.angajat.id}">
+    <select id="co-tip-${angId}">
       <option value="concediu">Odihnă</option>
       <option value="medical">Medical</option>
     </select>
-    <input type="date" value="${today}" id="co-start-${r.angajat.id}">
+    <input type="date" value="${today}" id="co-start-${angId}">
     <span style="font-size:13px;">→</span>
-    <input type="date" value="${today}" id="co-end-${r.angajat.id}">
-    <button onclick="event.stopPropagation(); adaugaConcediu(${r.angajat.id}, '${r.angajat.nume}')">Adaugă concediu</button>
+    <input type="date" value="${today}" id="co-end-${angId}">
+    <button onclick="event.stopPropagation(); adaugaConcediu(${angId}, '${angNume}')">Adaugă concediu</button>
   </div>`;
+  html += '</div>';
+
+  // Avansuri
+  const tranz = tranzactiiCurent[angId] || [];
+  const avansuri = tranz.filter(t => t.tip === 'avans');
+  const imprumuturi = tranz.filter(t => t.tip === 'imprumut');
+
+  html += `<div class="tranz-section"><h4>Avansuri <span style="color:var(--orange);">(${r.avans.toFixed(2)} RON)</span></h4>`;
+  html += `<div class="tranz-list">`;
+  if (avansuri.length === 0) {
+    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun avans</div>';
+  } else {
+    for (const t of avansuri) { html += renderTranzItem(t); }
+  }
+  html += '</div>';
+  html += renderAddForm(angId, angNume, 'avans');
+  html += '</div>';
+
+  // Imprumuturi
+  html += `<div class="tranz-section"><h4>Împrumuturi <span style="color:var(--red);">(${r.imprumut.toFixed(2)} RON)</span></h4>`;
+  html += `<div class="tranz-list">`;
+  if (imprumuturi.length === 0) {
+    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun împrumut</div>';
+  } else {
+    for (const t of imprumuturi) { html += renderTranzItem(t); }
+  }
+  html += '</div>';
+  html += renderAddForm(angId, angNume, 'imprumut');
   html += '</div>';
 
   // Sumar financiar
@@ -668,12 +670,7 @@ function renderDetaliiComplet(r, isManager) {
   }
 
   html += '</div>';
-
-  // Fix template literals inside template literals
-  return html
-    .replace(/\$\{r\.avans\.toFixed\(2\)\}/g, r.avans.toFixed(2))
-    .replace(/\$\{r\.imprumut\.toFixed\(2\)\}/g, r.imprumut.toFixed(2))
-    .replace(/\$\{r\.angajat\.id\}/g, r.angajat.id);
+  return html;
 }
 
 function renderTranzItem(t) {
