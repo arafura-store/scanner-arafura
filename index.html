@@ -1017,7 +1017,7 @@ async function onPinInput() {
     const esteWeekend = (now.getDay() === 0 || now.getDay() === 6);
     document.getElementById('pontaj-salut').textContent = `Bună, ${pontajAngajat.nume}!`;
     document.getElementById('pontaj-magazin').innerHTML = `${storeName} — ${azi}` +
-      (esteWeekend ? '<br><span style="color:#e67e22; font-weight:700; font-size:15px;">⭐ WEEKEND — plată dublă</span>' : '');
+      (esteWeekend ? '<br><span style="color:#e67e22; font-weight:700; font-size:15px;">⭐ WEEKEND</span>' : '');
     updatePontajStatus();
     showScreen('pontaj-actiuni');
     document.getElementById('pin-input').value = '';
