@@ -299,10 +299,10 @@
     .no-results-text { font-size: 18px; font-weight: 600; }
     .no-results-sub  { font-size: 14px; margin-top: 6px; }
 
-    /* ── SCREEN 4-6: PONTAJ ──────────────────── */
+    /* ── SCREEN 4-8: PONTAJ & SESIZARI ────────── */
     #screen-pontaj-pin,
     #screen-pontaj-actiuni,
-    #screen-pontaj-concediu {
+    #screen-sesizare-pin {
       justify-content: center;
       align-items: center;
       padding: 30px 24px;
@@ -384,12 +384,17 @@
       text-align: center;
     }
     /* ── PONTARE ───────────────────────────── */
-    .btn-pontare-home {
+    .home-buttons {
       position: fixed;
       bottom: 20px;
       right: 20px;
-      padding: 18px 32px;
-      font-size: 20px;
+      display: flex;
+      gap: 10px;
+      z-index: 50;
+    }
+    .btn-pontare-home {
+      padding: 18px 28px;
+      font-size: 18px;
       font-weight: 800;
       background: var(--blue);
       color: white;
@@ -397,10 +402,11 @@
       border-radius: 50px;
       cursor: pointer;
       box-shadow: 0 4px 16px rgba(26,115,232,.4);
-      z-index: 50;
       letter-spacing: .5px;
     }
     .btn-pontare-home:active { background: var(--blue2); }
+    .btn-sesizare-home { background: var(--orange); box-shadow: 0 4px 16px rgba(230,126,34,.4); }
+    .btn-sesizare-home:active { background: #d35400; }
 
     .pontaj-status {
       background: var(--bg);
@@ -607,7 +613,10 @@
     <button class="btn-voice" id="btn-voice" onclick="toggleVoice()" title="Caută cu vocea">🎤</button>
   </div>
   <div class="voice-hint" id="voice-hint">Apasă 🎤 și spune numele produsului</div>
-  <button class="btn-pontare-home" onclick="showScreen('pontaj-pin')">📋 Condica</button>
+  <div class="home-buttons">
+    <button class="btn-pontare-home" onclick="showScreen('pontaj-pin')">📋 Condica</button>
+    <button class="btn-pontare-home btn-sesizare-home" onclick="showScreen('sesizare-pin')">⚠️ Sesizări</button>
+  </div>
 </div>
 
 <!-- ══ SCREEN 4: PONTAJ PIN ══ -->
@@ -650,6 +659,60 @@
     </button>
   </div>
   <button class="btn-pontaj-back" onclick="showScreen('pontaj-pin')">← Alt angajat</button>
+</div>
+
+<!-- ══ SCREEN 7: SESIZARE PIN ══ -->
+<div class="screen" id="screen-sesizare-pin">
+  <div class="search-icon">🔐</div>
+  <div>
+    <div class="search-title">Sesizări</div>
+    <div class="search-subtitle">Introdu PIN-ul tău (4 cifre)</div>
+  </div>
+  <div class="search-box">
+    <input
+      class="search-input"
+      id="sesizare-pin-input"
+      type="password"
+      inputmode="numeric"
+      maxlength="4"
+      placeholder="****"
+      style="text-align:center; font-size:32px; letter-spacing:12px;"
+      oninput="onSesizarePinInput()"
+      autocomplete="off"
+    >
+  </div>
+  <button class="btn-pontaj-back" onclick="goToSearch()">← Înapoi la căutare</button>
+</div>
+
+<!-- ══ SCREEN 8: SESIZARE FORMULAR ══ -->
+<div class="screen" id="screen-sesizare-form">
+  <div style="padding:20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; align-items:center; gap:16px;">
+    <div class="search-title" id="sesizare-salut" style="font-size:18px;"></div>
+    <div class="concediu-form" style="max-width:500px;">
+      <label class="concediu-label">Tip sesizare:</label>
+      <select class="search-input" id="sesizare-tip" style="padding:14px 20px; font-size:16px;">
+        <option value="">— Selectează —</option>
+        <option value="cod_gresit">Cod de bare greșit</option>
+        <option value="cod_lipsa">Cod de bare lipsă</option>
+        <option value="cod_ilizibil">Cod de bare ilizibil / deteriorat</option>
+        <option value="produs_gresit">Produs greșit în sistem</option>
+        <option value="produs_lipsa">Produs lipsă din sistem</option>
+        <option value="propunere">Propunere / Sugestie</option>
+      </select>
+
+      <label class="concediu-label">Cod articol (opțional):</label>
+      <input type="text" class="search-input" id="sesizare-cod" placeholder="ex: 932786" style="font-size:16px;">
+
+      <label class="concediu-label">Denumire produs (opțional):</label>
+      <input type="text" class="search-input" id="sesizare-produs" placeholder="ex: Dosar plastic A4" style="font-size:16px;">
+
+      <label class="concediu-label">Mesaj:</label>
+      <textarea class="search-input" id="sesizare-mesaj" rows="4" placeholder="Descrie problema sau propunerea..." style="font-size:16px; resize:none;"></textarea>
+
+      <button class="btn-search" onclick="trimitereSesizare()" style="margin-top:10px; font-size:18px;">Trimite sesizarea</button>
+      <button class="btn-pontaj-back" onclick="showScreen('sesizare-pin')">← Înapoi</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══ SCREEN 2: RESULTS ══ -->
@@ -730,8 +793,8 @@ function showScreen(name) {
   const headerSub = document.getElementById('header-sub');
 
   // Butonul de pontare: ascunde pe ecranele de pontaj
-  const btnPontareHome = document.querySelector('.btn-pontare-home');
-  if (btnPontareHome) btnPontareHome.style.display = name.startsWith('pontaj') ? 'none' : 'block';
+  const homeButtons = document.querySelector('.home-buttons');
+  if (homeButtons) homeButtons.style.display = (name.startsWith('pontaj') || name.startsWith('sesizare')) ? 'none' : 'flex';
 
   if (name === 'search') {
     btnSearch.style.display = 'none';
@@ -743,6 +806,14 @@ function showScreen(name) {
   } else if (name === 'barcode') {
     btnSearch.style.display = 'block';
     headerSub.textContent = 'Cod de bare';
+  } else if (name === 'sesizare-pin') {
+    btnSearch.style.display = 'none';
+    headerSub.textContent = 'Sesizări';
+    document.getElementById('sesizare-pin-input').value = '';
+    setTimeout(() => document.getElementById('sesizare-pin-input').focus(), 100);
+  } else if (name === 'sesizare-form') {
+    btnSearch.style.display = 'none';
+    headerSub.textContent = 'Sesizare — ' + (sesizareAngajat ? sesizareAngajat.nume : '');
   } else if (name === 'pontaj-pin') {
     btnSearch.style.display = 'none';
     headerSub.textContent = 'Condica';
@@ -1144,6 +1215,78 @@ async function trimitereConcediu() {
     if (resp.ok) {
       showToast('Cerere de concediu trimisă!');
       showScreen('pontaj-actiuni');
+    } else {
+      throw new Error('Eroare salvare');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  } finally {
+    showLoading(false);
+  }
+}
+
+// ── SESIZARI ─────────────────────────────────────────────────────
+let sesizareAngajat = null;
+
+async function onSesizarePinInput() {
+  const pin = document.getElementById('sesizare-pin-input').value;
+  if (pin.length < 4) return;
+
+  showLoading(true);
+  try {
+    const resp = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/angajati?pin=eq.${pin}&activ=eq.true&select=id,nume`,
+      { headers: HEADERS }
+    );
+    const data = await resp.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect');
+      document.getElementById('sesizare-pin-input').value = '';
+      return;
+    }
+
+    sesizareAngajat = data[0];
+    document.getElementById('sesizare-salut').textContent = `${sesizareAngajat.nume} — ${storeName}`;
+    // Reseteaza formularul
+    document.getElementById('sesizare-tip').value = '';
+    document.getElementById('sesizare-cod').value = '';
+    document.getElementById('sesizare-produs').value = '';
+    document.getElementById('sesizare-mesaj').value = '';
+    showScreen('sesizare-form');
+    document.getElementById('sesizare-pin-input').value = '';
+  } catch (e) {
+    showToast('Eroare conexiune');
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function trimitereSesizare() {
+  const tip = document.getElementById('sesizare-tip').value;
+  const mesaj = document.getElementById('sesizare-mesaj').value.trim();
+
+  if (!tip) { showToast('Selectează tipul sesizării'); return; }
+  if (!mesaj) { showToast('Scrie un mesaj'); return; }
+
+  showLoading(true);
+  try {
+    const resp = await fetch(`${window.SUPABASE_URL}/rest/v1/sesizari`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        angajat_id: sesizareAngajat.id,
+        angajat_nume: sesizareAngajat.nume,
+        magazin: storeName,
+        tip: tip,
+        cod_art: document.getElementById('sesizare-cod').value.trim() || null,
+        nume_art: document.getElementById('sesizare-produs').value.trim() || null,
+        mesaj: mesaj
+      })
+    });
+    if (resp.ok) {
+      showToast('Sesizare trimisă! Mulțumim!', 3000);
+      showScreen('sesizare-pin');
     } else {
       throw new Error('Eroare salvare');
     }
