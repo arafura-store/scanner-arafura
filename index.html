@@ -465,6 +465,31 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- ══ SCREEN 0: SETUP MAGAZIN ══ -->
+<div class="screen" id="screen-setup">
+  <div class="search-icon">🏪</div>
+  <div>
+    <div class="search-title">Configurare magazin</div>
+    <div class="search-subtitle">Selectează magazinul pentru această tabletă</div>
+  </div>
+  <div class="search-box">
+    <select class="search-input" id="select-magazin" style="padding:18px 20px; font-size:18px;">
+      <option value="">— Alege magazinul —</option>
+      <option value="DEPOZIT PAPETARIE">Depozit Papetărie</option>
+      <option value="MARVIMEX">Marvimex</option>
+      <option value="TOMIS 3">Tomis 3</option>
+      <option value="MEDGIDIA">Medgidia</option>
+      <option value="NAVODARI">Năvodari</option>
+      <option value="POARTA 6">Poarta 6</option>
+      <option value="BABADAG">Babadag</option>
+      <option value="SHOWROOM">Showroom</option>
+    </select>
+  </div>
+  <div class="search-buttons">
+    <button class="btn-search" onclick="saveStore()">Salvează</button>
+  </div>
+</div>
+
 <!-- ══ SCREEN 1: SEARCH ══ -->
 <div class="screen active" id="screen-search">
   <div class="search-icon">🔍</div>
@@ -530,6 +555,37 @@ let recognition   = null;
 let isListening   = false;
 let brightMax     = false;
 let searchTimeout = null;
+let storeName     = localStorage.getItem('arafura_magazin') || '';
+
+// ── SETUP MAGAZIN ────────────────────────────────────────────────
+function initStore() {
+  if (!storeName) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-setup').classList.add('active');
+  } else {
+    document.getElementById('header-sub').textContent = storeName;
+  }
+}
+
+function saveStore() {
+  const sel = document.getElementById('select-magazin').value;
+  if (!sel) { showToast('Selectează un magazin'); return; }
+  storeName = sel;
+  localStorage.setItem('arafura_magazin', sel);
+  document.getElementById('header-sub').textContent = sel;
+  showScreen('search');
+  showToast('Magazin salvat: ' + sel);
+}
+
+// ── LOG CAUTARE ──────────────────────────────────────────────────
+function logSearch(query, rezultate) {
+  if (!storeName) return;
+  fetch(`${window.SUPABASE_URL}/rest/v1/search_log`, {
+    method: 'POST',
+    headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ magazin: storeName, query: query, rezultate: rezultate })
+  }).catch(() => {});  // silent fail — nu blocam cautarea
+}
 
 // ── NAVIGATION ───────────────────────────────────────────────────
 function showScreen(name) {
@@ -542,7 +598,7 @@ function showScreen(name) {
 
   if (name === 'search') {
     btnSearch.style.display = 'none';
-    headerSub.textContent = 'Căutare produse';
+    headerSub.textContent = storeName || 'Căutare produse';
     if (brightMax) toggleBrightness();
   } else if (name === 'results') {
     btnSearch.style.display = 'block';
@@ -673,6 +729,7 @@ async function doSearch() {
     }
 
     renderResults(query, exact, similar, totalCount);
+    logSearch(query, exact.length + similar.length);
     showScreen('results');
   } catch (e) {
     const msg = e.message.includes('timeout') ? 'Conexiune lentă — încearcă din nou' : 'Eroare conexiune. Verifică internetul.';
@@ -1031,6 +1088,9 @@ function getProductIcon(name) {
   if (n.includes('sac') || n.includes('punga'))                             return '🛍️';
   return '📦';
 }
+
+// Init magazin la incarcare
+initStore();
 
 // Prevent zoom on double tap
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
