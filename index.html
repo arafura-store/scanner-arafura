@@ -1012,8 +1012,9 @@ async function onPinInput() {
     pontajRecords = Array.isArray(pontaje) ? pontaje : [];
     pontajUltimul = pontajRecords.length > 0 ? pontajRecords[pontajRecords.length - 1] : null;
 
+    const azi = new Date().toLocaleDateString('ro-RO', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
     document.getElementById('pontaj-salut').textContent = `Bună, ${pontajAngajat.nume}!`;
-    document.getElementById('pontaj-magazin').textContent = storeName;
+    document.getElementById('pontaj-magazin').textContent = `${storeName} — ${azi}`;
     updatePontajStatus();
     showScreen('pontaj-actiuni');
     document.getElementById('pin-input').value = '';
