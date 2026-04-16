@@ -37,7 +37,7 @@
       gap: 14px;
     }
     .header h1 { font-size: 22px; font-weight: 800; }
-    .header-controls { display: flex; gap: 10px; align-items: center; }
+    .header-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
     .header select, .header button {
       padding: 10px 16px;
       font-size: 15px;
@@ -107,18 +107,8 @@
       font-weight: 700;
       border-top: 2px solid var(--blue);
     }
-    .input-cell {
-      width: 80px;
-      padding: 6px 8px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 13px;
-      text-align: right;
-      background: #fffef0;
-    }
-    .input-cell:focus { border-color: var(--blue); outline: none; background: white; }
     .rest-plata { color: var(--green); font-weight: 700; }
-    .rest-negativ { color: var(--red); }
+    .rest-negativ { color: var(--red); font-weight: 700; }
 
     .detail-table { margin-bottom: 30px; }
     .day-sat { background: #fef9c3; }
@@ -143,16 +133,6 @@
       cursor: pointer;
     }
     .btn-export:hover { background: #166a3a; }
-    .btn-save {
-      padding: 10px 20px;
-      background: var(--orange);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-    }
 
     .manager-stores {
       display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
@@ -165,11 +145,89 @@
     }
     .store-badge strong { color: var(--blue); }
 
+    /* Tranzactii panel */
+    .tranz-panel {
+      padding: 16px;
+      background: #fafbfc;
+    }
+    .tranz-section {
+      margin-bottom: 16px;
+    }
+    .tranz-section h4 {
+      font-size: 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tranz-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .tranz-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .tranz-item .tranz-data { color: var(--sub); min-width: 80px; }
+    .tranz-item .tranz-suma { font-weight: 700; min-width: 80px; text-align: right; }
+    .tranz-item .tranz-desc { flex: 1; color: #555; }
+    .tranz-item.avans .tranz-suma { color: var(--orange); }
+    .tranz-item.imprumut .tranz-suma { color: var(--red); }
+    .tranz-item .tranz-del {
+      background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px;
+    }
+    .tranz-item .tranz-del:hover { color: var(--red); }
+
+    .tranz-add {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .tranz-add input, .tranz-add select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .tranz-add input[type=number] { width: 90px; text-align: right; }
+    .tranz-add input[type=date] { width: 130px; }
+    .tranz-add input[type=text] { width: 160px; }
+    .tranz-add button {
+      padding: 8px 14px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .tranz-total {
+      display: flex;
+      gap: 20px;
+      padding: 10px 12px;
+      background: white;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      font-size: 14px;
+      font-weight: 600;
+      flex-wrap: wrap;
+    }
+
     @media print {
       body { padding: 0; font-size: 11px; }
-      .header button, .header select, .btn-save { display: none; }
-      .no-print { display: none; }
-      .input-cell { border: none; background: transparent; }
+      .header button, .header select { display: none; }
+      .no-print, .tranz-add, .tranz-del { display: none !important; }
     }
   </style>
 </head>
@@ -181,7 +239,6 @@
     <select id="sel-luna"></select>
     <select id="sel-an"></select>
     <button onclick="genereazaRaport()">Generează</button>
-    <button class="btn-save" id="btn-save" onclick="salveazaFinanciar()" style="display:none">Salvează avansuri</button>
     <button class="btn-export" onclick="window.print()">Printează</button>
   </div>
 </div>
@@ -193,7 +250,7 @@ const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${wind
 const API = window.SUPABASE_URL + '/rest/v1';
 
 let raportCurent = null;
-let financiarCurent = {};
+let tranzactiiCurent = {};  // angajat_id -> [tranzactii]
 let lunaSelectata = 0;
 let anSelectat = 0;
 
@@ -246,20 +303,30 @@ async function genereazaRaport() {
     const pontaje = await fetchAll(`${API}/pontaj?select=*&data=gte.${primaZi}&data=lte.${ultimaZi}&order=data.asc,created_at.asc`);
     const concedii = await fetchAll(`${API}/concedii?select=*&data_start=lte.${ultimaZi}&data_end=gte.${primaZi}&aprobat=not.eq.false`);
 
-    // Fetch financiar (avansuri, imprumuturi)
-    const financiar = await fetchAll(`${API}/financiar?select=*&luna=eq.${lunaSelectata+1}&an=eq.${anSelectat}`);
-    financiarCurent = {};
-    for (const f of financiar) {
-      financiarCurent[f.angajat_id] = f;
+    // Fetch tranzactii luna curenta
+    const tranzactii = await fetchAll(`${API}/tranzactii?select=*&luna=eq.${lunaSelectata+1}&an=eq.${anSelectat}&order=data.asc`);
+    tranzactiiCurent = {};
+    for (const t of tranzactii) {
+      if (!tranzactiiCurent[t.angajat_id]) tranzactiiCurent[t.angajat_id] = [];
+      tranzactiiCurent[t.angajat_id].push(t);
     }
 
     raportCurent = calculeazaRaport(angajati, pontaje, concedii, anSelectat, lunaSelectata);
     afiseazaRaport(raportCurent, anSelectat, lunaSelectata);
-    document.getElementById('btn-save').style.display = 'inline-block';
 
   } catch (e) {
     content.innerHTML = `<div class="loading">Eroare: ${e.message}</div>`;
   }
+}
+
+function calcTranzactii(angId) {
+  const lista = tranzactiiCurent[angId] || [];
+  let avans = 0, imprumut = 0;
+  for (const t of lista) {
+    if (t.tip === 'avans') avans += parseFloat(t.suma) || 0;
+    else if (t.tip === 'imprumut') imprumut += parseFloat(t.suma) || 0;
+  }
+  return { avans, imprumut };
 }
 
 function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
@@ -282,15 +349,10 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
       }
     }
 
-    let oreLucrateLV = 0;
-    let oreLucrateWE = 0;
-    let zileLucrateLV = 0;
-    let zileLucrateWE = 0;
-    let oreConcediu = 0;
-    let zileConcediuNr = 0;
+    let oreLucrateLV = 0, oreLucrateWE = 0;
+    let zileLucrateLV = 0, zileLucrateWE = 0;
+    let oreConcediu = 0, zileConcediuNr = 0;
     const detaliiZile = [];
-
-    // Ore pe magazine (pt manager)
     const orePeMagazin = {};
 
     const pontajePeZi = {};
@@ -312,7 +374,6 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
         if (esteSam) oreCO = ang.ore_sambata || 0;
         else if (esteDum) oreCO = ang.ore_duminica || 0;
         else oreCO = ang.ore_luni_vineri || 0;
-
         oreConcediu += oreCO;
         zileConcediuNr++;
         detaliiZile.push({
@@ -326,17 +387,14 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
           if (p.ora_intrare && p.ora_iesire) {
             const ore = (new Date(p.ora_iesire) - new Date(p.ora_intrare)) / 3600000;
             oreZi += ore;
-            // Ore pe magazin
             const mag = p.magazin || 'Necunoscut';
             orePeMagazin[mag] = (orePeMagazin[mag] || 0) + ore;
           }
         }
         oreZi = Math.round(oreZi * 100) / 100;
-
         const mult = esteWE ? 2 : 1;
         if (esteWE) { oreLucrateWE += oreZi; zileLucrateWE++; }
         else { oreLucrateLV += oreZi; zileLucrateLV++; }
-
         detaliiZile.push({
           data: dataStr, zi: ziSapt, tip: esteWE ? 'weekend' : 'lucru',
           ore: oreZi, tarif: ang.tarif_ora || 0,
@@ -352,30 +410,23 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
     const sumCO = esteFix ? 0 : oreConcediu * (ang.tarif_ora || 0);
     const totalSuma = esteFix ? ang.salariu_fix : (sumLV + sumWE + sumCO);
 
-    const fin = financiarCurent[ang.id] || {};
-    const avans = fin.avans || 0;
-    const imprumut = fin.imprumut || 0;
+    const { avans, imprumut } = calcTranzactii(ang.id);
     const restPlata = totalSuma - avans - imprumut;
 
     rezultate.push({
       angajat: ang,
       oreLucrateLV: Math.round(oreLucrateLV * 100) / 100,
       oreLucrateWE: Math.round(oreLucrateWE * 100) / 100,
-      zileLucrateLV,
-      zileLucrateWE,
-      oreConcediu,
-      zileConcediuNr,
+      zileLucrateLV, zileLucrateWE, oreConcediu, zileConcediuNr,
       sumLV: Math.round(sumLV * 100) / 100,
       sumWE: Math.round(sumWE * 100) / 100,
       sumCO: Math.round(sumCO * 100) / 100,
       totalSuma: Math.round(totalSuma * 100) / 100,
       avans, imprumut,
       restPlata: Math.round(restPlata * 100) / 100,
-      detaliiZile,
-      orePeMagazin
+      detaliiZile, orePeMagazin
     });
   }
-
   return rezultate;
 }
 
@@ -385,7 +436,6 @@ function numeZi(zi) {
 
 function afiseazaRaport(raport, an, luna) {
   const content = document.getElementById('content');
-
   const totalSalarii = raport.reduce((s, r) => s + r.totalSuma, 0);
   const totalAvans = raport.reduce((s, r) => s + r.avans, 0);
   const totalImprumut = raport.reduce((s, r) => s + r.imprumut, 0);
@@ -442,10 +492,7 @@ function afiseazaRaport(raport, an, luna) {
     const isFix = !!r.angajat.salariu_fix;
     const tipLabel = isManager ? ' <span style="color:#999; font-size:11px;">MANAGER</span>' :
                      isFix ? ' <span style="color:#1a73e8; font-size:11px;">FIX</span>' : '';
-
     const restCls = r.restPlata < 0 ? 'rest-negativ' : 'rest-plata';
-    const finAvans = financiarCurent[r.angajat.id]?.avans || 0;
-    const finImprumut = financiarCurent[r.angajat.id]?.imprumut || 0;
 
     html += `
         <tr style="cursor:pointer" onclick="toggleDetalii('det-${r.angajat.id}')">
@@ -458,26 +505,17 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num">${r.zileConcediuNr || '—'}</td>
           <td class="num">${isFix ? '—' : (r.sumCO ? r.sumCO.toFixed(2) : '—')}</td>
           <td class="num bold">${r.totalSuma.toFixed(2)}</td>
-          <td class="num" onclick="event.stopPropagation()">
-            <input class="input-cell" type="number" step="0.01" value="${finAvans || ''}"
-              placeholder="0" data-ang="${r.angajat.id}" data-field="avans"
-              onchange="updateRest(${r.angajat.id})">
-          </td>
-          <td class="num" onclick="event.stopPropagation()">
-            <input class="input-cell" type="number" step="0.01" value="${finImprumut || ''}"
-              placeholder="0" data-ang="${r.angajat.id}" data-field="imprumut"
-              onchange="updateRest(${r.angajat.id})">
-          </td>
-          <td class="num bold ${restCls}" id="rest-${r.angajat.id}">${r.restPlata.toFixed(2)} RON</td>
+          <td class="num" style="color:var(--orange)">${r.avans ? r.avans.toFixed(2) : '—'}</td>
+          <td class="num" style="color:var(--red)">${r.imprumut ? r.imprumut.toFixed(2) : '—'}</td>
+          <td class="num ${restCls}">${r.restPlata.toFixed(2)} RON</td>
         </tr>
         <tr id="det-${r.angajat.id}" style="display:none">
           <td colspan="12" style="padding:0;">
-            ${isManager ? renderDetaliiManager(r) : renderDetalii(r)}
+            ${renderDetaliiComplet(r, isManager)}
           </td>
         </tr>`;
   }
 
-  // Rand total
   html += `
         <tr class="total-row">
           <td class="bold" colspan="2">TOTAL</td>
@@ -488,117 +526,149 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num">${raport.reduce((s,r)=>s+r.zileConcediuNr,0)}</td>
           <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumCO,0).toFixed(2)}</td>
           <td class="num bold">${totalSalarii.toFixed(2)}</td>
-          <td class="num bold" id="total-avans">${totalAvans.toFixed(2)}</td>
-          <td class="num bold" id="total-imprumut">${totalImprumut.toFixed(2)}</td>
-          <td class="num bold rest-plata" id="total-rest">${totalRest.toFixed(2)} RON</td>
+          <td class="num bold">${totalAvans.toFixed(2)}</td>
+          <td class="num bold">${totalImprumut.toFixed(2)}</td>
+          <td class="num bold rest-plata">${totalRest.toFixed(2)} RON</td>
         </tr>`;
 
   html += '</tbody></table></div>';
-
   content.innerHTML = html;
 }
 
-function updateRest(angId) {
-  const r = raportCurent.find(x => x.angajat.id === angId);
-  if (!r) return;
+function renderDetaliiComplet(r, isManager) {
+  let html = '<div class="tranz-panel">';
 
-  const avansInput = document.querySelector(`input[data-ang="${angId}"][data-field="avans"]`);
-  const imprumutInput = document.querySelector(`input[data-ang="${angId}"][data-field="imprumut"]`);
-  const avans = parseFloat(avansInput.value) || 0;
-  const imprumut = parseFloat(imprumutInput.value) || 0;
-  const rest = r.totalSuma - avans - imprumut;
-
-  const restEl = document.getElementById(`rest-${angId}`);
-  restEl.textContent = rest.toFixed(2) + ' RON';
-  restEl.className = `num bold ${rest < 0 ? 'rest-negativ' : 'rest-plata'}`;
-
-  // Recalculeaza totaluri
-  let totalAvans = 0, totalImprumut = 0, totalRest = 0;
-  for (const rr of raportCurent) {
-    const ai = document.querySelector(`input[data-ang="${rr.angajat.id}"][data-field="avans"]`);
-    const ii = document.querySelector(`input[data-ang="${rr.angajat.id}"][data-field="imprumut"]`);
-    const a = ai ? (parseFloat(ai.value) || 0) : 0;
-    const i = ii ? (parseFloat(ii.value) || 0) : 0;
-    totalAvans += a;
-    totalImprumut += i;
-    totalRest += rr.totalSuma - a - i;
-  }
-  document.getElementById('total-avans').textContent = totalAvans.toFixed(2);
-  document.getElementById('total-imprumut').textContent = totalImprumut.toFixed(2);
-  const totalRestEl = document.getElementById('total-rest');
-  totalRestEl.textContent = totalRest.toFixed(2) + ' RON';
-}
-
-async function salveazaFinanciar() {
-  const luna = lunaSelectata + 1;
-  const an = anSelectat;
-
-  for (const r of raportCurent) {
-    const avansInput = document.querySelector(`input[data-ang="${r.angajat.id}"][data-field="avans"]`);
-    const imprumutInput = document.querySelector(`input[data-ang="${r.angajat.id}"][data-field="imprumut"]`);
-    const avans = parseFloat(avansInput?.value) || 0;
-    const imprumut = parseFloat(imprumutInput?.value) || 0;
-
-    if (avans === 0 && imprumut === 0 && !financiarCurent[r.angajat.id]) continue;
-
-    const body = { angajat_id: r.angajat.id, luna, an, avans, imprumut };
-
-    if (financiarCurent[r.angajat.id]) {
-      // Update
-      await fetch(`${API}/financiar?id=eq.${financiarCurent[r.angajat.id].id}`, {
-        method: 'PATCH',
-        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ avans, imprumut })
-      });
+  // Manager: ore pe magazine
+  if (isManager) {
+    html += '<div class="tranz-section"><h4>Ore pe magazine:</h4>';
+    html += '<div class="manager-stores">';
+    const stores = Object.entries(r.orePeMagazin).sort((a,b) => b[1] - a[1]);
+    const totalOre = stores.reduce((s, [,h]) => s + h, 0);
+    if (stores.length === 0) {
+      html += '<span style="color:#999;">Nicio activitate</span>';
     } else {
-      // Insert
-      const resp = await fetch(`${API}/financiar`, {
-        method: 'POST',
-        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-        body: JSON.stringify(body)
-      });
-      const data = await resp.json();
-      if (Array.isArray(data) && data.length > 0) {
-        financiarCurent[r.angajat.id] = data[0];
+      for (const [mag, ore] of stores) {
+        html += `<div class="store-badge"><strong>${mag}</strong>: ${ore.toFixed(1)}h</div>`;
       }
+      html += `<div class="store-badge" style="background:#e8f0fe;"><strong>TOTAL</strong>: ${totalOre.toFixed(1)}h</div>`;
     }
+    html += '</div></div>';
   }
 
-  alert('Avansuri și împrumuturi salvate!');
-}
+  // Tranzactii financiare
+  const tranz = tranzactiiCurent[r.angajat.id] || [];
+  const avansuri = tranz.filter(t => t.tip === 'avans');
+  const imprumuturi = tranz.filter(t => t.tip === 'imprumut');
 
-function renderDetaliiManager(r) {
-  // Manager: arata ore pe fiecare magazin
-  let html = '<div style="padding:16px;">';
-  html += '<strong style="font-size:14px;">Ore pe magazine:</strong>';
-  html += '<div class="manager-stores">';
-
-  const stores = Object.entries(r.orePeMagazin).sort((a,b) => b[1] - a[1]);
-  const totalOre = stores.reduce((s, [,h]) => s + h, 0);
-
-  if (stores.length === 0) {
-    html += '<span style="color:#999;">Nicio activitate</span>';
+  html += '<div class="tranz-section"><h4>Avansuri <span style="color:var(--orange);">(${r.avans.toFixed(2)} RON)</span></h4>';
+  html += '<div class="tranz-list" id="tranz-avans-${r.angajat.id}">';
+  if (avansuri.length === 0) {
+    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun avans</div>';
   } else {
-    for (const [mag, ore] of stores) {
-      html += `<div class="store-badge"><strong>${mag}</strong>: ${ore.toFixed(1)}h</div>`;
+    for (const t of avansuri) {
+      html += renderTranzItem(t);
     }
-    html += `<div class="store-badge" style="background:#e8f0fe;"><strong>TOTAL</strong>: ${totalOre.toFixed(1)}h</div>`;
   }
-
+  html += '</div>';
+  html += renderAddForm(r.angajat.id, r.angajat.nume, 'avans');
   html += '</div>';
 
-  // Plus detalii zilnice
+  html += '<div class="tranz-section"><h4>Împrumuturi <span style="color:var(--red);">(${r.imprumut.toFixed(2)} RON)</span></h4>';
+  html += '<div class="tranz-list" id="tranz-imprumut-${r.angajat.id}">';
+  if (imprumuturi.length === 0) {
+    html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun împrumut</div>';
+  } else {
+    for (const t of imprumuturi) {
+      html += renderTranzItem(t);
+    }
+  }
+  html += '</div>';
+  html += renderAddForm(r.angajat.id, r.angajat.nume, 'imprumut');
+  html += '</div>';
+
+  // Sumar financiar
+  html += `<div class="tranz-total">
+    <span>Salariu: <strong>${r.totalSuma.toFixed(2)} RON</strong></span>
+    <span>- Avansuri: <strong style="color:var(--orange)">${r.avans.toFixed(2)}</strong></span>
+    <span>- Împrumuturi: <strong style="color:var(--red)">${r.imprumut.toFixed(2)}</strong></span>
+    <span>= <strong class="${r.restPlata < 0 ? 'rest-negativ' : 'rest-plata'}">${r.restPlata.toFixed(2)} RON REST PLATĂ</strong></span>
+  </div>`;
+
+  // Detalii zilnice
   if (r.detaliiZile.length > 0) {
     html += '<div style="margin-top:16px;">' + renderDetaliiTable(r) + '</div>';
   }
 
   html += '</div>';
-  return html;
+
+  // Fix template literals inside template literals
+  return html
+    .replace(/\$\{r\.avans\.toFixed\(2\)\}/g, r.avans.toFixed(2))
+    .replace(/\$\{r\.imprumut\.toFixed\(2\)\}/g, r.imprumut.toFixed(2))
+    .replace(/\$\{r\.angajat\.id\}/g, r.angajat.id);
 }
 
-function renderDetalii(r) {
-  if (r.detaliiZile.length === 0) return '<div style="padding:16px; color:#999;">Nicio activitate</div>';
-  return renderDetaliiTable(r);
+function renderTranzItem(t) {
+  return `<div class="tranz-item ${t.tip}">
+    <span class="tranz-data">${t.data}</span>
+    <span class="tranz-suma">${parseFloat(t.suma).toFixed(2)} RON</span>
+    <span class="tranz-desc">${t.descriere || '—'}</span>
+    <button class="tranz-del no-print" onclick="event.stopPropagation(); stergeTranzactie(${t.id})" title="Șterge">✕</button>
+  </div>`;
+}
+
+function renderAddForm(angId, angNume, tip) {
+  const today = new Date().toISOString().slice(0, 10);
+  const label = tip === 'avans' ? 'Adaugă avans' : 'Adaugă împrumut';
+  return `<div class="tranz-add no-print">
+    <input type="number" step="0.01" placeholder="Suma" id="tranz-suma-${tip}-${angId}">
+    <input type="date" value="${today}" id="tranz-data-${tip}-${angId}">
+    <input type="text" placeholder="Descriere" id="tranz-desc-${tip}-${angId}">
+    <button onclick="event.stopPropagation(); adaugaTranzactie(${angId}, '${angNume}', '${tip}')">${label}</button>
+  </div>`;
+}
+
+async function adaugaTranzactie(angId, angNume, tip) {
+  const suma = parseFloat(document.getElementById(`tranz-suma-${tip}-${angId}`).value);
+  const data = document.getElementById(`tranz-data-${tip}-${angId}`).value;
+  const descriere = document.getElementById(`tranz-desc-${tip}-${angId}`).value;
+
+  if (!suma || suma <= 0) { alert('Introdu o sumă validă'); return; }
+  if (!data) { alert('Selectează data'); return; }
+
+  try {
+    const resp = await fetch(`${API}/tranzactii`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        angajat_id: angId,
+        angajat_nume: angNume,
+        tip, suma, data, descriere,
+        luna: lunaSelectata + 1,
+        an: anSelectat
+      })
+    });
+    const result = await resp.json();
+    if (Array.isArray(result) && result.length > 0) {
+      // Regenereaza raportul
+      genereazaRaport();
+    }
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function stergeTranzactie(id) {
+  if (!confirm('Sigur vrei să ștergi această tranzacție?')) return;
+  try {
+    await fetch(`${API}/tranzactii?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: HEADERS
+    });
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
 }
 
 function renderDetaliiTable(r) {
