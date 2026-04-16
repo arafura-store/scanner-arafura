@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitorizare — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #1a73e8;
+      --green: #1e8449;
+      --red: #c0392b;
+      --orange: #e67e22;
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1a1a2e;
+      --sub: #6b7280;
+      --border: #e5e7eb;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+    }
+    .header {
+      background: var(--blue);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+    .header h1 { font-size: 22px; font-weight: 800; }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .tab {
+      flex: 1;
+      padding: 16px;
+      text-align: center;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      background: var(--card);
+      color: var(--sub);
+      border-bottom: 3px solid transparent;
+      transition: all .15s;
+    }
+    .tab:hover { background: var(--bg); }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+    .filters {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .filters select, .filters input {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+    }
+    .filters button {
+      padding: 10px 20px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .summary-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .summary-card .label { font-size: 12px; color: var(--sub); }
+    .summary-card .value { font-size: 24px; font-weight: 800; margin-top: 4px; }
+    .summary-card .value.blue { color: var(--blue); }
+    .summary-card .value.green { color: var(--green); }
+    .summary-card .value.orange { color: var(--orange); }
+    .summary-card .value.red { color: var(--red); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      font-size: 13px;
+    }
+    th {
+      background: var(--blue);
+      color: white;
+      padding: 10px 8px;
+      text-align: left;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0f4ff; }
+    .num { text-align: right; }
+    .bold { font-weight: 700; }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-nou { background: #fee2e2; color: #991b1b; }
+    .badge-rezolvat { background: #d1fae5; color: #065f46; }
+    .badge-magazin { background: #e8f0fe; color: var(--blue); }
+
+    .tip-label {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .tip-cod_gresit { background: #fee2e2; color: #991b1b; }
+    .tip-cod_lipsa { background: #fef3c7; color: #92400e; }
+    .tip-cod_ilizibil { background: #fce7f3; color: #9d174d; }
+    .tip-produs_gresit { background: #ede9fe; color: #5b21b6; }
+    .tip-produs_lipsa { background: #dbeafe; color: #1e40af; }
+    .tip-propunere { background: #d1fae5; color: #065f46; }
+
+    .btn-status {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-rezolva { background: var(--green); color: white; }
+    .btn-redeschide { background: var(--orange); color: white; }
+
+    .search-rank { display: flex; flex-direction: column; gap: 6px; }
+    .rank-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: white;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .rank-pos { font-size: 18px; font-weight: 800; color: var(--blue); min-width: 30px; }
+    .rank-bar {
+      flex: 1;
+      height: 8px;
+      background: var(--bg);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .rank-bar-fill { height: 100%; background: var(--blue); border-radius: 4px; }
+    .rank-query { font-size: 14px; font-weight: 600; min-width: 200px; }
+    .rank-count { font-size: 13px; color: var(--sub); min-width: 60px; text-align: right; }
+
+    .section { margin-bottom: 30px; }
+    .section h3 { font-size: 16px; margin-bottom: 12px; }
+
+    .loading { text-align: center; padding: 60px; color: var(--sub); font-size: 18px; }
+
+    @media print {
+      .filters, .btn-status { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARAFURA — Monitorizare</h1>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('cautari')">🔍 Căutări produse</button>
+  <button class="tab" onclick="switchTab('sesizari')">⚠️ Sesizări</button>
+</div>
+
+<div id="tab-cautari">
+  <div class="filters">
+    <select id="f-magazin-c">
+      <option value="">Toate magazinele</option>
+      <option value="DEPOZIT PAPETARIE">Depozit Papetărie</option>
+      <option value="MARVIMEX">Marvimex</option>
+      <option value="TOMIS 3">Tomis 3</option>
+      <option value="MEDGIDIA">Medgidia</option>
+      <option value="NAVODARI">Năvodari</option>
+      <option value="POARTA 6">Poarta 6</option>
+      <option value="BABADAG">Babadag</option>
+      <option value="SHOWROOM">Showroom</option>
+    </select>
+    <input type="date" id="f-data-start-c">
+    <span>→</span>
+    <input type="date" id="f-data-end-c">
+    <button onclick="incarcaCautari()">Filtrează</button>
+  </div>
+  <div id="content-cautari"><div class="loading">Apasă Filtrează</div></div>
+</div>
+
+<div id="tab-sesizari" style="display:none;">
+  <div class="filters">
+    <select id="f-magazin-s">
+      <option value="">Toate magazinele</option>
+      <option value="DEPOZIT PAPETARIE">Depozit Papetărie</option>
+      <option value="MARVIMEX">Marvimex</option>
+      <option value="TOMIS 3">Tomis 3</option>
+      <option value="MEDGIDIA">Medgidia</option>
+      <option value="NAVODARI">Năvodari</option>
+      <option value="POARTA 6">Poarta 6</option>
+      <option value="BABADAG">Babadag</option>
+      <option value="SHOWROOM">Showroom</option>
+    </select>
+    <select id="f-status-s">
+      <option value="">Toate</option>
+      <option value="nou">Noi</option>
+      <option value="rezolvat">Rezolvate</option>
+    </select>
+    <select id="f-tip-s">
+      <option value="">Toate tipurile</option>
+      <option value="cod_gresit">Cod de bare greșit</option>
+      <option value="cod_lipsa">Cod de bare lipsă</option>
+      <option value="cod_ilizibil">Cod de bare ilizibil</option>
+      <option value="produs_gresit">Produs greșit în sistem</option>
+      <option value="produs_lipsa">Produs lipsă din sistem</option>
+      <option value="propunere">Propunere</option>
+    </select>
+    <button onclick="incarcaSesizari()">Filtrează</button>
+  </div>
+  <div id="content-sesizari"><div class="loading">Apasă Filtrează</div></div>
+</div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+
+const TIP_LABELS = {
+  'cod_gresit': 'Cod greșit',
+  'cod_lipsa': 'Cod lipsă',
+  'cod_ilizibil': 'Cod ilizibil',
+  'produs_gresit': 'Produs greșit',
+  'produs_lipsa': 'Produs lipsă',
+  'propunere': 'Propunere'
+};
+
+// Set default dates (last 7 days)
+const today = new Date();
+const weekAgo = new Date(today);
+weekAgo.setDate(weekAgo.getDate() - 7);
+document.getElementById('f-data-start-c').value = weekAgo.toISOString().slice(0,10);
+document.getElementById('f-data-end-c').value = today.toISOString().slice(0,10);
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-cautari').style.display = tab === 'cautari' ? '' : 'none';
+  document.getElementById('tab-sesizari').style.display = tab === 'sesizari' ? '' : 'none';
+  event.target.classList.add('active');
+}
+
+// ══ CAUTARI ══════════════════════════════════════════════════════
+
+async function incarcaCautari() {
+  const magazin = document.getElementById('f-magazin-c').value;
+  const dataStart = document.getElementById('f-data-start-c').value;
+  const dataEnd = document.getElementById('f-data-end-c').value;
+  const content = document.getElementById('content-cautari');
+  content.innerHTML = '<div class="loading">Se încarcă...</div>';
+
+  try {
+    let url = `${API}/search_log?select=*&order=created_at.desc&limit=1000`;
+    if (magazin) url += `&magazin=eq.${encodeURIComponent(magazin)}`;
+    if (dataStart) url += `&created_at=gte.${dataStart}T00:00:00`;
+    if (dataEnd) url += `&created_at=lte.${dataEnd}T23:59:59`;
+
+    const resp = await fetch(url, { headers: HEADERS });
+    const data = await resp.json();
+
+    if (!Array.isArray(data)) throw new Error('Eroare date');
+
+    renderCautari(data);
+  } catch (e) {
+    content.innerHTML = `<div class="loading">Eroare: ${e.message}</div>`;
+  }
+}
+
+function renderCautari(data) {
+  const content = document.getElementById('content-cautari');
+
+  // Statistici
+  const totalCautari = data.length;
+  const magazineCautari = {};
+  const queryCounts = {};
+  const zeroResults = data.filter(d => d.rezultate === 0);
+
+  for (const d of data) {
+    magazineCautari[d.magazin] = (magazineCautari[d.magazin] || 0) + 1;
+    const q = d.query.toLowerCase().trim();
+    queryCounts[q] = (queryCounts[q] || 0) + 1;
+  }
+
+  // Top cautari
+  const topCautari = Object.entries(queryCounts).sort((a,b) => b[1] - a[1]).slice(0, 15);
+  const maxCount = topCautari.length > 0 ? topCautari[0][1] : 1;
+
+  // Top cautari fara rezultat
+  const zeroQueryCounts = {};
+  for (const d of zeroResults) {
+    const q = d.query.toLowerCase().trim();
+    zeroQueryCounts[q] = (zeroQueryCounts[q] || 0) + 1;
+  }
+  const topZero = Object.entries(zeroQueryCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+
+  let html = `
+    <div class="summary">
+      <div class="summary-card">
+        <div class="label">Total căutări</div>
+        <div class="value blue">${totalCautari}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Fără rezultat</div>
+        <div class="value red">${zeroResults.length}</div>
+      </div>
+      ${Object.entries(magazineCautari).sort((a,b) => b[1] - a[1]).map(([mag, cnt]) =>
+        `<div class="summary-card">
+          <div class="label">${mag}</div>
+          <div class="value">${cnt}</div>
+        </div>`
+      ).join('')}
+    </div>`;
+
+  // Top cautari
+  html += '<div class="section"><h3>Top căutări</h3><div class="search-rank">';
+  for (let i = 0; i < topCautari.length; i++) {
+    const [query, count] = topCautari[i];
+    const pct = Math.round(count / maxCount * 100);
+    html += `<div class="rank-item">
+      <span class="rank-pos">${i+1}</span>
+      <span class="rank-query">${escHtml(query)}</span>
+      <div class="rank-bar"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+      <span class="rank-count">${count}x</span>
+    </div>`;
+  }
+  html += '</div></div>';
+
+  // Top cautari fara rezultat
+  if (topZero.length > 0) {
+    html += '<div class="section"><h3 style="color:var(--red);">Căutări fără rezultat (produse problematice)</h3><div class="search-rank">';
+    for (const [query, count] of topZero) {
+      html += `<div class="rank-item" style="border-color:#fecaca;">
+        <span class="rank-pos" style="color:var(--red);">!</span>
+        <span class="rank-query">${escHtml(query)}</span>
+        <span class="rank-count" style="color:var(--red);">${count}x</span>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+
+  // Tabel detaliat
+  html += '<div class="section"><h3>Toate căutările</h3>';
+  html += `<table>
+    <thead><tr>
+      <th>Data/Ora</th><th>Magazin</th><th>Căutare</th><th class="num">Rezultate</th>
+    </tr></thead><tbody>`;
+
+  for (const d of data) {
+    const dt = new Date(d.created_at);
+    const ora = dt.toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+    const zeroClass = d.rezultate === 0 ? ' style="background:#fef2f2;"' : '';
+    html += `<tr${zeroClass}>
+      <td>${ora}</td>
+      <td><span class="badge badge-magazin">${d.magazin}</span></td>
+      <td class="bold">${escHtml(d.query)}</td>
+      <td class="num">${d.rezultate === 0 ? '<span style="color:var(--red); font-weight:700;">0</span>' : d.rezultate}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table></div>';
+  content.innerHTML = html;
+}
+
+// ══ SESIZARI ═════════════════════════════════════════════════════
+
+async function incarcaSesizari() {
+  const magazin = document.getElementById('f-magazin-s').value;
+  const status = document.getElementById('f-status-s').value;
+  const tip = document.getElementById('f-tip-s').value;
+  const content = document.getElementById('content-sesizari');
+  content.innerHTML = '<div class="loading">Se încarcă...</div>';
+
+  try {
+    let url = `${API}/sesizari?select=*&order=created_at.desc&limit=500`;
+    if (magazin) url += `&magazin=eq.${encodeURIComponent(magazin)}`;
+    if (status) url += `&status=eq.${status}`;
+    if (tip) url += `&tip=eq.${tip}`;
+
+    const resp = await fetch(url, { headers: HEADERS });
+    const data = await resp.json();
+
+    if (!Array.isArray(data)) throw new Error('Eroare date');
+
+    renderSesizari(data);
+  } catch (e) {
+    content.innerHTML = `<div class="loading">Eroare: ${e.message}</div>`;
+  }
+}
+
+function renderSesizari(data) {
+  const content = document.getElementById('content-sesizari');
+
+  const totalNoi = data.filter(d => d.status === 'nou').length;
+  const totalRezolvate = data.filter(d => d.status === 'rezolvat').length;
+
+  // Contor pe tip
+  const tipCounts = {};
+  for (const d of data) {
+    tipCounts[d.tip] = (tipCounts[d.tip] || 0) + 1;
+  }
+
+  let html = `
+    <div class="summary">
+      <div class="summary-card">
+        <div class="label">Total sesizări</div>
+        <div class="value blue">${data.length}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Noi (nerezolvate)</div>
+        <div class="value red">${totalNoi}</div>
+      </div>
+      <div class="summary-card">
+        <div class="label">Rezolvate</div>
+        <div class="value green">${totalRezolvate}</div>
+      </div>
+      ${Object.entries(tipCounts).map(([tip, cnt]) =>
+        `<div class="summary-card">
+          <div class="label">${TIP_LABELS[tip] || tip}</div>
+          <div class="value orange">${cnt}</div>
+        </div>`
+      ).join('')}
+    </div>`;
+
+  html += `<table>
+    <thead><tr>
+      <th>Data</th><th>Magazin</th><th>Angajat</th><th>Tip</th>
+      <th>Cod</th><th>Produs</th><th>Mesaj</th><th>Status</th><th>Acțiune</th>
+    </tr></thead><tbody>`;
+
+  for (const d of data) {
+    const dt = new Date(d.created_at);
+    const ora = dt.toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+    const statusBadge = d.status === 'nou'
+      ? '<span class="badge badge-nou">NOU</span>'
+      : '<span class="badge badge-rezolvat">REZOLVAT</span>';
+    const actionBtn = d.status === 'nou'
+      ? `<button class="btn-status btn-rezolva" onclick="schimbaStatus(${d.id}, 'rezolvat')">Rezolvă</button>`
+      : `<button class="btn-status btn-redeschide" onclick="schimbaStatus(${d.id}, 'nou')">Redeschide</button>`;
+
+    html += `<tr>
+      <td>${ora}</td>
+      <td><span class="badge badge-magazin">${d.magazin}</span></td>
+      <td>${d.angajat_nume}</td>
+      <td><span class="tip-label tip-${d.tip}">${TIP_LABELS[d.tip] || d.tip}</span></td>
+      <td>${d.cod_art || '—'}</td>
+      <td>${escHtml(d.nume_art || '—')}</td>
+      <td style="max-width:300px;">${escHtml(d.mesaj || '')}</td>
+      <td>${statusBadge}</td>
+      <td>${actionBtn}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  content.innerHTML = html;
+}
+
+async function schimbaStatus(id, status) {
+  try {
+    await fetch(`${API}/sesizari?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status })
+    });
+    incarcaSesizari();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
