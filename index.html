@@ -299,6 +299,16 @@
     .no-results-text { font-size: 18px; font-weight: 600; }
     .no-results-sub  { font-size: 14px; margin-top: 6px; }
 
+    /* ── SCREEN 4-6: PONTAJ ──────────────────── */
+    #screen-pontaj-pin,
+    #screen-pontaj-actiuni,
+    #screen-pontaj-concediu {
+      justify-content: center;
+      align-items: center;
+      padding: 30px 24px;
+      gap: 20px;
+    }
+
     /* ── SCREEN 3: BARCODE ──────────────────── */
     #screen-barcode {
       justify-content: space-between;
@@ -373,6 +383,84 @@
       color: var(--sub);
       text-align: center;
     }
+    /* ── PONTARE ───────────────────────────── */
+    .btn-pontare-home {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 14px 22px;
+      font-size: 16px;
+      font-weight: 700;
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0,0,0,.12);
+      z-index: 50;
+    }
+    .btn-pontare-home:active { background: var(--bg); }
+
+    .pontaj-status {
+      background: var(--bg);
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      text-align: center;
+      font-size: 15px;
+      color: var(--sub);
+      width: 100%;
+      max-width: 400px;
+    }
+    .pontaj-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .btn-pontaj {
+      padding: 18px;
+      font-size: 18px;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-intrare { background: #d4edda; color: #155724; }
+    .btn-intrare:active { background: #b8d9c0; }
+    .btn-intrare:disabled { opacity: .4; cursor: default; }
+    .btn-iesire { background: #f8d7da; color: #721c24; }
+    .btn-iesire:active { background: #f0b8be; }
+    .btn-iesire:disabled { opacity: .4; cursor: default; }
+    .btn-concediu { background: #e8f0fe; color: var(--blue); }
+    .btn-concediu:active { background: #c5d9f7; }
+    .btn-pontaj-back {
+      background: none;
+      border: none;
+      color: var(--sub);
+      font-size: 15px;
+      cursor: pointer;
+      padding: 10px;
+    }
+
+    .concediu-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      max-width: 400px;
+    }
+    .concediu-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--sub);
+      margin-top: 4px;
+    }
+    .concediu-date {
+      padding: 14px 20px !important;
+      font-size: 18px !important;
+    }
+
     /* ── FOTO ──────────────────────────────── */
     .product-foto {
       width: 48px; height: 48px;
@@ -517,6 +605,74 @@
     <button class="btn-voice" id="btn-voice" onclick="toggleVoice()" title="Caută cu vocea">🎤</button>
   </div>
   <div class="voice-hint" id="voice-hint">Apasă 🎤 și spune numele produsului</div>
+  <button class="btn-pontare-home" onclick="showScreen('pontaj-pin')">🕐 Pontare</button>
+</div>
+
+<!-- ══ SCREEN 4: PONTAJ PIN ══ -->
+<div class="screen" id="screen-pontaj-pin">
+  <div class="search-icon">🔐</div>
+  <div>
+    <div class="search-title">Pontare</div>
+    <div class="search-subtitle">Introdu PIN-ul tău (4 cifre)</div>
+  </div>
+  <div class="search-box">
+    <input
+      class="search-input"
+      id="pin-input"
+      type="password"
+      inputmode="numeric"
+      maxlength="4"
+      placeholder="****"
+      style="text-align:center; font-size:32px; letter-spacing:12px;"
+      oninput="onPinInput()"
+      autocomplete="off"
+    >
+  </div>
+</div>
+
+<!-- ══ SCREEN 5: PONTAJ ACTIUNI ══ -->
+<div class="screen" id="screen-pontaj-actiuni">
+  <div class="search-icon">👋</div>
+  <div>
+    <div class="search-title" id="pontaj-salut"></div>
+    <div class="search-subtitle" id="pontaj-magazin"></div>
+  </div>
+  <div class="pontaj-status" id="pontaj-status"></div>
+  <div class="pontaj-buttons">
+    <button class="btn-pontaj btn-intrare" id="btn-intrare" onclick="pontareIntrare()">
+      ✅ Am venit
+    </button>
+    <button class="btn-pontaj btn-iesire" id="btn-iesire" onclick="pontareIesire()">
+      🚪 Am plecat
+    </button>
+    <button class="btn-pontaj btn-concediu" onclick="showScreen('pontaj-concediu')">
+      🏖️ Cer concediu
+    </button>
+  </div>
+  <button class="btn-pontaj-back" onclick="goToSearch()">← Înapoi la căutare</button>
+</div>
+
+<!-- ══ SCREEN 6: PONTAJ CONCEDIU ══ -->
+<div class="screen" id="screen-pontaj-concediu">
+  <div class="search-icon">🏖️</div>
+  <div>
+    <div class="search-title">Cerere concediu</div>
+    <div class="search-subtitle" id="concediu-nume"></div>
+  </div>
+  <div class="concediu-form">
+    <label class="concediu-label">De la:</label>
+    <input type="date" class="search-input concediu-date" id="concediu-start">
+    <label class="concediu-label">Până la:</label>
+    <input type="date" class="search-input concediu-date" id="concediu-end">
+    <label class="concediu-label">Tip:</label>
+    <select class="search-input" id="concediu-tip" style="padding:14px 20px;">
+      <option value="concediu">Concediu de odihnă</option>
+      <option value="zi libera">Zi liberă</option>
+      <option value="medical">Concediu medical</option>
+    </select>
+    <button class="btn-search" onclick="trimitereConcediu()" style="margin-top:10px;">Trimite cererea</button>
+    <button class="btn-pontaj-back" onclick="showScreen('pontaj-actiuni')">← Înapoi</button>
+  </div>
 </div>
 
 <!-- ══ SCREEN 2: RESULTS ══ -->
@@ -596,6 +752,10 @@ function showScreen(name) {
   const btnSearch = document.getElementById('btn-new-search');
   const headerSub = document.getElementById('header-sub');
 
+  // Butonul de pontare: ascunde pe ecranele de pontaj
+  const btnPontareHome = document.querySelector('.btn-pontare-home');
+  if (btnPontareHome) btnPontareHome.style.display = name.startsWith('pontaj') ? 'none' : 'block';
+
   if (name === 'search') {
     btnSearch.style.display = 'none';
     headerSub.textContent = storeName || 'Căutare produse';
@@ -606,6 +766,17 @@ function showScreen(name) {
   } else if (name === 'barcode') {
     btnSearch.style.display = 'block';
     headerSub.textContent = 'Cod de bare';
+  } else if (name === 'pontaj-pin') {
+    btnSearch.style.display = 'none';
+    headerSub.textContent = 'Pontare';
+    document.getElementById('pin-input').value = '';
+    setTimeout(() => document.getElementById('pin-input').focus(), 100);
+  } else if (name === 'pontaj-actiuni') {
+    btnSearch.style.display = 'none';
+    headerSub.textContent = 'Pontare — ' + (pontajAngajat ? pontajAngajat.nume : '');
+  } else if (name === 'pontaj-concediu') {
+    btnSearch.style.display = 'none';
+    headerSub.textContent = 'Cerere concediu';
   }
 }
 
@@ -804,6 +975,167 @@ function createProductCard(p) {
     <div class="product-arrow">›</div>`;
   card.onclick = () => showBarcode(p);
   return card;
+}
+
+// ── PONTAJ ───────────────────────────────────────────────────────
+let pontajAngajat = null;   // angajatul curent logat pt pontaj
+let pontajRecord  = null;   // pontajul de azi (daca exista)
+
+async function onPinInput() {
+  const pin = document.getElementById('pin-input').value;
+  if (pin.length < 4) return;
+
+  showLoading(true);
+  try {
+    // Cauta angajatul dupa PIN
+    const resp = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/angajati?pin=eq.${pin}&activ=eq.true&select=id,nume`,
+      { headers: HEADERS }
+    );
+    const data = await resp.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect');
+      document.getElementById('pin-input').value = '';
+      return;
+    }
+
+    pontajAngajat = data[0];
+
+    // Verifica daca are deja pontaj azi
+    const today = new Date().toISOString().slice(0, 10);
+    const respP = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/pontaj?angajat_id=eq.${pontajAngajat.id}&data=eq.${today}&magazin=eq.${encodeURIComponent(storeName)}&select=*&order=created_at.desc&limit=1`,
+      { headers: HEADERS }
+    );
+    const pontaje = await respP.json();
+    pontajRecord = (Array.isArray(pontaje) && pontaje.length > 0) ? pontaje[0] : null;
+
+    // Afiseaza ecranul de actiuni
+    document.getElementById('pontaj-salut').textContent = `Bună, ${pontajAngajat.nume}!`;
+    document.getElementById('pontaj-magazin').textContent = storeName;
+    updatePontajStatus();
+    showScreen('pontaj-actiuni');
+    document.getElementById('pin-input').value = '';
+    document.getElementById('concediu-nume').textContent = pontajAngajat.nume;
+
+  } catch (e) {
+    showToast('Eroare conexiune');
+  } finally {
+    showLoading(false);
+  }
+}
+
+function updatePontajStatus() {
+  const status = document.getElementById('pontaj-status');
+  const btnI = document.getElementById('btn-intrare');
+  const btnE = document.getElementById('btn-iesire');
+
+  if (!pontajRecord) {
+    status.innerHTML = 'Nu ești pontat/ă azi';
+    btnI.disabled = false;
+    btnE.disabled = true;
+  } else if (pontajRecord.ora_intrare && !pontajRecord.ora_iesire) {
+    const ora = new Date(pontajRecord.ora_intrare).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+    status.innerHTML = `✅ Intrat/ă la <strong>${ora}</strong>`;
+    btnI.disabled = true;
+    btnE.disabled = false;
+  } else if (pontajRecord.ora_intrare && pontajRecord.ora_iesire) {
+    const oraI = new Date(pontajRecord.ora_intrare).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+    const oraE = new Date(pontajRecord.ora_iesire).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+    status.innerHTML = `✅ ${oraI} → 🚪 ${oraE} — Pontare completă`;
+    btnI.disabled = true;
+    btnE.disabled = true;
+  }
+}
+
+async function pontareIntrare() {
+  showLoading(true);
+  try {
+    const now = new Date().toISOString();
+    const today = new Date().toISOString().slice(0, 10);
+    const resp = await fetch(`${window.SUPABASE_URL}/rest/v1/pontaj`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        angajat_id: pontajAngajat.id,
+        angajat_nume: pontajAngajat.nume,
+        magazin: storeName,
+        data: today,
+        ora_intrare: now
+      })
+    });
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      pontajRecord = data[0];
+      updatePontajStatus();
+      showToast('Pontare intrare salvată!');
+    } else {
+      throw new Error('Eroare salvare');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function pontareIesire() {
+  if (!pontajRecord) return;
+  showLoading(true);
+  try {
+    const now = new Date().toISOString();
+    const resp = await fetch(
+      `${window.SUPABASE_URL}/rest/v1/pontaj?id=eq.${pontajRecord.id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({ ora_iesire: now })
+    });
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      pontajRecord = data[0];
+      updatePontajStatus();
+      showToast('Pontare ieșire salvată!');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function trimitereConcediu() {
+  const start = document.getElementById('concediu-start').value;
+  const end = document.getElementById('concediu-end').value;
+  const tip = document.getElementById('concediu-tip').value;
+
+  if (!start || !end) { showToast('Completează datele'); return; }
+  if (end < start) { showToast('Data de sfârșit trebuie să fie după cea de început'); return; }
+
+  showLoading(true);
+  try {
+    const resp = await fetch(`${window.SUPABASE_URL}/rest/v1/concedii`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        angajat_id: pontajAngajat.id,
+        angajat_nume: pontajAngajat.nume,
+        data_start: start,
+        data_end: end,
+        tip: tip
+      })
+    });
+    if (resp.ok) {
+      showToast('Cerere de concediu trimisă!');
+      showScreen('pontaj-actiuni');
+    } else {
+      throw new Error('Eroare salvare');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  } finally {
+    showLoading(false);
+  }
 }
 
 // ── FOTO URL HELPER ──────────────────────────────────────────────
