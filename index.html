@@ -757,6 +757,8 @@ let searchTimeout = null;
 let storeName     = localStorage.getItem('arafura_magazin') || '';
 let deviceId      = localStorage.getItem('arafura_device_id') || '';
 let deviceAutorizat = false;
+const isAdmin = window.location.hash === '#admin' || localStorage.getItem('arafura_admin') === 'true';
+if (window.location.hash === '#admin') localStorage.setItem('arafura_admin', 'true');
 
 // ── DEVICE ID ────────────────────────────────────────────────────
 function genDeviceId() {
@@ -782,15 +784,19 @@ async function initStore() {
   document.getElementById('header-sub').textContent = storeName;
 
   // Verifica daca dispozitivul e autorizat
-  try {
-    const resp = await fetch(
-      `${window.SUPABASE_URL}/rest/v1/dispozitive?device_id=eq.${encodeURIComponent(deviceId)}&activ=eq.true&select=id,magazin`,
-      { headers: HEADERS }
-    );
-    const data = await resp.json();
-    deviceAutorizat = Array.isArray(data) && data.length > 0;
-  } catch(e) {
-    deviceAutorizat = false;
+  if (isAdmin) {
+    deviceAutorizat = true;
+  } else {
+    try {
+      const resp = await fetch(
+        `${window.SUPABASE_URL}/rest/v1/dispozitive?device_id=eq.${encodeURIComponent(deviceId)}&activ=eq.true&select=id,magazin`,
+        { headers: HEADERS }
+      );
+      const data = await resp.json();
+      deviceAutorizat = Array.isArray(data) && data.length > 0;
+    } catch(e) {
+      deviceAutorizat = false;
+    }
   }
 
   // Ascunde/arata butoanele de condica si sesizari
