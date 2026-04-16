@@ -1362,10 +1362,6 @@ function initVoice() {
     if (result.isFinal) {
       stopListening();
       doSearch();
-    } else {
-      // Arata buton "Cauta acum" pentru rezultat rapid
-      document.getElementById('voice-hint').innerHTML =
-        '<button onclick="stopListening(); doSearch();" style="padding:10px 24px; font-size:16px; font-weight:700; background:#1a73e8; color:white; border:none; border-radius:10px; cursor:pointer;">🔎 Caută acum</button>';
     }
   };
   r.onerror = (e) => {
