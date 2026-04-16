@@ -347,21 +347,27 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
     const pontajeAng = pontaje.filter(p => p.angajat_id === ang.id);
     const concediiAng = concedii.filter(c => c.angajat_id === ang.id);
 
-    const zileConcediu = new Set();
+    // Separam concediu odihna de medical
+    const zileConcediuOdihna = new Set();
+    const zileConcediuMedical = new Set();
+    let sumaMedical = 0;
     for (const c of concediiAng) {
       const start = new Date(c.data_start);
       const end = new Date(c.data_end);
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const ds = d.toISOString().slice(0, 10);
         if (d.getFullYear() === an && d.getMonth() === luna) {
-          zileConcediu.add(ds);
+          if (c.tip === 'medical') zileConcediuMedical.add(ds);
+          else zileConcediuOdihna.add(ds);
         }
       }
+      if (c.tip === 'medical') sumaMedical += parseFloat(c.suma_medical) || 0;
     }
 
     let oreLucrateLV = 0, oreLucrateWE = 0;
     let zileLucrateLV = 0, zileLucrateWE = 0;
-    let oreConcediu = 0, zileConcediuNr = 0;
+    let oreConcediuOdihna = 0, zileConcediuOdihnaNr = 0;
+    let zileConcediuMedicalNr = 0;
     const detaliiZile = [];
     const orePeMagazin = {};
 
@@ -379,17 +385,25 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
       const esteSam = ziSapt === 6;
       const esteDum = ziSapt === 0;
 
-      if (zileConcediu.has(dataStr)) {
+      if (zileConcediuOdihna.has(dataStr)) {
+        // Concediu odihna: calculam ore x tarif
         let oreCO = 0;
         if (esteSam) oreCO = ang.ore_sambata || 0;
         else if (esteDum) oreCO = ang.ore_duminica || 0;
         else oreCO = ang.ore_luni_vineri || 0;
-        oreConcediu += oreCO;
-        zileConcediuNr++;
+        oreConcediuOdihna += oreCO;
+        zileConcediuOdihnaNr++;
         detaliiZile.push({
           data: dataStr, zi: ziSapt, tip: 'concediu',
           ore: oreCO, tarif: ang.tarif_ora || 0,
           multiplicator: 1, suma: oreCO * (ang.tarif_ora || 0)
+        });
+      } else if (zileConcediuMedical.has(dataStr)) {
+        // Concediu medical: doar marcam ziua, suma vine de la contabilitate
+        zileConcediuMedicalNr++;
+        detaliiZile.push({
+          data: dataStr, zi: ziSapt, tip: 'medical',
+          ore: 0, tarif: 0, multiplicator: 0, suma: 0
         });
       } else if (pontajePeZi[dataStr]) {
         let oreZi = 0;
@@ -417,8 +431,8 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
     const esteFix = !!ang.salariu_fix;
     const sumLV = esteFix ? 0 : oreLucrateLV * (ang.tarif_ora || 0);
     const sumWE = esteFix ? 0 : oreLucrateWE * (ang.tarif_ora || 0) * 2;
-    const sumCO = esteFix ? 0 : oreConcediu * (ang.tarif_ora || 0);
-    const totalSuma = esteFix ? ang.salariu_fix : (sumLV + sumWE + sumCO);
+    const sumCO = esteFix ? 0 : oreConcediuOdihna * (ang.tarif_ora || 0);
+    const totalSuma = esteFix ? (ang.salariu_fix + sumaMedical) : (sumLV + sumWE + sumCO + sumaMedical);
 
     const { avans, imprumut } = calcTranzactii(ang.id);
     const restPlata = totalSuma - avans - imprumut;
@@ -427,7 +441,9 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
       angajat: ang,
       oreLucrateLV: Math.round(oreLucrateLV * 100) / 100,
       oreLucrateWE: Math.round(oreLucrateWE * 100) / 100,
-      zileLucrateLV, zileLucrateWE, oreConcediu, zileConcediuNr,
+      zileLucrateLV, zileLucrateWE,
+      oreConcediuOdihna, zileConcediuOdihnaNr,
+      zileConcediuMedicalNr, sumaMedical,
       sumLV: Math.round(sumLV * 100) / 100,
       sumWE: Math.round(sumWE * 100) / 100,
       sumCO: Math.round(sumCO * 100) / 100,
@@ -487,8 +503,10 @@ function afiseazaRaport(raport, an, luna) {
           <th class="num">Suma L-V</th>
           <th class="num">Ore WE</th>
           <th class="num">Suma WE (x2)</th>
-          <th class="num">Zile CO</th>
+          <th class="num">CO Odihnă</th>
           <th class="num">Suma CO</th>
+          <th class="num">CM Zile</th>
+          <th class="num">Suma CM</th>
           <th class="num bold">TOTAL</th>
           <th class="num">Avans</th>
           <th class="num">Împrumut</th>
@@ -512,15 +530,17 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num">${isFix ? '—' : (r.sumLV ? r.sumLV.toFixed(2) : '—')}</td>
           <td class="num">${r.oreLucrateWE || '—'}</td>
           <td class="num">${isFix ? '—' : (r.sumWE ? r.sumWE.toFixed(2) : '—')}</td>
-          <td class="num">${r.zileConcediuNr || '—'}</td>
+          <td class="num">${r.zileConcediuOdihnaNr || '—'}</td>
           <td class="num">${isFix ? '—' : (r.sumCO ? r.sumCO.toFixed(2) : '—')}</td>
+          <td class="num">${r.zileConcediuMedicalNr || '—'}</td>
+          <td class="num">${r.sumaMedical ? r.sumaMedical.toFixed(2) : '—'}</td>
           <td class="num bold">${r.totalSuma.toFixed(2)}</td>
           <td class="num" style="color:var(--orange)">${r.avans ? r.avans.toFixed(2) : '—'}</td>
           <td class="num" style="color:var(--red)">${r.imprumut ? r.imprumut.toFixed(2) : '—'}</td>
           <td class="num ${restCls}">${r.restPlata.toFixed(2)} RON</td>
         </tr>
         <tr id="det-${r.angajat.id}" style="display:none">
-          <td colspan="12" style="padding:0;">
+          <td colspan="14" style="padding:0;">
             ${renderDetaliiComplet(r, isManager)}
           </td>
         </tr>`;
@@ -533,8 +553,10 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumLV,0).toFixed(2)}</td>
           <td class="num">${totalOreWE.toFixed(1)}</td>
           <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumWE,0).toFixed(2)}</td>
-          <td class="num">${raport.reduce((s,r)=>s+r.zileConcediuNr,0)}</td>
+          <td class="num">${raport.reduce((s,r)=>s+r.zileConcediuOdihnaNr,0)}</td>
           <td class="num">${raport.filter(r=>!r.angajat.salariu_fix).reduce((s,r)=>s+r.sumCO,0).toFixed(2)}</td>
+          <td class="num">${raport.reduce((s,r)=>s+r.zileConcediuMedicalNr,0)}</td>
+          <td class="num">${raport.reduce((s,r)=>s+r.sumaMedical,0).toFixed(2)}</td>
           <td class="num bold">${totalSalarii.toFixed(2)}</td>
           <td class="num bold">${totalAvans.toFixed(2)}</td>
           <td class="num bold">${totalImprumut.toFixed(2)}</td>
@@ -598,7 +620,8 @@ function renderDetaliiComplet(r, isManager) {
 
   // Concedii
   const concediiAng = concediiCurent[r.angajat.id] || [];
-  html += `<div class="tranz-section"><h4>Concedii (${r.zileConcediuNr} zile)</h4>`;
+  const totalZileCO = r.zileConcediuOdihnaNr + r.zileConcediuMedicalNr;
+  html += `<div class="tranz-section"><h4>Concedii (${totalZileCO} zile: ${r.zileConcediuOdihnaNr} odihnă, ${r.zileConcediuMedicalNr} medical)</h4>`;
   html += `<div class="tranz-list">`;
   if (concediiAng.length === 0) {
     html += '<div style="color:#999; font-size:13px; padding:4px;">Niciun concediu</div>';
@@ -606,10 +629,11 @@ function renderDetaliiComplet(r, isManager) {
     for (const c of concediiAng) {
       const tipLabel = c.tip === 'medical' ? 'Medical' : 'Odihnă';
       const tipColor = c.tip === 'medical' ? 'var(--red)' : 'var(--blue)';
+      const sumaCM = parseFloat(c.suma_medical) || 0;
       html += `<div class="tranz-item">
         <span class="tranz-data">${c.data_start} → ${c.data_end}</span>
         <span class="tranz-suma" style="color:${tipColor}">${tipLabel}</span>
-        <span class="tranz-desc">${c.tip === 'medical' ? 'Concediu medical' : 'Concediu de odihnă'}</span>
+        <span class="tranz-desc">${c.tip === 'medical' ? 'Concediu medical' : 'Concediu de odihnă'}${c.tip === 'medical' ? ` — <input type="number" step="0.01" value="${sumaCM || ''}" placeholder="Suma CM" style="width:90px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; text-align:right; font-size:12px;" onchange="event.stopPropagation(); updateSumaMedical(${c.id}, this.value)"> RON` : ''}</span>
         <button class="tranz-del no-print" onclick="event.stopPropagation(); stergeConcediu(${c.id})" title="Șterge">✕</button>
       </div>`;
     }
@@ -632,6 +656,7 @@ function renderDetaliiComplet(r, isManager) {
   // Sumar financiar
   html += `<div class="tranz-total">
     <span>Salariu: <strong>${r.totalSuma.toFixed(2)} RON</strong></span>
+    ${r.sumaMedical ? `<span>+ CM medical: <strong>${r.sumaMedical.toFixed(2)}</strong></span>` : ''}
     <span>- Avansuri: <strong style="color:var(--orange)">${r.avans.toFixed(2)}</strong></span>
     <span>- Împrumuturi: <strong style="color:var(--red)">${r.imprumut.toFixed(2)}</strong></span>
     <span>= <strong class="${r.restPlata < 0 ? 'rest-negativ' : 'rest-plata'}">${r.restPlata.toFixed(2)} RON REST PLATĂ</strong></span>
@@ -728,6 +753,19 @@ async function adaugaConcediu(angId, angNume) {
   }
 }
 
+async function updateSumaMedical(concediuId, suma) {
+  try {
+    await fetch(`${API}/concedii?id=eq.${concediuId}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ suma_medical: parseFloat(suma) || 0 })
+    });
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
 async function stergeConcediu(id) {
   if (!confirm('Sigur vrei să ștergi acest concediu?')) return;
   try {
@@ -762,9 +800,10 @@ function renderDetaliiTable(r) {
     </tr></thead><tbody>`;
 
   for (const z of r.detaliiZile) {
-    const cls = z.tip === 'weekend' ? 'day-sat' : (z.tip === 'concediu' ? 'day-co' : '');
+    const cls = z.tip === 'weekend' ? 'day-sat' : (z.tip === 'concediu' ? 'day-co' : (z.tip === 'medical' ? 'day-sun' : ''));
     const tipLabel = z.tip === 'weekend' ? '<span class="weekend-badge">WEEKEND x2</span>' :
-                     z.tip === 'concediu' ? 'CONCEDIU' : 'Lucru';
+                     z.tip === 'concediu' ? 'CO ODIHNĂ' :
+                     z.tip === 'medical' ? '<span style="color:var(--red); font-weight:600;">CM MEDICAL</span>' : 'Lucru';
 
     let detalii = '';
     if (z.pontaje) {
