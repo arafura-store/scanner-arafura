@@ -425,7 +425,7 @@ async function incarcaOperatiuni() {
   const dataEnd = document.getElementById('t-data-end').value;
   const container = document.getElementById('tabel-operatiuni');
 
-  let url = `${API}/caiet?select=*&order=data.desc,created_at.desc&limit=5000`;
+  let url = `${API}/caiet?select=*&order=data.desc,completat_la.desc&limit=5000`;
   if (dataStart) url += `&data=gte.${dataStart}`;
   if (dataEnd) url += `&data=lte.${dataEnd}`;
 
@@ -448,7 +448,7 @@ async function incarcaOperatiuni() {
 
     for (const d of data) {
       const dtChitanta = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const dtCompletat = new Date(d.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       html += `<tr>
