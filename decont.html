@@ -179,11 +179,13 @@
       </div>
     </div>
 
-    <h3 style="font-size:16px; margin-bottom:12px;">Cheltuielile mele</h3>
+    <h3 style="font-size:16px; margin-bottom:12px;">Cheltuielile curente</h3>
     <div id="tabel-cheltuieli"></div>
     <button class="btn-trimite-decont" id="btn-trimite" style="display:none;" onclick="trimiteDecont()">
       📤 Trimite decontul pentru verificare
     </button>
+
+    <div id="istoric-deconturi" style="margin-top:30px;"></div>
   </div>
 </div>
 
@@ -283,8 +285,72 @@ async function incarcaDate() {
     // Render tabel
     renderTabel(totalCheltuit, esteTrimis);
 
+    // Istoric ultimele 5 deconturi confirmate
+    await incarcaIstoric();
+
   } catch (e) {
     showToast('Eroare la încărcare');
+  }
+}
+
+async function incarcaIstoric() {
+  const container = document.getElementById('istoric-deconturi');
+  try {
+    const resp = await fetch(
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&status=eq.confirmat&order=created_at.desc&limit=50`,
+      { headers: HEADERS }
+    );
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      container.innerHTML = '';
+      return;
+    }
+
+    // Grupeaza pe data confirmarii (aproximativ pe deconturi)
+    const deconturi = [];
+    let currentGroup = null;
+    for (const d of data) {
+      if (!currentGroup || Math.abs(new Date(d.created_at) - new Date(currentGroup.items[0].created_at)) > 60000) {
+        if (deconturi.length >= 5) break;
+        currentGroup = { items: [d], total: 0 };
+        deconturi.push(currentGroup);
+      } else {
+        currentGroup.items.push(d);
+      }
+      const s = parseFloat(d.suma || 0);
+      if (s >= 0) currentGroup.total += s;
+    }
+
+    if (deconturi.length === 0) { container.innerHTML = ''; return; }
+
+    let html = '<h3 style="font-size:16px; margin-bottom:12px; color:var(--sub);">Ultimele deconturi</h3>';
+
+    for (let i = 0; i < deconturi.length; i++) {
+      const dec = deconturi[i];
+      const dt = new Date(dec.items[0].created_at).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
+      html += `<details style="margin-bottom:10px; background:var(--card); border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); overflow:hidden;">
+        <summary style="padding:14px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-weight:600;">
+          <span>Decont ${dt} — ${dec.items.length} cheltuieli</span>
+          <span style="color:var(--green); font-weight:700;">${dec.total.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON — CONFIRMAT</span>
+        </summary>
+        <table style="box-shadow:none; border-radius:0;">
+          <thead><tr><th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th></tr></thead>
+          <tbody>`;
+      for (const d of dec.items) {
+        const dtItem = new Date(d.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'});
+        const s = parseFloat(d.suma);
+        html += `<tr>
+          <td>${dtItem}</td><td>${escHtml(d.beneficiar)}</td>
+          <td class="num" style="color:${s<0?'var(--green)':'var(--red)'}; font-weight:700;">${Math.abs(s).toLocaleString('ro-RO',{minimumFractionDigits:2})}</td>
+          <td style="font-size:12px; color:#888;">${escHtml(d.observatii||'')}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></details>';
+    }
+
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '';
   }
 }
 
@@ -432,6 +498,8 @@ async function trimiteDecont() {
 
     showToast('Decont trimis pentru verificare!');
     await incarcaDate();
+    // Scroll sus
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) { showToast('Eroare: ' + e.message); }
 }
 
