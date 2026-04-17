@@ -480,6 +480,25 @@
       font-size: 18px !important;
     }
 
+    /* ── MOTIVATIONAL BOX ──────────────────── */
+    .motivational-box {
+      background: linear-gradient(135deg, #fff7ed, #fef3c7, #fff1f2);
+      border-radius: 20px;
+      padding: 24px 28px;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 4px 20px rgba(234,179,8,.15);
+      border: 2px solid #fde68a;
+    }
+    .motivational-msg {
+      font-size: 15px;
+      color: #92400e;
+      line-height: 1.5;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+
     /* ── SESIZARI CARDS ─────────────────────── */
     .sesizare-card {
       background: var(--card);
@@ -768,9 +787,10 @@
 
 <!-- ══ SCREEN 9: SESIZARE MENU ══ -->
 <div class="screen" id="screen-sesizare-menu">
-  <div class="search-icon">⚠️</div>
-  <div>
-    <div class="search-title" id="sesizare-menu-salut"></div>
+  <div class="motivational-box">
+    <div style="font-size:36px;">💛</div>
+    <div class="search-title" id="sesizare-menu-salut" style="font-size:20px;"></div>
+    <div class="motivational-msg" id="motivational-msg"></div>
   </div>
   <div class="pontaj-buttons" style="max-width:400px; width:100%;">
     <button class="btn-pontaj" style="background:#e8f0fe; color:var(--blue);" onclick="showScreen('sesizare-form')">
@@ -1393,7 +1413,13 @@ async function onSesizarePinInput() {
 
     sesizareAngajat = data[0];
     document.getElementById('sesizare-salut').textContent = `${sesizareAngajat.nume} — ${storeName}`;
-    document.getElementById('sesizare-menu-salut').textContent = `${sesizareAngajat.nume}`;
+    // Detecteaza genul dupa prenume
+    const prenume = sesizareAngajat.nume.split(' ').slice(1).join(' ');
+    const numeBaieti = ['GABRIEL','LIVIU','PETRICA','ALEXANDRU','ANDREI','MARIUS','IOAN','DANIEL','MIHAI','GEORGE','FLORIN','COSMIN','ADRIAN','BOGDAN','STEFAN','RAZVAN','IONUT','CATALIN','CRISTIAN','ROBERT'];
+    const esteBaiat = numeBaieti.includes(prenume.toUpperCase());
+    document.getElementById('sesizare-menu-salut').textContent = `Bună, ${prenume}!`;
+    document.getElementById('motivational-msg').innerHTML =
+      `Fiecare observație a ta ne ajută,<br>asta înseamnă că îți pasă!<br><span style="font-size:14px; opacity:.85;">Mulțumim că ești ${esteBaiat ? 'atent' : 'atentă'}!</span>`;
     // Reseteaza formularul
     document.getElementById('sesizare-tip').value = '';
     document.getElementById('sesizare-cod').value = '';
