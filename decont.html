@@ -318,7 +318,7 @@ function renderTabel(totalCheltuit, esteTrimis) {
       </td>
       <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
       <td>${statusBadge}</td>
-      ${!esteTrimis ? `<td><button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button></td>` : ''}
+      ${!esteTrimis ? `<td><button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button></td>` : `<td></td>`}
     </tr>`;
   }
 
