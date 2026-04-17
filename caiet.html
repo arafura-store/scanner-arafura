@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caiet — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #1a73e8;
+      --blue2: #1557b0;
+      --green: #1e8449;
+      --red: #c0392b;
+      --orange: #e67e22;
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1a1a2e;
+      --sub: #6b7280;
+      --border: #e5e7eb;
+      --radius: 14px;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
+    .header {
+      background: var(--blue);
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header h1 { font-size: 20px; font-weight: 800; }
+    .header-user { font-size: 14px; opacity: .8; }
+    .header button {
+      padding: 8px 16px; font-size: 14px; font-weight: 600;
+      border: none; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,.2); color: white;
+    }
+
+    /* LOGIN */
+    .login-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 60px 24px; gap: 20px;
+    }
+    .login-screen .icon { font-size: 64px; }
+    .login-screen h2 { font-size: 24px; font-weight: 700; }
+    .login-screen input {
+      width: 200px; padding: 18px; font-size: 32px; text-align: center;
+      letter-spacing: 12px; border: 2px solid var(--border); border-radius: var(--radius);
+    }
+    .login-screen input:focus { border-color: var(--blue); outline: none; }
+
+    /* FORM */
+    .form-section {
+      max-width: 700px; margin: 20px auto; padding: 0 16px;
+    }
+    .form-card {
+      background: var(--card); border-radius: var(--radius); padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 16px;
+    }
+    .form-card h3 { font-size: 16px; margin-bottom: 14px; color: var(--blue); }
+    .form-row {
+      display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--sub); }
+    .form-group input, .form-group select, .form-group textarea {
+      padding: 12px; font-size: 15px; border: 1px solid var(--border);
+      border-radius: 8px; background: white;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      border-color: var(--blue); outline: none;
+    }
+    .form-group textarea { resize: none; }
+    .btn-submit {
+      width: 100%; padding: 16px; font-size: 18px; font-weight: 700;
+      background: var(--green); color: white; border: none;
+      border-radius: var(--radius); cursor: pointer; margin-top: 10px;
+    }
+    .btn-submit:active { background: #166a3a; }
+
+    /* SOLD */
+    .sold-bar {
+      background: var(--card); border-radius: var(--radius); padding: 16px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sold-label { font-size: 14px; color: var(--sub); }
+    .sold-value { font-size: 28px; font-weight: 800; color: var(--blue); }
+    .sold-neg { color: var(--red); }
+
+    /* TABLE */
+    .table-section {
+      max-width: 900px; margin: 0 auto 30px; padding: 0 16px;
+    }
+    .table-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px; flex-wrap: wrap; gap: 10px;
+    }
+    .table-header h3 { font-size: 16px; }
+    .table-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .table-filters select, .table-filters input {
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
+    }
+    table {
+      width: 100%; border-collapse: collapse; background: var(--card);
+      border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      font-size: 13px;
+    }
+    th {
+      background: var(--blue); color: white; padding: 10px 8px;
+      text-align: left; font-size: 12px; white-space: nowrap;
+    }
+    td { padding: 8px; border-bottom: 1px solid var(--border); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0f4ff; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .bold { font-weight: 700; }
+    .intrare { color: var(--green); font-weight: 600; }
+    .iesire { color: var(--red); font-weight: 600; }
+    .btn-del {
+      background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px;
+    }
+    .btn-del:hover { color: var(--red); }
+    .toast {
+      position: fixed; bottom: 30px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e; color: white;
+      padding: 12px 22px; border-radius: 24px;
+      font-size: 15px; z-index: 200;
+      transition: transform .3s ease; white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+
+    .suggestions {
+      position: absolute; background: white; border: 1px solid var(--border);
+      border-radius: 8px; max-height: 200px; overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,.1); z-index: 50; width: 100%;
+    }
+    .suggestions div {
+      padding: 10px 12px; cursor: pointer; font-size: 14px;
+    }
+    .suggestions div:hover { background: var(--bg); }
+
+    @media print {
+      .header, .form-section, .table-filters, .btn-del { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>ARAFURA — Caiet</h1>
+    <span class="header-user" id="header-user"></span>
+  </div>
+  <button onclick="logout()" id="btn-logout" style="display:none">Ieși</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
+<div id="screen-login" class="login-screen">
+  <div class="icon">📒</div>
+  <h2>Registru de casă</h2>
+  <p style="color:var(--sub);">Introdu PIN-ul tău</p>
+  <input type="password" inputmode="numeric" maxlength="4" placeholder="****"
+    id="login-pin" oninput="onLoginPin()" autocomplete="off">
+</div>
+
+<!-- MAIN -->
+<div id="screen-main" style="display:none;">
+
+  <div class="form-section">
+    <div class="sold-bar">
+      <span class="sold-label">Sold curent:</span>
+      <span class="sold-value" id="sold-curent">—</span>
+    </div>
+
+    <div class="form-card">
+      <h3>Operațiune nouă</h3>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;">
+          <label>Data</label>
+          <input type="date" id="f-data">
+        </div>
+        <div class="form-group">
+          <label>Tip operațiune</label>
+          <div style="position:relative;">
+            <input type="text" id="f-tip" placeholder="ex: INCASARE" autocomplete="off"
+              oninput="showSuggestions('tip', this.value)" onfocus="showSuggestions('tip', this.value)">
+            <div class="suggestions" id="sug-tip" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Beneficiar</label>
+          <div style="position:relative;">
+            <input type="text" id="f-beneficiar" placeholder="ex: TOMIS 3" autocomplete="off"
+              oninput="showSuggestions('beneficiar', this.value)" onfocus="showSuggestions('beneficiar', this.value)">
+            <div class="suggestions" id="sug-beneficiar" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Intrare (RON)</label>
+          <input type="number" step="0.01" id="f-intrare" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label>Ieșire (RON)</label>
+          <input type="number" step="0.01" id="f-iesire" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Observații</label>
+          <input type="text" id="f-obs" placeholder="opțional">
+        </div>
+      </div>
+      <button class="btn-submit" onclick="adaugaOperatiune()">Adaugă operațiune</button>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-header">
+      <h3>Operațiuni recente</h3>
+      <div class="table-filters">
+        <input type="date" id="t-data-start" onchange="incarcaOperatiuni()">
+        <span style="line-height:36px;">→</span>
+        <input type="date" id="t-data-end" onchange="incarcaOperatiuni()">
+      </div>
+    </div>
+    <div id="tabel-operatiuni"></div>
+  </div>
+</div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+let currentUser = null;
+
+// Tipuri si beneficiari cunoscuti (se completeaza din DB)
+let tipuriCunoscute = [];
+let beneficiariCunoscuti = [];
+
+async function onLoginPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin.length < 4) return;
+
+  try {
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    currentUser = data[0];
+    document.getElementById('header-user').textContent = currentUser.nume;
+    document.getElementById('btn-logout').style.display = '';
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-main').style.display = '';
+    document.getElementById('login-pin').value = '';
+
+    // Set default date
+    document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+
+    // Set filter dates (last 7 days)
+    const today = new Date();
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    document.getElementById('t-data-start').value = weekAgo.toISOString().slice(0, 10);
+    document.getElementById('t-data-end').value = today.toISOString().slice(0, 10);
+
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
+  } catch (e) {
+    showToast('Eroare conexiune');
+  }
+}
+
+function logout() {
+  currentUser = null;
+  document.getElementById('screen-login').style.display = '';
+  document.getElementById('screen-main').style.display = 'none';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('header-user').textContent = '';
+}
+
+async function incarcaSold() {
+  try {
+    // Calculeaza sold din toate operatiunile
+    const resp = await fetch(`${API}/caiet?select=intrare,iesire&order=data.asc,created_at.asc&limit=50000`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+
+    let sold = 0;
+    for (const d of data) {
+      sold += parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
+    }
+
+    const el = document.getElementById('sold-curent');
+    el.textContent = sold.toLocaleString('ro-RO', { minimumFractionDigits: 2 }) + ' RON';
+    el.className = sold < 0 ? 'sold-value sold-neg' : 'sold-value';
+  } catch (e) {}
+}
+
+async function incarcaSugestii() {
+  try {
+    const resp = await fetch(`${API}/caiet?select=tip,beneficiar&limit=5000`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+    const tipSet = new Set(), benSet = new Set();
+    for (const d of data) {
+      if (d.tip) tipSet.add(d.tip.trim().toUpperCase());
+      if (d.beneficiar) benSet.add(d.beneficiar.trim().toUpperCase());
+    }
+    tipuriCunoscute = [...tipSet].sort();
+    beneficiariCunoscuti = [...benSet].sort();
+  } catch (e) {}
+}
+
+function showSuggestions(field, value) {
+  const list = field === 'tip' ? tipuriCunoscute : beneficiariCunoscuti;
+  const container = document.getElementById(`sug-${field}`);
+  const val = value.trim().toUpperCase();
+
+  if (!val) { container.style.display = 'none'; return; }
+
+  const matches = list.filter(item => item.includes(val)).slice(0, 8);
+  if (matches.length === 0) { container.style.display = 'none'; return; }
+
+  container.innerHTML = matches.map(m => `<div onclick="selectSuggestion('${field}', '${m.replace(/'/g, "\\'")}')">${m}</div>`).join('');
+  container.style.display = '';
+}
+
+function selectSuggestion(field, value) {
+  document.getElementById(`f-${field}`).value = value;
+  document.getElementById(`sug-${field}`).style.display = 'none';
+}
+
+// Hide suggestions on click outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.form-group')) {
+    document.querySelectorAll('.suggestions').forEach(s => s.style.display = 'none');
+  }
+});
+
+async function adaugaOperatiune() {
+  const data = document.getElementById('f-data').value;
+  const tip = document.getElementById('f-tip').value.trim().toUpperCase();
+  const beneficiar = document.getElementById('f-beneficiar').value.trim().toUpperCase();
+  const intrare = parseFloat(document.getElementById('f-intrare').value) || 0;
+  const iesire = parseFloat(document.getElementById('f-iesire').value) || 0;
+  const obs = document.getElementById('f-obs').value.trim();
+
+  if (!data) { showToast('Selectează data'); return; }
+  if (!tip) { showToast('Completează tipul operațiunii'); return; }
+  if (!beneficiar) { showToast('Completează beneficiarul'); return; }
+  if (intrare === 0 && iesire === 0) { showToast('Completează intrare sau ieșire'); return; }
+
+  try {
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data, tip, beneficiar,
+        intrare: intrare || 0,
+        iesire: iesire || 0,
+        observatii: obs,
+        utilizator: currentUser.nume
+      })
+    });
+    if (resp.ok) {
+      showToast('Operațiune adăugată!');
+      // Reset form (keep date)
+      document.getElementById('f-tip').value = '';
+      document.getElementById('f-beneficiar').value = '';
+      document.getElementById('f-intrare').value = '';
+      document.getElementById('f-iesire').value = '';
+      document.getElementById('f-obs').value = '';
+      // Refresh
+      await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
+    } else {
+      showToast('Eroare la salvare');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  }
+}
+
+async function incarcaOperatiuni() {
+  const dataStart = document.getElementById('t-data-start').value;
+  const dataEnd = document.getElementById('t-data-end').value;
+  const container = document.getElementById('tabel-operatiuni');
+
+  let url = `${API}/caiet?select=*&order=data.desc,created_at.desc&limit=500`;
+  if (dataStart) url += `&data=gte.${dataStart}`;
+  if (dataEnd) url += `&data=lte.${dataEnd}`;
+
+  try {
+    const resp = await fetch(url, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+
+    if (data.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--sub);">Nicio operațiune în perioada selectată</div>';
+      return;
+    }
+
+    let html = `<table>
+      <thead><tr>
+        <th>Data</th><th>Tip</th><th>Beneficiar</th>
+        <th class="num">Intrare</th><th class="num">Ieșire</th>
+        <th>Obs</th><th>Cine</th><th></th>
+      </tr></thead><tbody>`;
+
+    for (const d of data) {
+      const dt = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      html += `<tr>
+        <td>${dt}</td>
+        <td class="bold">${escHtml(d.tip)}</td>
+        <td>${escHtml(d.beneficiar)}</td>
+        <td class="num intrare">${d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : ''}</td>
+        <td class="num iesire">${d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : ''}</td>
+        <td style="color:var(--sub); font-size:12px;">${escHtml(d.observatii || '')}</td>
+        <td style="font-size:12px; color:var(--sub);">${d.utilizator}</td>
+        <td><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button></td>
+      </tr>`;
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--red); padding:20px;">Eroare la încărcare</div>';
+  }
+}
+
+async function stergeOperatiune(id) {
+  if (!confirm('Sigur vrei să ștergi această operațiune?')) return;
+  try {
+    await fetch(`${API}/caiet?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
+    await Promise.all([incarcaSold(), incarcaOperatiuni()]);
+    showToast('Operațiune ștearsă');
+  } catch (e) {
+    showToast('Eroare');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
