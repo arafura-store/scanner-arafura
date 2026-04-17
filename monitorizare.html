@@ -476,7 +476,7 @@ function renderSesizari(data) {
   html += `<table>
     <thead><tr>
       <th>Data</th><th>Magazin</th><th>Angajat</th><th>Tip</th>
-      <th>Cod</th><th>Produs</th><th>Mesaj</th><th>Status</th><th>Acțiune</th>
+      <th>Cod</th><th>Produs</th><th>Mesaj</th><th>Răspuns</th><th>Status</th><th>Acțiune</th>
     </tr></thead><tbody>`;
 
   for (const d of data) {
@@ -489,6 +489,11 @@ function renderSesizari(data) {
       ? `<button class="btn-status btn-rezolva" onclick="schimbaStatus(${d.id}, 'rezolvat')">Rezolvă</button>`
       : `<button class="btn-status btn-redeschide" onclick="schimbaStatus(${d.id}, 'nou')">Redeschide</button>`;
 
+    const raspunsHtml = d.raspuns
+      ? `<div style="font-size:12px; color:var(--green); font-weight:600;">${escHtml(d.raspuns)}</div>`
+      : `<input type="text" placeholder="Scrie răspuns..." style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:12px;"
+          onkeydown="if(event.key==='Enter') trimiteRaspuns(${d.id}, this.value)">`;
+
     html += `<tr>
       <td>${ora}</td>
       <td><span class="badge badge-magazin">${d.magazin}</span></td>
@@ -496,7 +501,8 @@ function renderSesizari(data) {
       <td><span class="tip-label tip-${d.tip}">${TIP_LABELS[d.tip] || d.tip}</span></td>
       <td>${d.cod_art || '—'}</td>
       <td>${escHtml(d.nume_art || '—')}</td>
-      <td style="max-width:300px;">${escHtml(d.mesaj || '')}</td>
+      <td style="max-width:250px;">${escHtml(d.mesaj || '')}</td>
+      <td style="min-width:180px;">${raspunsHtml}</td>
       <td>${statusBadge}</td>
       <td>${actionBtn}</td>
     </tr>`;
@@ -504,6 +510,20 @@ function renderSesizari(data) {
 
   html += '</tbody></table>';
   content.innerHTML = html;
+}
+
+async function trimiteRaspuns(id, raspuns) {
+  if (!raspuns.trim()) return;
+  try {
+    await fetch(`${API}/sesizari?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ raspuns: raspuns.trim(), raspuns_la: new Date().toISOString(), status: 'rezolvat' })
+    });
+    incarcaSesizari();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
 }
 
 async function schimbaStatus(id, status) {
