@@ -318,7 +318,10 @@ function renderTabel(totalCheltuit, esteTrimis) {
       </td>
       <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
       <td>${statusBadge}</td>
-      ${!esteTrimis ? `<td><button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button></td>` : `<td></td>`}
+      ${!esteTrimis ? `<td style="white-space:nowrap;">
+        <button class="btn-del" onclick="editCheltuiala(${d.id})" title="Editează" style="color:#1a73e8;">✎</button>
+        <button class="btn-del" onclick="stergeCheltuiala(${d.id})" title="Șterge">✕</button>
+      </td>` : `<td></td>`}
     </tr>`;
   }
 
@@ -369,6 +372,22 @@ async function adaugaCheltuiala() {
       await incarcaDate();
     }
   } catch (e) { showToast('Eroare'); }
+}
+
+async function editCheltuiala(id) {
+  const item = cheltuieliCurente.find(d => d.id === id);
+  if (!item) return;
+  // Pre-completeaza formularul cu datele existente
+  document.getElementById('f-data').value = item.data;
+  document.getElementById('f-tip').value = parseFloat(item.suma) < 0 ? 'incasare' : 'cheltuiala';
+  document.getElementById('f-suma').value = Math.abs(parseFloat(item.suma));
+  document.getElementById('f-beneficiar').value = item.beneficiar;
+  document.getElementById('f-obs').value = item.observatii || '';
+  // Stergem randul vechi
+  await fetch(`${API}/deconturi?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
+  await incarcaDate();
+  showToast('Editează și salvează din nou');
+  document.getElementById('f-beneficiar').focus();
 }
 
 async function stergeCheltuiala(id) {
