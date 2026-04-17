@@ -142,10 +142,24 @@
       background: #fdecea; padding: 4px 8px; border-radius: 6px;
       display: inline-block;
     }
-    .btn-del {
+    .btn-edit, .btn-del {
       background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px;
+      padding: 4px;
     }
+    .btn-edit:hover { color: var(--blue); }
     .btn-del:hover { color: var(--red); }
+    .edit-row input, .edit-row select {
+      padding: 6px 8px; border: 1px solid var(--blue); border-radius: 6px;
+      font-size: 13px; width: 100%;
+    }
+    .edit-row .btn-save-edit {
+      padding: 6px 14px; background: var(--green); color: white;
+      border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .edit-row .btn-cancel-edit {
+      padding: 6px 14px; background: var(--sub); color: white;
+      border: none; border-radius: 6px; font-size: 12px; cursor: pointer;
+    }
     .toast {
       position: fixed; bottom: 30px; left: 50%;
       transform: translateX(-50%) translateY(80px);
@@ -451,7 +465,8 @@ async function incarcaOperatiuni() {
       const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
-      html += `<tr>
+      const isAdmin = currentUser && currentUser.nume === 'EUGEN';
+      html += `<tr id="row-${d.id}">
         <td style="font-size:11px; color:#999; white-space:nowrap;">${dtCompletat}</td>
         <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
         <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
@@ -460,7 +475,7 @@ async function incarcaOperatiuni() {
         <td class="num">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
         <td style="color:#888; font-size:12px; max-width:150px;">${escHtml(d.observatii || '')}</td>
         <td style="font-size:11px; color:#aaa;">${d.utilizator}</td>
-        <td>${currentUser && currentUser.nume === 'EUGEN' ? `<button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
+        <td style="white-space:nowrap;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
       </tr>`;
     }
 
@@ -468,6 +483,63 @@ async function incarcaOperatiuni() {
     container.innerHTML = html;
   } catch (e) {
     container.innerHTML = '<div style="color:var(--red); padding:20px;">Eroare la încărcare</div>';
+  }
+}
+
+let editData = {};
+
+async function editOperatiune(id) {
+  // Fetch original data
+  try {
+    const resp = await fetch(`${API}/caiet?id=eq.${id}&select=*`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) return;
+    const d = data[0];
+    editData = d;
+
+    const row = document.getElementById(`row-${id}`);
+    row.className = 'edit-row';
+    row.innerHTML = `
+      <td colspan="2"><input type="date" id="edit-data" value="${d.data}"></td>
+      <td><input type="text" id="edit-tip" value="${escHtml(d.tip)}"></td>
+      <td><input type="text" id="edit-beneficiar" value="${escHtml(d.beneficiar)}"></td>
+      <td><input type="number" step="0.01" id="edit-intrare" value="${d.intrare || ''}" placeholder="0"></td>
+      <td><input type="number" step="0.01" id="edit-iesire" value="${d.iesire || ''}" placeholder="0"></td>
+      <td><input type="text" id="edit-obs" value="${escHtml(d.observatii || '')}"></td>
+      <td></td>
+      <td style="white-space:nowrap;">
+        <button class="btn-save-edit" onclick="salveazaEdit(${id})">Salvează</button>
+        <button class="btn-cancel-edit" onclick="incarcaOperatiuni()">Anulează</button>
+      </td>`;
+  } catch(e) {
+    showToast('Eroare');
+  }
+}
+
+async function salveazaEdit(id) {
+  const data = document.getElementById('edit-data').value;
+  const tip = document.getElementById('edit-tip').value.trim().toUpperCase();
+  const beneficiar = document.getElementById('edit-beneficiar').value.trim().toUpperCase();
+  const intrare = parseFloat(document.getElementById('edit-intrare').value) || 0;
+  const iesire = parseFloat(document.getElementById('edit-iesire').value) || 0;
+  const obs = document.getElementById('edit-obs').value.trim();
+
+  if (!data || !tip || !beneficiar) { showToast('Completează câmpurile obligatorii'); return; }
+
+  try {
+    const resp = await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ data, tip, beneficiar, intrare, iesire, observatii: obs })
+    });
+    if (resp.ok) {
+      showToast('Modificare salvată!');
+      await Promise.all([incarcaSold(), incarcaOperatiuni()]);
+    } else {
+      showToast('Eroare la salvare');
+    }
+  } catch(e) {
+    showToast('Eroare: ' + e.message);
   }
 }
 
