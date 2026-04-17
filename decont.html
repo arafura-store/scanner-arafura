@@ -291,6 +291,7 @@ async function adaugaCheltuiala() {
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
 
   try {
+    // Salvez in deconturi
     const resp = await fetch(`${API}/deconturi`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
@@ -298,6 +299,18 @@ async function adaugaCheltuiala() {
         utilizator: currentUser.nume,
         data, beneficiar, suma: Math.round(suma * 100) / 100,
         observatii: obs
+      })
+    });
+    // Salvez si in registru (caiet)
+    await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data, tip: 'DECONT ' + currentUser.nume,
+        beneficiar, intrare: 0,
+        iesire: Math.round(suma * 100) / 100,
+        observatii: obs,
+        utilizator: currentUser.nume
       })
     });
     if (resp.ok) {
@@ -315,6 +328,16 @@ async function adaugaCheltuiala() {
 async function stergeCheltuiala(id) {
   if (!confirm('Sigur vrei să ștergi?')) return;
   try {
+    // Ia datele ca sa stergem si din caiet
+    const resp = await fetch(`${API}/deconturi?id=eq.${id}&select=*`, { headers: HEADERS });
+    const data = await resp.json();
+    if (Array.isArray(data) && data.length > 0) {
+      const d = data[0];
+      // Sterge din caiet (match pe data, tip, beneficiar, suma)
+      await fetch(`${API}/caiet?tip=eq.DECONT ${encodeURIComponent(d.utilizator)}&beneficiar=eq.${encodeURIComponent(d.beneficiar)}&data=eq.${d.data}&iesire=eq.${d.suma}`, {
+        method: 'DELETE', headers: HEADERS
+      });
+    }
     await fetch(`${API}/deconturi?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
     await incarcaDate();
     showToast('Șters');
