@@ -137,11 +137,18 @@
     </div>
 
     <div class="form-card">
-      <h3>Cheltuială nouă</h3>
+      <h3>Operațiune nouă</h3>
       <div class="form-row">
         <div class="form-group" style="max-width:160px;">
           <label>Data</label>
           <input type="date" id="f-data">
+        </div>
+        <div class="form-group" style="max-width:160px;">
+          <label>Tip</label>
+          <select id="f-tip" style="padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+            <option value="cheltuiala">Cheltuială</option>
+            <option value="incasare">Încasare</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Suma (RON)</label>
@@ -222,8 +229,11 @@ async function incarcaDate() {
     // Fondul se stabileste din ultima operatiune de tip DECONT din caiet
     // Deocamdata il calculam din totalul cheltuit
     let totalCheltuit = 0;
+    let totalIncasat = 0;
     for (const d of data) {
-      totalCheltuit += parseFloat(d.suma || 0);
+      const s = parseFloat(d.suma || 0);
+      if (s >= 0) totalCheltuit += s;
+      else totalIncasat += Math.abs(s);
     }
 
     // Fetch fondul din caiet (ultimul DECONT catre acest utilizator)
@@ -234,7 +244,7 @@ async function incarcaDate() {
     const fondData = await respFond.json();
     fondTotal = (Array.isArray(fondData) && fondData.length > 0) ? parseFloat(fondData[0].iesire || 0) : 0;
 
-    const disponibil = fondTotal - totalCheltuit;
+    const disponibil = fondTotal - totalCheltuit + totalIncasat;
 
     const fondEl = document.getElementById('fond-disponibil');
     fondEl.textContent = disponibil.toLocaleString('ro-RO', { minimumFractionDigits: 2 }) + ' RON';
@@ -256,10 +266,14 @@ async function incarcaDate() {
 
     for (const d of data) {
       const dt = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const sumaVal = parseFloat(d.suma);
+      const esteInc = sumaVal < 0;
       html += `<tr>
         <td style="white-space:nowrap;">${dt}</td>
         <td style="font-weight:600;">${escHtml(d.beneficiar)}</td>
-        <td class="num suma-cell">${parseFloat(d.suma).toLocaleString('ro-RO', { minimumFractionDigits: 2 })}</td>
+        <td class="num" style="font-weight:700; color:${esteInc ? 'var(--green)' : 'var(--red)'};">
+          ${esteInc ? '+' : '-'}${Math.abs(sumaVal).toLocaleString('ro-RO', { minimumFractionDigits: 2 })}
+        </td>
         <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
         <td>${currentUser && currentUser.nume === 'EUGEN' ? `<button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button>` : ''}</td>
       </tr>`;
@@ -291,13 +305,17 @@ async function adaugaCheltuiala() {
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
 
   try {
+    const tipOp = document.getElementById('f-tip').value;
+    const esteIncasare = tipOp === 'incasare';
+
     // Salvez in deconturi
     const resp = await fetch(`${API}/deconturi`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
         utilizator: currentUser.nume,
-        data, beneficiar, suma: Math.round(suma * 100) / 100,
+        data, beneficiar,
+        suma: esteIncasare ? -Math.round(suma * 100) / 100 : Math.round(suma * 100) / 100,
         observatii: obs
       })
     });
@@ -307,8 +325,9 @@ async function adaugaCheltuiala() {
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
         data, tip: 'DECONT ' + currentUser.nume,
-        beneficiar, intrare: 0,
-        iesire: Math.round(suma * 100) / 100,
+        beneficiar,
+        intrare: esteIncasare ? Math.round(suma * 100) / 100 : 0,
+        iesire: esteIncasare ? 0 : Math.round(suma * 100) / 100,
         observatii: obs,
         utilizator: currentUser.nume
       })
