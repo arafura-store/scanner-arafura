@@ -142,6 +142,29 @@
       background: #fdecea; padding: 4px 8px; border-radius: 6px;
       display: inline-block;
     }
+    .alerta-decont-box {
+      background: linear-gradient(135deg, #fef3c7, #fff7ed);
+      border: 2px solid #f59e0b;
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .alerta-decont-box .alerta-icon { font-size: 36px; }
+    .alerta-decont-box .alerta-text { flex: 1; }
+    .alerta-decont-box .alerta-nume { font-size: 16px; font-weight: 700; color: #92400e; }
+    .alerta-decont-box .alerta-suma { font-size: 24px; font-weight: 800; color: #c0392b; }
+    .alerta-decont-box .btn-deconteaza {
+      padding: 12px 24px; font-size: 16px; font-weight: 700;
+      background: #1e8449; color: white; border: none;
+      border-radius: 10px; cursor: pointer;
+    }
+    .alerta-decont-box .btn-deconteaza:active { background: #166a3a; }
+
     .btn-edit, .btn-del {
       background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px;
       padding: 4px;
@@ -214,6 +237,8 @@
       <span class="sold-label">Sold curent:</span>
       <span class="sold-value" id="sold-curent">—</span>
     </div>
+
+    <div id="alerta-decont" style="display:none;"></div>
 
     <div class="form-card">
       <h3>Operațiune nouă</h3>
@@ -326,7 +351,7 @@ async function onLoginPin() {
     document.getElementById('t-data-start').value = primaZi.toISOString().slice(0, 10);
     document.getElementById('t-data-end').value = today.toISOString().slice(0, 10);
 
-    await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii(), verificaDeconturi()]);
   } catch (e) {
     showToast('Eroare conexiune');
   }
@@ -531,6 +556,85 @@ async function incarcaOperatiuni() {
     container.innerHTML = html;
   } catch (e) {
     container.innerHTML = '<div style="color:var(--red); padding:20px;">Eroare la încărcare</div>';
+  }
+}
+
+async function verificaDeconturi() {
+  if (!currentUser || currentUser.nume !== 'EUGEN') return;
+  const container = document.getElementById('alerta-decont');
+
+  try {
+    // Ia toate deconturile nedecontate, grupate pe utilizator
+    const resp = await fetch(`${API}/deconturi?select=utilizator,suma&status=eq.nou&limit=5000`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+
+    // Grupeaza pe utilizator
+    const perUser = {};
+    for (const d of data) {
+      if (!perUser[d.utilizator]) perUser[d.utilizator] = { cheltuit: 0, incasat: 0, count: 0 };
+      const s = parseFloat(d.suma || 0);
+      if (s >= 0) perUser[d.utilizator].cheltuit += s;
+      else perUser[d.utilizator].incasat += Math.abs(s);
+      perUser[d.utilizator].count++;
+    }
+
+    let html = '';
+    for (const [user, val] of Object.entries(perUser)) {
+      const dePredat = val.cheltuit - val.incasat;
+      if (val.count === 0) continue;
+      html += `<div class="alerta-decont-box">
+        <div class="alerta-icon">⚠️</div>
+        <div class="alerta-text">
+          <div class="alerta-nume">${user} are de primit:</div>
+          <div class="alerta-suma">${dePredat.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
+          <div style="font-size:12px; color:#92400e;">${val.count} cheltuieli nedecontate</div>
+        </div>
+        <button class="btn-deconteaza" onclick="deconteaza('${user}', ${dePredat.toFixed(2)})">Decontează</button>
+      </div>`;
+    }
+
+    container.innerHTML = html;
+    container.style.display = '';
+  } catch(e) {
+    container.style.display = 'none';
+  }
+}
+
+async function deconteaza(utilizator, suma) {
+  if (!confirm(`Decontezi ${suma.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nAceasta va:\n- Marca cheltuielile ca decontate\n- Adăuga o operațiune DECONT în registru\n- Reseta fondul`)) return;
+
+  try {
+    // 1. Marcheaza cheltuielile ca decontate
+    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.nou`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'decontat' })
+    });
+
+    // 2. Adauga operatiune DECONT in caiet (dau banii inapoi)
+    const today = new Date().toISOString().slice(0, 10);
+    await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data: today,
+        tip: 'DECONT',
+        beneficiar: utilizator,
+        intrare: 0,
+        iesire: suma,
+        observatii: 'DECONTARE CHELTUIELI',
+        utilizator: currentUser.nume
+      })
+    });
+
+    showToast(`Decontat ${suma.toFixed(2)} RON pentru ${utilizator}!`);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi()]);
+  } catch(e) {
+    showToast('Eroare: ' + e.message);
   }
 }
 
