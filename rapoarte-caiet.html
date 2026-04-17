@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapoarte Caiet — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #1a73e8; --green: #1e8449; --red: #c0392b;
+      --orange: #e67e22; --purple: #7c3aed;
+      --bg: #f4f6f9; --card: #ffffff; --text: #1a1a2e;
+      --sub: #6b7280; --border: #e5e7eb;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+    .header {
+      background: #2c3e50; color: white; padding: 20px 30px; border-radius: 14px;
+      margin-bottom: 20px; display: flex; align-items: center;
+      justify-content: space-between; flex-wrap: wrap; gap: 14px;
+    }
+    .header h1 { font-size: 22px; font-weight: 800; }
+    .header-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .header select, .header button {
+      padding: 10px 16px; font-size: 15px; border: none; border-radius: 8px; cursor: pointer;
+    }
+    .header select { background: rgba(255,255,255,.15); color: white; }
+    .header select option { color: #333; }
+    .header button { background: white; color: #2c3e50; font-weight: 700; }
+
+    .tabs { display: flex; gap: 0; margin-bottom: 20px; background: var(--card); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); flex-wrap: wrap; }
+    .tab {
+      flex: 1; min-width: 120px; padding: 14px 8px; text-align: center; font-size: 14px; font-weight: 700;
+      cursor: pointer; border: none; background: var(--card); color: var(--sub);
+      border-bottom: 3px solid transparent; transition: all .15s;
+    }
+    .tab:hover { background: var(--bg); }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .summary {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px; margin-bottom: 20px;
+    }
+    .summary-card {
+      background: var(--card); border-radius: 12px; padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    }
+    .summary-card .label { font-size: 12px; color: var(--sub); }
+    .summary-card .value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+
+    table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      background: var(--card); border-radius: 12px; overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08); font-size: 13px; margin-bottom: 20px;
+    }
+    th {
+      background: #2c3e50; color: white; padding: 12px 10px;
+      text-align: right; font-size: 11px; white-space: nowrap;
+      text-transform: uppercase; letter-spacing: .3px;
+    }
+    th:first-child { text-align: left; }
+    td { padding: 10px; border-bottom: 1px solid #f0f0f0; text-align: right; }
+    td:first-child { text-align: left; font-weight: 600; }
+    tr:nth-child(even) td { background: #fafbfc; }
+    tr:hover td { background: #edf2fb; }
+    tr:last-child td { border-bottom: none; }
+    .total-row td { background: #e8f0fe !important; font-weight: 700; border-top: 2px solid var(--blue); }
+    .num { font-variant-numeric: tabular-nums; }
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+
+    .loading { text-align: center; padding: 40px; color: var(--sub); }
+
+    @media print {
+      .header select, .header button, .tabs { display: none; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARAFURA — Rapoarte</h1>
+  <div class="header-controls">
+    <select id="sel-an"></select>
+    <button onclick="genereazaRapoarte()">Generează</button>
+    <button style="background:var(--green); color:white;" onclick="window.print()">Printează</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('vanzari')">Vânzări</button>
+  <button class="tab" onclick="switchTab('amanet')">Amanet</button>
+  <button class="tab" onclick="switchTab('banca')">Bancă</button>
+  <button class="tab" onclick="switchTab('combustibil')">Combustibil</button>
+  <button class="tab" onclick="switchTab('rezumat')">Rezumat</button>
+</div>
+
+<div id="tab-vanzari" class="tab-content active"><div class="loading">Apasă Generează</div></div>
+<div id="tab-amanet" class="tab-content"><div class="loading">Apasă Generează</div></div>
+<div id="tab-banca" class="tab-content"><div class="loading">Apasă Generează</div></div>
+<div id="tab-combustibil" class="tab-content"><div class="loading">Apasă Generează</div></div>
+<div id="tab-rezumat" class="tab-content"><div class="loading">Apasă Generează</div></div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+
+const LUNI = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+const MAGAZINE = ['TOMIS 3','SERVICII','BABADAG','MEDGIDIA','NAVODARI','MARVIMEX','POARTA 6','SHOWROOM','BROTACEI','KOGALNICEANU','CUMPANA','POPORULUI'];
+const BANCI = ['LIBRA BANK','VISTA BANK','BANORIENT','TRANSILVANIA'];
+const FIRME_BANCA = ['ARAFURA','PERFECTA','DOMADAMI','ROCO','VIENEZ','FLOROM','IMONDIS'];
+const MAGAZINE_AMANET = ['CASIERIE CENTRALA','BABADAG','CUMPANA','POPORULUI','TOMIS 3','MARVIMEX','POARTA 6','MEDGIDIA','NAVODARI'];
+
+let allData = [];
+
+// Populare an
+const selAn = document.getElementById('sel-an');
+for (let y = 2026; y >= 2024; y--) {
+  const opt = document.createElement('option');
+  opt.value = y; opt.textContent = y;
+  if (y === new Date().getFullYear()) opt.selected = true;
+  selAn.appendChild(opt);
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function fmt(n) {
+  if (!n || n === 0) return '';
+  return n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function genereazaRapoarte() {
+  const an = parseInt(selAn.value);
+  document.querySelectorAll('.tab-content').forEach(t => t.innerHTML = '<div class="loading">Se generează...</div>');
+
+  try {
+    // Fetch all data for the year
+    allData = [];
+    let offset = 0;
+    while (true) {
+      const resp = await fetch(
+        `${API}/caiet?select=*&data=gte.${an}-01-01&data=lte.${an}-12-31&order=data.asc&limit=5000&offset=${offset}`,
+        { headers: HEADERS }
+      );
+      const data = await resp.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      allData.push(...data);
+      offset += 5000;
+      if (data.length < 5000) break;
+    }
+
+    renderVanzari(an);
+    renderAmanet(an);
+    renderBanca(an);
+    renderCombustibil(an);
+    renderRezumat(an);
+
+  } catch (e) {
+    document.querySelectorAll('.tab-content').forEach(t =>
+      t.innerHTML = `<div class="loading" style="color:var(--red);">Eroare: ${e.message}</div>`
+    );
+  }
+}
+
+// ══ VANZARI ══════════════════════════════════════════════════════
+function renderVanzari(an) {
+  const container = document.getElementById('tab-vanzari');
+  const incasari = allData.filter(d => d.tip === 'INCASARE');
+
+  // Matrix: luna x magazin
+  const matrix = {};
+  for (let m = 0; m < 12; m++) matrix[m] = {};
+
+  for (const d of incasari) {
+    const luna = new Date(d.data).getMonth();
+    const mag = d.beneficiar.trim();
+    if (!matrix[luna][mag]) matrix[luna][mag] = 0;
+    matrix[luna][mag] += parseFloat(d.intrare || 0);
+  }
+
+  // Detecteaza magazine active
+  const magActive = MAGAZINE.filter(mag => {
+    for (let m = 0; m < 12; m++) if (matrix[m][mag]) return true;
+    return false;
+  });
+
+  let html = `<table><thead><tr><th>LUNA</th>`;
+  for (const mag of magActive) html += `<th>${mag}</th>`;
+  html += `<th style="background:var(--blue);">TOTAL</th></tr></thead><tbody>`;
+
+  const totalCol = {};
+  for (const mag of magActive) totalCol[mag] = 0;
+  let grandTotal = 0;
+
+  for (let m = 0; m < 12; m++) {
+    let rowTotal = 0;
+    html += `<tr><td>${LUNI[m]}</td>`;
+    for (const mag of magActive) {
+      const val = matrix[m][mag] || 0;
+      totalCol[mag] += val;
+      rowTotal += val;
+      html += `<td class="num">${fmt(val)}</td>`;
+    }
+    grandTotal += rowTotal;
+    html += `<td class="num" style="font-weight:700; color:var(--blue);">${fmt(rowTotal)}</td></tr>`;
+  }
+
+  html += `<tr class="total-row"><td>TOTAL ${an}</td>`;
+  for (const mag of magActive) html += `<td class="num">${fmt(totalCol[mag])}</td>`;
+  html += `<td class="num" style="color:var(--blue);">${fmt(grandTotal)}</td></tr>`;
+  html += '</tbody></table>';
+
+  // Summary
+  const sumHtml = `<div class="summary">
+    <div class="summary-card"><div class="label">Total încasări ${an}</div><div class="value green">${fmt(grandTotal)} RON</div></div>
+    ${magActive.slice(0, 4).map(mag => `<div class="summary-card"><div class="label">${mag}</div><div class="value" style="font-size:18px;">${fmt(totalCol[mag])}</div></div>`).join('')}
+  </div>`;
+
+  container.innerHTML = sumHtml + html;
+}
+
+// ══ AMANET ═══════════════════════════════════════════════════════
+function renderAmanet(an) {
+  const container = document.getElementById('tab-amanet');
+  const amanet = allData.filter(d => d.tip === 'AMANET' || d.tip === 'FOND AMANET');
+
+  const matrix = {}; // luna -> magazin -> {incasare, plata}
+  for (let m = 0; m < 12; m++) matrix[m] = {};
+
+  for (const d of amanet) {
+    const luna = new Date(d.data).getMonth();
+    const mag = d.beneficiar.trim();
+    if (!matrix[luna][mag]) matrix[luna][mag] = { incasare: 0, plata: 0 };
+    matrix[luna][mag].incasare += parseFloat(d.intrare || 0);
+    matrix[luna][mag].plata += parseFloat(d.iesire || 0);
+  }
+
+  const magActive = MAGAZINE_AMANET.filter(mag => {
+    for (let m = 0; m < 12; m++) if (matrix[m][mag]) return true;
+    return false;
+  });
+
+  let html = '<table><thead><tr><th>LUNA</th><th>TIP</th>';
+  for (const mag of magActive) html += `<th>${mag}</th>`;
+  html += '<th style="background:var(--blue);">TOTAL</th></tr></thead><tbody>';
+
+  let totalIncasare = 0, totalPlata = 0;
+
+  for (let m = 0; m < 12; m++) {
+    let hasData = false;
+    for (const mag of magActive) if (matrix[m][mag]) { hasData = true; break; }
+    if (!hasData) continue;
+
+    // Incasare row
+    let rowInc = 0;
+    html += `<tr><td rowspan="2" style="vertical-align:middle;">${LUNI[m]}</td><td class="green" style="font-weight:600;">ÎNCASARE</td>`;
+    for (const mag of magActive) {
+      const val = matrix[m][mag]?.incasare || 0;
+      rowInc += val;
+      html += `<td class="num green">${fmt(val)}</td>`;
+    }
+    totalIncasare += rowInc;
+    html += `<td class="num green" style="font-weight:700;">${fmt(rowInc)}</td></tr>`;
+
+    // Plata row
+    let rowPlata = 0;
+    html += `<tr><td class="red" style="font-weight:600;">PLATĂ</td>`;
+    for (const mag of magActive) {
+      const val = matrix[m][mag]?.plata || 0;
+      rowPlata += val;
+      html += `<td class="num red">${fmt(val)}</td>`;
+    }
+    totalPlata += rowPlata;
+    html += `<td class="num red" style="font-weight:700;">${fmt(rowPlata)}</td></tr>`;
+  }
+
+  html += '</tbody></table>';
+
+  const sumHtml = `<div class="summary">
+    <div class="summary-card"><div class="label">Total încasări amanet</div><div class="value green">${fmt(totalIncasare)} RON</div></div>
+    <div class="summary-card"><div class="label">Total plăți amanet</div><div class="value red">${fmt(totalPlata)} RON</div></div>
+    <div class="summary-card"><div class="label">Diferență</div><div class="value" style="color:${totalIncasare - totalPlata >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(totalIncasare - totalPlata)} RON</div></div>
+  </div>`;
+
+  container.innerHTML = sumHtml + html;
+}
+
+// ══ BANCA ════════════════════════════════════════════════════════
+function renderBanca(an) {
+  const container = document.getElementById('tab-banca');
+  const depuneri = allData.filter(d => d.tip === 'DEPUNERE');
+  const retrageri = allData.filter(d => d.tip === 'RETRAGERE');
+
+  // Detecteaza banci din observatii/beneficiar
+  function detectBanca(d) {
+    const all = ((d.beneficiar || '') + ' ' + (d.observatii || '')).toUpperCase();
+    if (all.includes('LIBRA')) return 'LIBRA BANK';
+    if (all.includes('VISTA')) return 'VISTA BANK';
+    if (all.includes('BANORIENT') || all.includes('ORIENT')) return 'BANORIENT';
+    if (all.includes('TRANSILVANIA') || all.includes('BT ')) return 'TRANSILVANIA';
+    return 'ALTĂ BANCĂ';
+  }
+
+  // Matrix: luna -> banca -> {depunere, retragere}
+  const matrix = {};
+  for (let m = 0; m < 12; m++) matrix[m] = {};
+
+  for (const d of depuneri) {
+    const luna = new Date(d.data).getMonth();
+    const banca = detectBanca(d);
+    if (!matrix[luna][banca]) matrix[luna][banca] = { dep: 0, ret: 0 };
+    matrix[luna][banca].dep += parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
+  }
+  for (const d of retrageri) {
+    const luna = new Date(d.data).getMonth();
+    const banca = detectBanca(d);
+    if (!matrix[luna][banca]) matrix[luna][banca] = { dep: 0, ret: 0 };
+    matrix[luna][banca].ret += parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
+  }
+
+  const banciActive = [...BANCI, 'ALTĂ BANCĂ'].filter(b => {
+    for (let m = 0; m < 12; m++) if (matrix[m][b]) return true;
+    return false;
+  });
+
+  let html = '<table><thead><tr><th>LUNA</th>';
+  for (const b of banciActive) html += `<th colspan="2">${b}</th>`;
+  html += '</tr><tr><th></th>';
+  for (const b of banciActive) html += '<th>DEPUNERE</th><th>RETRAGERE</th>';
+  html += '</tr></thead><tbody>';
+
+  const totalBanca = {};
+  for (const b of banciActive) totalBanca[b] = { dep: 0, ret: 0 };
+
+  for (let m = 0; m < 12; m++) {
+    let hasData = false;
+    for (const b of banciActive) if (matrix[m][b]) { hasData = true; break; }
+    if (!hasData) continue;
+
+    html += `<tr><td>${LUNI[m]}</td>`;
+    for (const b of banciActive) {
+      const dep = matrix[m][b]?.dep || 0;
+      const ret = matrix[m][b]?.ret || 0;
+      totalBanca[b].dep += dep;
+      totalBanca[b].ret += ret;
+      html += `<td class="num green">${fmt(dep)}</td><td class="num red">${fmt(ret)}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '<tr class="total-row"><td>TOTAL</td>';
+  for (const b of banciActive) {
+    html += `<td class="num green">${fmt(totalBanca[b].dep)}</td><td class="num red">${fmt(totalBanca[b].ret)}</td>`;
+  }
+  html += '</tr></tbody></table>';
+
+  const totalDep = Object.values(totalBanca).reduce((s, b) => s + b.dep, 0);
+  const totalRet = Object.values(totalBanca).reduce((s, b) => s + b.ret, 0);
+
+  const sumHtml = `<div class="summary">
+    <div class="summary-card"><div class="label">Total depuneri</div><div class="value green">${fmt(totalDep)} RON</div></div>
+    <div class="summary-card"><div class="label">Total retrageri</div><div class="value red">${fmt(totalRet)} RON</div></div>
+  </div>`;
+
+  container.innerHTML = sumHtml + html;
+}
+
+// ══ COMBUSTIBIL ══════════════════════════════════════════════════
+function renderCombustibil(an) {
+  const container = document.getElementById('tab-combustibil');
+  const combustibil = allData.filter(d => d.tip === 'COMBUSTIBIL');
+
+  // Per luna si per vehicul/beneficiar
+  const perLuna = {};
+  const perVehicul = {};
+
+  for (const d of combustibil) {
+    const luna = new Date(d.data).getMonth();
+    const vehicul = d.beneficiar.trim();
+    const suma = parseFloat(d.iesire || 0) || parseFloat(d.intrare || 0);
+
+    if (!perLuna[luna]) perLuna[luna] = 0;
+    perLuna[luna] += suma;
+
+    if (!perVehicul[vehicul]) perVehicul[vehicul] = 0;
+    perVehicul[vehicul] += suma;
+  }
+
+  let totalComb = 0;
+
+  // Tabel per luna
+  let html = '<h3 style="margin-bottom:12px;">Combustibil pe luni</h3><table><thead><tr><th>LUNA</th><th>SUMĂ</th></tr></thead><tbody>';
+  for (let m = 0; m < 12; m++) {
+    if (!perLuna[m]) continue;
+    totalComb += perLuna[m];
+    html += `<tr><td>${LUNI[m]}</td><td class="num red">${fmt(perLuna[m])}</td></tr>`;
+  }
+  html += `<tr class="total-row"><td>TOTAL</td><td class="num red">${fmt(totalComb)}</td></tr>`;
+  html += '</tbody></table>';
+
+  // Tabel per vehicul
+  const vehiculeSorted = Object.entries(perVehicul).sort((a, b) => b[1] - a[1]);
+  html += '<h3 style="margin:20px 0 12px;">Combustibil pe vehicul/beneficiar</h3><table><thead><tr><th>VEHICUL</th><th>SUMĂ</th></tr></thead><tbody>';
+  for (const [v, suma] of vehiculeSorted) {
+    html += `<tr><td>${v}</td><td class="num red">${fmt(suma)}</td></tr>`;
+  }
+  html += `<tr class="total-row"><td>TOTAL</td><td class="num red">${fmt(totalComb)}</td></tr>`;
+  html += '</tbody></table>';
+
+  const sumHtml = `<div class="summary">
+    <div class="summary-card"><div class="label">Total combustibil ${an}</div><div class="value red">${fmt(totalComb)} RON</div></div>
+    <div class="summary-card"><div class="label">Nr. alimentări</div><div class="value">${combustibil.length}</div></div>
+    <div class="summary-card"><div class="label">Medie/lună</div><div class="value" style="font-size:18px;">${fmt(totalComb / (Object.keys(perLuna).length || 1))}</div></div>
+  </div>`;
+
+  container.innerHTML = sumHtml + html;
+}
+
+// ══ REZUMAT ═════════════════════════════════════════════════════
+function renderRezumat(an) {
+  const container = document.getElementById('tab-rezumat');
+
+  // Grupare per tip
+  const perTip = {};
+  for (const d of allData) {
+    const tip = d.tip.trim();
+    if (!perTip[tip]) perTip[tip] = { intrare: 0, iesire: 0, count: 0 };
+    perTip[tip].intrare += parseFloat(d.intrare || 0);
+    perTip[tip].iesire += parseFloat(d.iesire || 0);
+    perTip[tip].count++;
+  }
+
+  const tipuriSorted = Object.entries(perTip).sort((a, b) => (b[1].intrare + b[1].iesire) - (a[1].intrare + a[1].iesire));
+
+  let totalIntrare = 0, totalIesire = 0;
+
+  let html = '<h3 style="margin-bottom:12px;">Rezumat pe tipuri de operațiuni</h3>';
+  html += '<table><thead><tr><th>TIP OPERAȚIUNE</th><th>NR.</th><th>INTRĂRI</th><th>IEȘIRI</th><th>DIFERENȚĂ</th></tr></thead><tbody>';
+
+  for (const [tip, val] of tipuriSorted) {
+    const dif = val.intrare - val.iesire;
+    totalIntrare += val.intrare;
+    totalIesire += val.iesire;
+    html += `<tr>
+      <td>${tip}</td>
+      <td class="num">${val.count}</td>
+      <td class="num green">${fmt(val.intrare)}</td>
+      <td class="num red">${fmt(val.iesire)}</td>
+      <td class="num" style="font-weight:700; color:${dif >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(dif)}</td>
+    </tr>`;
+  }
+
+  html += `<tr class="total-row">
+    <td>TOTAL</td><td class="num">${allData.length}</td>
+    <td class="num green">${fmt(totalIntrare)}</td>
+    <td class="num red">${fmt(totalIesire)}</td>
+    <td class="num" style="color:${totalIntrare - totalIesire >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(totalIntrare - totalIesire)}</td>
+  </tr>`;
+  html += '</tbody></table>';
+
+  // Per luna
+  html += '<h3 style="margin:20px 0 12px;">Rezumat pe luni</h3>';
+  html += '<table><thead><tr><th>LUNA</th><th>INTRĂRI</th><th>IEȘIRI</th><th>DIFERENȚĂ</th><th>SOLD CUMULAT</th></tr></thead><tbody>';
+
+  let soldCumulat = 0;
+  for (let m = 0; m < 12; m++) {
+    const lunaData = allData.filter(d => new Date(d.data).getMonth() === m);
+    if (lunaData.length === 0) continue;
+    let intr = 0, ies = 0;
+    for (const d of lunaData) {
+      intr += parseFloat(d.intrare || 0);
+      ies += parseFloat(d.iesire || 0);
+    }
+    const dif = intr - ies;
+    soldCumulat += dif;
+    html += `<tr>
+      <td>${LUNI[m]}</td>
+      <td class="num green">${fmt(intr)}</td>
+      <td class="num red">${fmt(ies)}</td>
+      <td class="num" style="font-weight:700; color:${dif >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(dif)}</td>
+      <td class="num" style="font-weight:700; color:var(--blue);">${fmt(soldCumulat)}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  const sumHtml = `<div class="summary">
+    <div class="summary-card"><div class="label">Total intrări ${an}</div><div class="value green">${fmt(totalIntrare)} RON</div></div>
+    <div class="summary-card"><div class="label">Total ieșiri ${an}</div><div class="value red">${fmt(totalIesire)} RON</div></div>
+    <div class="summary-card"><div class="label">Diferență</div><div class="value" style="color:${totalIntrare-totalIesire>=0?'var(--green)':'var(--red)'};">${fmt(totalIntrare - totalIesire)} RON</div></div>
+    <div class="summary-card"><div class="label">Nr. operațiuni</div><div class="value">${allData.length}</div></div>
+  </div>`;
+
+  container.innerHTML = sumHtml + html;
+}
+</script>
+</body>
+</html>
