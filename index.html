@@ -1415,7 +1415,7 @@ async function onSesizarePinInput() {
     document.getElementById('sesizare-salut').textContent = `${sesizareAngajat.nume} — ${storeName}`;
     // Detecteaza genul dupa prenume
     const prenume = sesizareAngajat.nume.split(' ').slice(1).join(' ');
-    const numeBaieti = ['GABRIEL','LIVIU','PETRICA','ALEXANDRU','ANDREI','MARIUS','IOAN','DANIEL','MIHAI','GEORGE','FLORIN','COSMIN','ADRIAN','BOGDAN','STEFAN','RAZVAN','IONUT','CATALIN','CRISTIAN','ROBERT'];
+    const numeBaieti = ['GABRIEL','LIVIU'];
     const esteBaiat = numeBaieti.includes(prenume.toUpperCase());
     document.getElementById('sesizare-menu-salut').textContent = `Bună, ${prenume}!`;
     document.getElementById('motivational-msg').innerHTML =
