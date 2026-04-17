@@ -435,7 +435,9 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
     const totalSuma = esteFix ? (ang.salariu_fix + sumaMedical) : (sumLV + sumWE + sumCO + sumaMedical);
 
     const { avans, imprumut } = calcTranzactii(ang.id);
-    const restPlata = totalSuma - avans - imprumut;
+    // Garantie: rata lunara doar daca nu s-a atins totalul
+    const garantieRata = (ang.garantie_oprita < ang.garantie_total) ? (ang.garantie_rata || 0) : 0;
+    const restPlata = totalSuma - avans - imprumut - garantieRata;
 
     rezultate.push({
       angajat: ang,
@@ -448,7 +450,9 @@ function calculeazaRaport(angajati, pontaje, concedii, an, luna) {
       sumWE: Math.round(sumWE * 100) / 100,
       sumCO: Math.round(sumCO * 100) / 100,
       totalSuma: Math.round(totalSuma * 100) / 100,
-      avans, imprumut,
+      avans, imprumut, garantieRata,
+      garantieOprita: ang.garantie_oprita || 0,
+      garantieTotal: ang.garantie_total || 0,
       restPlata: Math.round(restPlata * 100) / 100,
       detaliiZile, orePeMagazin
     });
@@ -465,6 +469,7 @@ function afiseazaRaport(raport, an, luna) {
   const totalSalarii = raport.reduce((s, r) => s + r.totalSuma, 0);
   const totalAvans = raport.reduce((s, r) => s + r.avans, 0);
   const totalImprumut = raport.reduce((s, r) => s + r.imprumut, 0);
+  const totalGarantie = raport.reduce((s, r) => s + r.garantieRata, 0);
   const totalRest = raport.reduce((s, r) => s + r.restPlata, 0);
   const totalOreLV = raport.reduce((s, r) => s + r.oreLucrateLV, 0);
   const totalOreWE = raport.reduce((s, r) => s + r.oreLucrateWE, 0);
@@ -510,6 +515,7 @@ function afiseazaRaport(raport, an, luna) {
           <th class="num bold">TOTAL</th>
           <th class="num">Avans</th>
           <th class="num">Împrumut</th>
+          <th class="num">Garanție</th>
           <th class="num bold">REST PLATĂ</th>
         </tr>
       </thead>
@@ -537,10 +543,11 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num bold">${r.totalSuma.toFixed(2)}</td>
           <td class="num" style="color:var(--orange)">${r.avans ? r.avans.toFixed(2) : '—'}</td>
           <td class="num" style="color:var(--red)">${r.imprumut ? r.imprumut.toFixed(2) : '—'}</td>
+          <td class="num" style="color:#7c3aed" title="${r.garantieOprita}/${r.garantieTotal}">${r.garantieRata ? r.garantieRata.toFixed(0) : '—'}</td>
           <td class="num ${restCls}">${r.restPlata.toFixed(2)} RON</td>
         </tr>
         <tr id="det-${r.angajat.id}" style="display:none">
-          <td colspan="14" style="padding:0;">
+          <td colspan="15" style="padding:0;">
             ${renderDetaliiComplet(r, isManager)}
           </td>
         </tr>`;
@@ -560,6 +567,7 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num bold">${totalSalarii.toFixed(2)}</td>
           <td class="num bold">${totalAvans.toFixed(2)}</td>
           <td class="num bold">${totalImprumut.toFixed(2)}</td>
+          <td class="num bold">${raport.reduce((s,r)=>s+r.garantieRata,0).toFixed(0)}</td>
           <td class="num bold rest-plata">${totalRest.toFixed(2)} RON</td>
         </tr>`;
 
@@ -660,6 +668,7 @@ function renderDetaliiComplet(r, isManager) {
     ${r.sumaMedical ? `<span>+ CM medical: <strong>${r.sumaMedical.toFixed(2)}</strong></span>` : ''}
     <span>- Avansuri: <strong style="color:var(--orange)">${r.avans.toFixed(2)}</strong></span>
     <span>- Împrumuturi: <strong style="color:var(--red)">${r.imprumut.toFixed(2)}</strong></span>
+    ${r.garantieRata ? `<span>- Garanție: <strong style="color:#7c3aed">${r.garantieRata.toFixed(0)} (${r.garantieOprita}/${r.garantieTotal})</strong></span>` : ''}
     <span>= <strong class="${r.restPlata < 0 ? 'rest-negativ' : 'rest-plata'}">${r.restPlata.toFixed(2)} RON REST PLATĂ</strong></span>
   </div>`;
 
