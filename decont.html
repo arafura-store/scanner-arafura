@@ -491,7 +491,8 @@ async function trimiteDecont() {
           intrare: sumaVal < 0 ? Math.abs(sumaVal) : 0,
           iesire: sumaVal >= 0 ? sumaVal : 0,
           observatii: d.observatii || '',
-          utilizator: currentUser.nume
+          utilizator: currentUser.nume,
+          completat_la: new Date().toISOString()
         })
       });
     }

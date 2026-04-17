@@ -504,7 +504,8 @@ async function adaugaOperatiune() {
         intrare: intrare || 0,
         iesire: iesire || 0,
         observatii: obs,
-        utilizator: currentUser.nume
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
       })
     });
     if (resp.ok) {
