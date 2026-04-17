@@ -610,7 +610,7 @@ async function verificaDeconturi() {
     }
 
     // Verifica deconturi trimise (asteapta confirmare)
-    const resp = await fetch(`${API}/deconturi?select=*&status=eq.trimis&confirmat=eq.false&returnat=eq.false&order=utilizator,data.asc`, { headers: HEADERS });
+    const resp = await fetch(`${API}/deconturi?select=*&status=eq.trimis&confirmat=not.eq.true&returnat=not.eq.true&order=utilizator,data.asc`, { headers: HEADERS });
     const data = await resp.json();
 
     if (!Array.isArray(data) || data.length === 0) {

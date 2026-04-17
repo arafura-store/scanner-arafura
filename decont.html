@@ -234,7 +234,7 @@ async function incarcaDate() {
 
     // Fetch cheltuieli curente (status=nou, netrimise sau trimise dar neconfirmate)
     const resp = await fetch(
-      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&status=in.(nou,trimis)&confirmat=eq.false&returnat=eq.false&order=data.desc,created_at.desc`,
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&status=in.(nou,trimis)&confirmat=not.eq.true&returnat=not.eq.true&order=data.desc,created_at.desc`,
       { headers: HEADERS }
     );
     cheltuieliCurente = await resp.json();
@@ -242,7 +242,7 @@ async function incarcaDate() {
 
     // Check for returned deconts
     const respRetur = await fetch(
-      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&returnat=eq.true&confirmat=eq.false&order=created_at.desc&limit=10`,
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&returnat=eq.true&confirmat=not.eq.true&order=created_at.desc&limit=10`,
       { headers: HEADERS }
     );
     const returnate = await respRetur.json();
