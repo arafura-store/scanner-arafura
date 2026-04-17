@@ -314,12 +314,19 @@ function logout() {
 async function incarcaSold() {
   try {
     // Calculeaza sold din toate operatiunile
-    const resp = await fetch(`${API}/caiet?select=intrare,iesire&order=data.asc,created_at.asc&limit=50000`, { headers: HEADERS });
-    const data = await resp.json();
-    if (!Array.isArray(data)) return;
+    let allEntries = [];
+    let off = 0;
+    while (true) {
+      const resp = await fetch(`${API}/caiet?select=intrare,iesire&order=data.asc,created_at.asc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const d = await resp.json();
+      if (!Array.isArray(d) || d.length === 0) break;
+      allEntries.push(...d);
+      off += 1000;
+      if (d.length < 1000) break;
+    }
 
     let sold = 0;
-    for (const d of data) {
+    for (const d of allEntries) {
       sold += parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
     }
 

@@ -143,19 +143,19 @@ async function genereazaRapoarte() {
   document.querySelectorAll('.tab-content').forEach(t => t.innerHTML = '<div class="loading">Se generează...</div>');
 
   try {
-    // Fetch all data for the year
+    // Fetch all data for the year (paginate per 1000)
     allData = [];
     let offset = 0;
     while (true) {
       const resp = await fetch(
-        `${API}/caiet?select=*&data=gte.${an}-01-01&data=lte.${an}-12-31&order=data.asc&limit=5000&offset=${offset}`,
+        `${API}/caiet?select=*&data=gte.${an}-01-01&data=lte.${an}-12-31&order=data.asc,created_at.asc&limit=1000&offset=${offset}`,
         { headers: HEADERS }
       );
       const data = await resp.json();
       if (!Array.isArray(data) || data.length === 0) break;
       allData.push(...data);
-      offset += 5000;
-      if (data.length < 5000) break;
+      offset += 1000;
+      if (data.length < 1000) break;
     }
 
     renderVanzari(an);
