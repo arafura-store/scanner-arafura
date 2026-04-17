@@ -560,7 +560,7 @@
 <!-- HEADER -->
 <div class="header" id="header">
   <div class="header-top">
-    <div class="header-logo">ARAFURA</div>
+    <div class="header-logo" id="header-logo">ARAFURA</div>
     <div class="header-sub" id="header-sub">Căutare produse</div>
   </div>
   <button class="header-btn-search" id="btn-new-search" onclick="goToSearch()">🔍 Caută alt produs</button>
@@ -1662,6 +1662,23 @@ function getProductIcon(name) {
 
 // Init magazin la incarcare
 initStore();
+
+// Long press pe logo (3 sec) = resetare magazin
+let logoTimer = null;
+const logo = document.getElementById('header-logo');
+logo.addEventListener('touchstart', () => { logoTimer = setTimeout(resetDevice, 3000); });
+logo.addEventListener('touchend', () => clearTimeout(logoTimer));
+logo.addEventListener('mousedown', () => { logoTimer = setTimeout(resetDevice, 3000); });
+logo.addEventListener('mouseup', () => clearTimeout(logoTimer));
+
+function resetDevice() {
+  if (confirm('Resetare dispozitiv? Se va șterge magazinul și device ID-ul.')) {
+    localStorage.removeItem('arafura_magazin');
+    localStorage.removeItem('arafura_device_id');
+    localStorage.removeItem('arafura_admin');
+    location.reload();
+  }
+}
 
 // Prevent zoom on double tap
 document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
