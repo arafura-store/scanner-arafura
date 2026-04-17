@@ -1453,7 +1453,7 @@ const TIP_LABELS_SCANNER = {
 async function checkRaspunsuri() {
   try {
     const resp = await fetch(
-      `${window.SUPABASE_URL}/rest/v1/sesizari?angajat_id=eq.${sesizareAngajat.id}&raspuns=not.is.null&select=id&limit=100`,
+      `${window.SUPABASE_URL}/rest/v1/sesizari?angajat_id=eq.${sesizareAngajat.id}&raspuns=not.is.null&citit=eq.false&select=id&limit=100`,
       { headers: HEADERS }
     );
     const data = await resp.json();
@@ -1504,6 +1504,16 @@ async function veziRaspunsuri() {
       }
       lista.innerHTML = html;
     }
+    // Marcheaza toate raspunsurile ca citite
+    await fetch(
+      `${window.SUPABASE_URL}/rest/v1/sesizari?angajat_id=eq.${sesizareAngajat.id}&raspuns=not.is.null&citit=eq.false`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ citit: true })
+    }).catch(() => {});
+    // Actualizeaza badge
+    document.getElementById('badge-raspunsuri').style.display = 'none';
+
     showScreen('sesizare-raspunsuri');
   } catch(e) {
     showToast('Eroare conexiune');
