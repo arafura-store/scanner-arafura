@@ -397,8 +397,8 @@ async function incarcaSold() {
 
     let sold = 0;
     for (const d of allEntries) {
-      // PENDING nu afecteaza soldul
-      if (d.tip && d.tip.includes('PENDING')) continue;
+      // PENDING si CONFIRMAT nu afecteaza soldul (sunt doar info)
+      if (d.tip && (d.tip.includes('PENDING') || d.tip.includes('CONFIRMAT'))) continue;
       sold += parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
     }
 
@@ -558,8 +558,9 @@ async function incarcaOperatiuni() {
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const isAdmin = currentUser && currentUser.nume === 'EUGEN';
       const isPending = d.tip && d.tip.includes('PENDING');
-      html += `<tr id="row-${d.id}" style="${isPending ? 'opacity:0.45; background:#fffef0;' : ''}">
-        <td style="font-size:11px; color:#999; white-space:nowrap;">${dtCompletat}</td>
+      const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
+      const rowStyle = isPending ? 'opacity:0.45; background:#fffef0;' : (isConfirmat ? 'opacity:0.7; background:#f0fdf4;' : '');
+      html += `<tr id="row-${d.id}" style="${rowStyle}">
         <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
         <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
         <td style="font-weight:500;">${escHtml(d.beneficiar)}</td>
@@ -690,13 +691,13 @@ async function confirmaDecont(utilizator, suma) {
       body: JSON.stringify({ confirmat: true, status: 'confirmat', confirmat_de: currentUser.nume })
     });
 
-    // 2. Transforma PENDING in activ in caiet (scoate PENDING din tip)
-    // Fetch PENDING entries
+    // 2. Cheltuielile raman ca INFO in caiet (nu afecteaza soldul)
+    // Doar marcam PENDING ca CONFIRMAT (tot fara sold)
     const respPending = await fetch(`${API}/caiet?select=id,tip&tip=like.DECONT ${encodeURIComponent(utilizator)}*PENDING*`, { headers: HEADERS });
     const pending = await respPending.json();
     if (Array.isArray(pending)) {
       for (const p of pending) {
-        const newTip = p.tip.replace(' (PENDING)', '');
+        const newTip = p.tip.replace('(PENDING)', '(CONFIRMAT)');
         await fetch(`${API}/caiet?id=eq.${p.id}`, {
           method: 'PATCH',
           headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
@@ -705,7 +706,7 @@ async function confirmaDecont(utilizator, suma) {
       }
     }
 
-    // 3. Adauga reincarcare fond
+    // 3. Adauga reincarcare fond (doar asta afecteaza soldul)
     const today = new Date().toISOString().slice(0, 10);
     await fetch(`${API}/caiet`, {
       method: 'POST',
