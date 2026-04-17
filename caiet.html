@@ -191,7 +191,7 @@
       <h3>Operațiune nouă</h3>
       <div class="form-row">
         <div class="form-group" style="max-width:160px;">
-          <label>Data</label>
+          <label>Data chitanță</label>
           <input type="date" id="f-data">
         </div>
         <div class="form-group">
@@ -421,15 +421,17 @@ async function incarcaOperatiuni() {
 
     let html = `<table>
       <thead><tr>
-        <th>Data</th><th>Tip</th><th>Beneficiar</th>
+        <th>Completat</th><th>Data chitanță</th><th>Tip</th><th>Beneficiar</th>
         <th class="num">Intrare</th><th class="num">Ieșire</th>
         <th>Obs</th><th>Cine</th><th></th>
       </tr></thead><tbody>`;
 
     for (const d of data) {
-      const dt = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const dtChitanta = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const dtCompletat = new Date(d.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       html += `<tr>
-        <td>${dt}</td>
+        <td style="font-size:11px; color:var(--sub);">${dtCompletat}</td>
+        <td class="bold">${dtChitanta}</td>
         <td class="bold">${escHtml(d.tip)}</td>
         <td>${escHtml(d.beneficiar)}</td>
         <td class="num intrare">${d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : ''}</td>
