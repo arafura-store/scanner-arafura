@@ -113,21 +113,35 @@
       padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
     }
     table {
-      width: 100%; border-collapse: collapse; background: var(--card);
-      border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      background: var(--card);
+      border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.08);
       font-size: 13px;
     }
     th {
-      background: var(--blue); color: white; padding: 10px 8px;
+      background: #2c3e50; color: white; padding: 12px 12px;
       text-align: left; font-size: 12px; white-space: nowrap;
+      letter-spacing: .3px; text-transform: uppercase;
     }
-    td { padding: 8px; border-bottom: 1px solid var(--border); }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f0f0f0;
+    }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #f0f4ff; }
+    tr:nth-child(even) td { background: #fafbfc; }
+    tr:hover td { background: #edf2fb; }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
     .bold { font-weight: 700; }
-    .intrare { color: var(--green); font-weight: 600; }
-    .iesire { color: var(--red); font-weight: 600; }
+    .intrare {
+      color: var(--green); font-weight: 700;
+      background: #e8f5e9; padding: 4px 8px; border-radius: 6px;
+      display: inline-block;
+    }
+    .iesire {
+      color: var(--red); font-weight: 700;
+      background: #fdecea; padding: 4px 8px; border-radius: 6px;
+      display: inline-block;
+    }
     .btn-del {
       background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px;
     }
@@ -429,15 +443,17 @@ async function incarcaOperatiuni() {
     for (const d of data) {
       const dtChitanta = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const dtCompletat = new Date(d.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
+      const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       html += `<tr>
-        <td style="font-size:11px; color:var(--sub);">${dtCompletat}</td>
-        <td class="bold">${dtChitanta}</td>
-        <td class="bold">${escHtml(d.tip)}</td>
-        <td>${escHtml(d.beneficiar)}</td>
-        <td class="num intrare">${d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : ''}</td>
-        <td class="num iesire">${d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : ''}</td>
-        <td style="color:var(--sub); font-size:12px;">${escHtml(d.observatii || '')}</td>
-        <td style="font-size:12px; color:var(--sub);">${d.utilizator}</td>
+        <td style="font-size:11px; color:#999; white-space:nowrap;">${dtCompletat}</td>
+        <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
+        <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
+        <td style="font-weight:500;">${escHtml(d.beneficiar)}</td>
+        <td class="num">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
+        <td class="num">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
+        <td style="color:#888; font-size:12px; max-width:150px;">${escHtml(d.observatii || '')}</td>
+        <td style="font-size:11px; color:#aaa;">${d.utilizator}</td>
         <td>${currentUser && currentUser.nume === 'EUGEN' ? `<button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
       </tr>`;
     }
