@@ -85,6 +85,21 @@
 <div class="header">
   <h1>ARAFURA — Rapoarte</h1>
   <div class="header-controls">
+    <select id="sel-luna">
+      <option value="">Tot anul</option>
+      <option value="0">Ianuarie</option>
+      <option value="1">Februarie</option>
+      <option value="2">Martie</option>
+      <option value="3">Aprilie</option>
+      <option value="4">Mai</option>
+      <option value="5">Iunie</option>
+      <option value="6">Iulie</option>
+      <option value="7">August</option>
+      <option value="8">Septembrie</option>
+      <option value="9">Octombrie</option>
+      <option value="10">Noiembrie</option>
+      <option value="11">Decembrie</option>
+    </select>
     <select id="sel-an"></select>
     <button onclick="genereazaRapoarte()">Generează</button>
     <button style="background:var(--green); color:white;" onclick="window.print()">Printează</button>
@@ -140,15 +155,28 @@ function fmt(n) {
 
 async function genereazaRapoarte() {
   const an = parseInt(selAn.value);
+  const lunaFilter = document.getElementById('sel-luna').value;
   document.querySelectorAll('.tab-content').forEach(t => t.innerHTML = '<div class="loading">Se generează...</div>');
 
   try {
-    // Fetch all data for the year (paginate per 1000)
+    // Determine date range
+    let dataStart, dataEnd;
+    if (lunaFilter !== '') {
+      const luna = parseInt(lunaFilter);
+      dataStart = `${an}-${String(luna+1).padStart(2,'0')}-01`;
+      const ultimaZi = new Date(an, luna+1, 0).getDate();
+      dataEnd = `${an}-${String(luna+1).padStart(2,'0')}-${String(ultimaZi).padStart(2,'0')}`;
+    } else {
+      dataStart = `${an}-01-01`;
+      dataEnd = `${an}-12-31`;
+    }
+
+    // Fetch all data (paginate per 1000)
     allData = [];
     let offset = 0;
     while (true) {
       const resp = await fetch(
-        `${API}/caiet?select=*&data=gte.${an}-01-01&data=lte.${an}-12-31&order=data.asc,created_at.asc&limit=1000&offset=${offset}`,
+        `${API}/caiet?select=*&data=gte.${dataStart}&data=lte.${dataEnd}&order=data.asc,created_at.asc&limit=1000&offset=${offset}`,
         { headers: HEADERS }
       );
       const data = await resp.json();
