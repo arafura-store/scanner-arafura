@@ -554,7 +554,7 @@ async function incarcaOperatiuni() {
 
     for (const d of data) {
       const dtChitanta = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const isAdmin = currentUser && currentUser.nume === 'EUGEN';
@@ -562,6 +562,7 @@ async function incarcaOperatiuni() {
       const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
       const rowStyle = isPending ? 'opacity:0.45; background:#fffef0;' : (isConfirmat ? 'opacity:0.7; background:#f0fdf4;' : '');
       html += `<tr id="row-${d.id}" style="${rowStyle}">
+        <td style="white-space:nowrap; font-size:12px; color:#555;">${dtCompletat}</td>
         <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
         <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
         <td style="font-weight:500;">${escHtml(d.beneficiar)}</td>
