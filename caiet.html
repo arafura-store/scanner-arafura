@@ -296,6 +296,12 @@ async function onLoginPin() {
       return;
     }
     currentUser = data[0];
+    // NICU nu are acces la registru - doar la decont
+    if (currentUser.nume === 'NICU') {
+      showToast('Folosește pagina de Decont');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
     document.getElementById('header-user').textContent = currentUser.nume;
     document.getElementById('btn-logout').style.display = '';
     document.getElementById('screen-login').style.display = 'none';

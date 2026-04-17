@@ -261,7 +261,7 @@ async function incarcaDate() {
         <td style="font-weight:600;">${escHtml(d.beneficiar)}</td>
         <td class="num suma-cell">${parseFloat(d.suma).toLocaleString('ro-RO', { minimumFractionDigits: 2 })}</td>
         <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
-        <td><button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button></td>
+        <td>${currentUser && currentUser.nume === 'EUGEN' ? `<button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button>` : ''}</td>
       </tr>`;
     }
 
