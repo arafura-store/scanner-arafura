@@ -286,8 +286,14 @@ function renderAmanet(an) {
   html += '</tbody></table>';
 
   const sumHtml = `<div class="summary">
-    <div class="summary-card"><div class="label">Încasați din amanet</div><div class="value green">${fmt(totalIncasare)} RON</div></div>
-    <div class="summary-card"><div class="label">Plătiți către amanet</div><div class="value red">${fmt(totalPlata)} RON</div></div>
+    <div class="summary-card"><div class="label">Total încasări amanet</div><div class="value green">${fmt(totalIncasare)} RON</div></div>
+    <div class="summary-card"><div class="label">Total plăți amanet</div><div class="value red">${fmt(totalPlata)} RON</div></div>
+    <div class="summary-card">
+      <div class="label">Încasați din amanet</div>
+      <div class="value green">${fmt(totalIncasare - totalPlata >= 0 ? totalIncasare - totalPlata : 0)} RON</div>
+      <div class="label" style="margin-top:8px;">Plătiți către amanet</div>
+      <div class="value red">${fmt(totalPlata - totalIncasare >= 0 ? totalPlata - totalIncasare : 0)} RON</div>
+    </div>
   </div>`;
 
   container.innerHTML = sumHtml + html;
