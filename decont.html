@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Decont — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --blue: #1a73e8; --green: #1e8449; --red: #c0392b;
+      --orange: #e67e22; --bg: #f4f6f9; --card: #ffffff;
+      --text: #1a1a2e; --sub: #6b7280; --border: #e5e7eb; --radius: 14px;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+    .header {
+      background: var(--orange); color: white; padding: 14px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2); position: sticky; top: 0; z-index: 100;
+    }
+    .header h1 { font-size: 20px; font-weight: 800; }
+    .header-user { font-size: 14px; opacity: .8; }
+    .header button {
+      padding: 8px 16px; font-size: 14px; font-weight: 600;
+      border: none; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,.2); color: white;
+    }
+
+    .login-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 60px 24px; gap: 20px;
+    }
+    .login-screen .icon { font-size: 64px; }
+    .login-screen h2 { font-size: 24px; font-weight: 700; }
+    .login-screen input {
+      width: 200px; padding: 18px; font-size: 32px; text-align: center;
+      letter-spacing: 12px; border: 2px solid var(--border); border-radius: var(--radius);
+    }
+    .login-screen input:focus { border-color: var(--orange); outline: none; }
+
+    .main { max-width: 600px; margin: 20px auto; padding: 0 16px; }
+
+    .fond-bar {
+      background: var(--card); border-radius: var(--radius); padding: 16px 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .fond-label { font-size: 14px; color: var(--sub); }
+    .fond-value { font-size: 28px; font-weight: 800; }
+    .fond-green { color: var(--green); }
+    .fond-red { color: var(--red); }
+
+    .form-card {
+      background: var(--card); border-radius: var(--radius); padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 16px;
+    }
+    .form-card h3 { font-size: 16px; margin-bottom: 14px; color: var(--orange); }
+    .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--sub); }
+    .form-group input {
+      padding: 12px; font-size: 15px; border: 1px solid var(--border); border-radius: 8px;
+    }
+    .form-group input:focus { border-color: var(--orange); outline: none; }
+    .btn-submit {
+      width: 100%; padding: 16px; font-size: 18px; font-weight: 700;
+      background: var(--orange); color: white; border: none;
+      border-radius: var(--radius); cursor: pointer; margin-top: 10px;
+    }
+    .btn-submit:active { background: #d35400; }
+
+    table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      background: var(--card); border-radius: 12px; overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08); font-size: 13px;
+    }
+    th {
+      background: #2c3e50; color: white; padding: 12px 10px;
+      text-align: left; font-size: 12px; text-transform: uppercase;
+    }
+    td { padding: 10px; border-bottom: 1px solid #f0f0f0; }
+    tr:nth-child(even) td { background: #fafbfc; }
+    tr:hover td { background: #edf2fb; }
+    tr:last-child td { border-bottom: none; }
+    .total-row td { background: #e8f0fe !important; font-weight: 700; border-top: 2px solid var(--blue); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .suma-cell { color: var(--red); font-weight: 700; }
+    .btn-del {
+      background: none; border: none; color: #ccc; cursor: pointer; font-size: 14px;
+    }
+    .btn-del:hover { color: var(--red); }
+
+    .toast {
+      position: fixed; bottom: 30px; left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e; color: white;
+      padding: 12px 22px; border-radius: 24px;
+      font-size: 15px; z-index: 200;
+      transition: transform .3s ease;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>ARAFURA — Decont</h1>
+    <span class="header-user" id="header-user"></span>
+  </div>
+  <button onclick="logout()" id="btn-logout" style="display:none">Ieși</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
+<div id="screen-login" class="login-screen">
+  <div class="icon">🧾</div>
+  <h2>Decont cheltuieli</h2>
+  <p style="color:var(--sub);">Introdu PIN-ul tău</p>
+  <input type="password" inputmode="numeric" maxlength="4" placeholder="****"
+    id="login-pin" oninput="onLoginPin()" autocomplete="off">
+</div>
+
+<!-- MAIN -->
+<div id="screen-main" style="display:none;">
+  <div class="main">
+    <div class="fond-bar">
+      <div>
+        <div class="fond-label">Fond disponibil</div>
+        <div class="fond-value fond-green" id="fond-disponibil">—</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="fond-label">Cheltuit</div>
+        <div class="fond-value fond-red" id="fond-cheltuit">—</div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <h3>Cheltuială nouă</h3>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;">
+          <label>Data</label>
+          <input type="date" id="f-data">
+        </div>
+        <div class="form-group">
+          <label>Suma (RON)</label>
+          <input type="number" step="0.01" id="f-suma" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Beneficiar / Ce ai cumpărat</label>
+          <input type="text" id="f-beneficiar" placeholder="ex: BENZINĂ, BUTELII, MATERIALE">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Observații</label>
+          <input type="text" id="f-obs" placeholder="opțional">
+        </div>
+      </div>
+      <button class="btn-submit" onclick="adaugaCheltuiala()">Adaugă cheltuială</button>
+    </div>
+
+    <h3 style="font-size:16px; margin-bottom:12px;">Cheltuielile mele</h3>
+    <div id="tabel-cheltuieli"></div>
+  </div>
+</div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+let currentUser = null;
+let fondTotal = 0;
+
+async function onLoginPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin.length < 4) return;
+
+  try {
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    currentUser = data[0];
+    document.getElementById('header-user').textContent = currentUser.nume;
+    document.getElementById('btn-logout').style.display = '';
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-main').style.display = '';
+    document.getElementById('login-pin').value = '';
+    document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+
+    await incarcaDate();
+  } catch (e) {
+    showToast('Eroare conexiune');
+  }
+}
+
+function logout() {
+  currentUser = null;
+  document.getElementById('screen-login').style.display = '';
+  document.getElementById('screen-main').style.display = 'none';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('header-user').textContent = '';
+}
+
+async function incarcaDate() {
+  try {
+    // Fetch cheltuielile userului curent care nu sunt decontate
+    const resp = await fetch(
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&status=eq.nou&order=data.desc,created_at.desc`,
+      { headers: HEADERS }
+    );
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+
+    // Calculeaza fond
+    // Fondul se stabileste din ultima operatiune de tip DECONT din caiet
+    // Deocamdata il calculam din totalul cheltuit
+    let totalCheltuit = 0;
+    for (const d of data) {
+      totalCheltuit += parseFloat(d.suma || 0);
+    }
+
+    // Fetch fondul din caiet (ultimul DECONT catre acest utilizator)
+    const respFond = await fetch(
+      `${API}/caiet?select=iesire&tip=eq.DECONT&beneficiar=eq.${encodeURIComponent(currentUser.nume)}&order=data.desc&limit=1`,
+      { headers: HEADERS }
+    );
+    const fondData = await respFond.json();
+    fondTotal = (Array.isArray(fondData) && fondData.length > 0) ? parseFloat(fondData[0].iesire || 0) : 0;
+
+    const disponibil = fondTotal - totalCheltuit;
+
+    const fondEl = document.getElementById('fond-disponibil');
+    fondEl.textContent = disponibil.toLocaleString('ro-RO', { minimumFractionDigits: 2 }) + ' RON';
+    fondEl.className = disponibil >= 0 ? 'fond-value fond-green' : 'fond-value fond-red';
+
+    document.getElementById('fond-cheltuit').textContent =
+      totalCheltuit.toLocaleString('ro-RO', { minimumFractionDigits: 2 }) + ' RON';
+
+    // Render tabel
+    const container = document.getElementById('tabel-cheltuieli');
+    if (data.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--sub);">Nicio cheltuială încă</div>';
+      return;
+    }
+
+    let html = `<table><thead><tr>
+      <th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th><th></th>
+    </tr></thead><tbody>`;
+
+    for (const d of data) {
+      const dt = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      html += `<tr>
+        <td style="white-space:nowrap;">${dt}</td>
+        <td style="font-weight:600;">${escHtml(d.beneficiar)}</td>
+        <td class="num suma-cell">${parseFloat(d.suma).toLocaleString('ro-RO', { minimumFractionDigits: 2 })}</td>
+        <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
+        <td><button class="btn-del" onclick="stergeCheltuiala(${d.id})">✕</button></td>
+      </tr>`;
+    }
+
+    // Total row
+    html += `<tr class="total-row">
+      <td colspan="2">TOTAL CHELTUIT</td>
+      <td class="num suma-cell">${totalCheltuit.toLocaleString('ro-RO', { minimumFractionDigits: 2 })}</td>
+      <td colspan="2"></td>
+    </tr>`;
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+  } catch (e) {
+    showToast('Eroare la încărcare');
+  }
+}
+
+async function adaugaCheltuiala() {
+  const data = document.getElementById('f-data').value;
+  const suma = parseFloat(document.getElementById('f-suma').value) || 0;
+  const beneficiar = document.getElementById('f-beneficiar').value.trim().toUpperCase();
+  const obs = document.getElementById('f-obs').value.trim();
+
+  if (!data) { showToast('Selectează data'); return; }
+  if (!suma || suma <= 0) { showToast('Introdu suma'); return; }
+  if (!beneficiar) { showToast('Completează beneficiarul'); return; }
+
+  try {
+    const resp = await fetch(`${API}/deconturi`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        utilizator: currentUser.nume,
+        data, beneficiar, suma: Math.round(suma * 100) / 100,
+        observatii: obs
+      })
+    });
+    if (resp.ok) {
+      showToast('Cheltuială adăugată!');
+      document.getElementById('f-suma').value = '';
+      document.getElementById('f-beneficiar').value = '';
+      document.getElementById('f-obs').value = '';
+      await incarcaDate();
+    }
+  } catch (e) {
+    showToast('Eroare');
+  }
+}
+
+async function stergeCheltuiala(id) {
+  if (!confirm('Sigur vrei să ștergi?')) return;
+  try {
+    await fetch(`${API}/deconturi?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
+    await incarcaDate();
+    showToast('Șters');
+  } catch (e) {
+    showToast('Eroare');
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
