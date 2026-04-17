@@ -142,6 +142,21 @@
       background: #fdecea; padding: 4px 8px; border-radius: 6px;
       display: inline-block;
     }
+    .fond-display-box {
+      background: linear-gradient(135deg, #ede9fe, #e8f0fe);
+      border: 2px solid #7c3aed;
+      border-radius: var(--radius);
+      padding: 14px 20px;
+      margin-bottom: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 10px;
+    }
+    .fond-display-box .fond-info { font-size: 15px; font-weight: 600; color: #5b21b6; }
+    .fond-display-box .fond-suma { font-size: 22px; font-weight: 800; color: #5b21b6; }
+    .fond-display-box .btn-edit-fond {
+      padding: 6px 14px; background: #7c3aed; color: white;
+      border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
     .alerta-decont-box {
       background: linear-gradient(135deg, #fef3c7, #fff7ed);
       border: 2px solid #f59e0b;
@@ -238,6 +253,7 @@
       <span class="sold-value" id="sold-curent">—</span>
     </div>
 
+    <div id="fond-display" style="display:none;"></div>
     <div id="alerta-decont" style="display:none;"></div>
 
     <div class="form-card">
@@ -381,6 +397,8 @@ async function incarcaSold() {
 
     let sold = 0;
     for (const d of allEntries) {
+      // PENDING nu afecteaza soldul
+      if (d.tip && d.tip.includes('PENDING')) continue;
       sold += parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
     }
 
@@ -539,7 +557,8 @@ async function incarcaOperatiuni() {
       const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const isAdmin = currentUser && currentUser.nume === 'EUGEN';
-      html += `<tr id="row-${d.id}">
+      const isPending = d.tip && d.tip.includes('PENDING');
+      html += `<tr id="row-${d.id}" style="${isPending ? 'opacity:0.45; background:#fffef0;' : ''}">
         <td style="font-size:11px; color:#999; white-space:nowrap;">${dtCompletat}</td>
         <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
         <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
@@ -560,13 +579,40 @@ async function incarcaOperatiuni() {
 }
 
 async function verificaDeconturi() {
-  if (!currentUser || currentUser.nume !== 'EUGEN') return;
+  const fondDisplay = document.getElementById('fond-display');
   const container = document.getElementById('alerta-decont');
 
   try {
-    // Ia toate deconturile nedecontate, grupate pe utilizator
-    const resp = await fetch(`${API}/deconturi?select=utilizator,suma&status=eq.nou&limit=5000`, { headers: HEADERS });
+    // Afiseaza fondurile
+    const respFonduri = await fetch(`${API}/fonduri?select=*`, { headers: HEADERS });
+    const fonduri = await respFonduri.json();
+
+    if (Array.isArray(fonduri) && fonduri.length > 0) {
+      let fondHtml = '';
+      for (const f of fonduri) {
+        fondHtml += `<div class="fond-display-box">
+          <div>
+            <div class="fond-info">FOND ${f.utilizator}</div>
+            <div class="fond-suma">${parseFloat(f.suma).toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
+          </div>
+          ${currentUser && currentUser.nume === 'EUGEN' ? `
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input type="number" step="0.01" value="${f.suma}" id="fond-edit-${f.id}" style="width:100px; padding:8px; border:1px solid #7c3aed; border-radius:6px; text-align:right;">
+              <button class="btn-edit-fond" onclick="editFond(${f.id})">Salvează</button>
+            </div>
+          ` : ''}
+        </div>`;
+      }
+      fondDisplay.innerHTML = fondHtml;
+      fondDisplay.style.display = '';
+    } else {
+      fondDisplay.style.display = 'none';
+    }
+
+    // Verifica deconturi trimise (asteapta confirmare)
+    const resp = await fetch(`${API}/deconturi?select=*&status=eq.trimis&confirmat=eq.false&returnat=eq.false&order=utilizator,data.asc`, { headers: HEADERS });
     const data = await resp.json();
+
     if (!Array.isArray(data) || data.length === 0) {
       container.style.display = 'none';
       return;
@@ -575,26 +621,42 @@ async function verificaDeconturi() {
     // Grupeaza pe utilizator
     const perUser = {};
     for (const d of data) {
-      if (!perUser[d.utilizator]) perUser[d.utilizator] = { cheltuit: 0, incasat: 0, count: 0 };
+      if (!perUser[d.utilizator]) perUser[d.utilizator] = { items: [], total: 0 };
       const s = parseFloat(d.suma || 0);
-      if (s >= 0) perUser[d.utilizator].cheltuit += s;
-      else perUser[d.utilizator].incasat += Math.abs(s);
-      perUser[d.utilizator].count++;
+      perUser[d.utilizator].items.push(d);
+      perUser[d.utilizator].total += s;
     }
 
     let html = '';
     for (const [user, val] of Object.entries(perUser)) {
-      const dePredat = val.cheltuit - val.incasat;
-      if (val.count === 0) continue;
-      html += `<div class="alerta-decont-box">
-        <div class="alerta-icon">⚠️</div>
-        <div class="alerta-text">
-          <div class="alerta-nume">${user} are de primit:</div>
-          <div class="alerta-suma">${dePredat.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
-          <div style="font-size:12px; color:#92400e;">${val.count} cheltuieli nedecontate</div>
+      html += `<div class="alerta-decont-box" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div class="alerta-icon">📋</div>
+            <div>
+              <div class="alerta-nume">DECONT ${user}</div>
+              <div class="alerta-suma">${val.total.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
+              <div style="font-size:12px; color:#92400e;">${val.items.length} cheltuieli — așteaptă verificare</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-deconteaza" onclick="confirmaDecont('${user}', ${val.total.toFixed(2)})">Confirmă</button>
+            <button style="padding:12px 20px; font-size:15px; font-weight:700; background:var(--red); color:white; border:none; border-radius:10px; cursor:pointer;" onclick="returneazaDecont('${user}')">Returnează</button>
+          </div>
         </div>
-        <button class="btn-deconteaza" onclick="deconteaza('${user}', ${dePredat.toFixed(2)})">Decontează</button>
-      </div>`;
+        <table style="margin-top:12px; box-shadow:none;">
+          <thead><tr><th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th></tr></thead>
+          <tbody>`;
+      for (const d of val.items) {
+        const dt = new Date(d.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'});
+        const s = parseFloat(d.suma);
+        html += `<tr>
+          <td>${dt}</td><td>${escHtml(d.beneficiar)}</td>
+          <td class="num" style="color:${s<0?'var(--green)':'var(--red)'}; font-weight:700;">${s<0?'+':''}${Math.abs(s).toLocaleString('ro-RO',{minimumFractionDigits:2})}</td>
+          <td style="font-size:12px; color:#888;">${escHtml(d.observatii||'')}</td>
+        </tr>`;
+      }
+      html += `</tbody></table></div>`;
     }
 
     container.innerHTML = html;
@@ -604,38 +666,83 @@ async function verificaDeconturi() {
   }
 }
 
-async function deconteaza(utilizator, suma) {
-  if (!confirm(`Decontezi ${suma.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nAceasta va:\n- Marca cheltuielile ca decontate\n- Adăuga o operațiune DECONT în registru\n- Reseta fondul`)) return;
-
+async function editFond(id) {
+  const suma = parseFloat(document.getElementById(`fond-edit-${id}`).value) || 0;
   try {
-    // 1. Marcheaza cheltuielile ca decontate
-    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.nou`, {
+    await fetch(`${API}/fonduri?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ status: 'decontat' })
+      body: JSON.stringify({ suma, updated_at: new Date().toISOString() })
+    });
+    showToast('Fond actualizat!');
+    await verificaDeconturi();
+  } catch(e) { showToast('Eroare'); }
+}
+
+async function confirmaDecont(utilizator, suma) {
+  if (!confirm(`Confirmi decontul de ${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nCheltuielile vor intra în sold.`)) return;
+
+  try {
+    // 1. Marcheaza cheltuielile ca confirmate
+    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ confirmat: true, status: 'confirmat', confirmat_de: currentUser.nume })
     });
 
-    // 2. Adauga operatiune DECONT in caiet (dau banii inapoi)
+    // 2. Transforma PENDING in activ in caiet (scoate PENDING din tip)
+    // Fetch PENDING entries
+    const respPending = await fetch(`${API}/caiet?select=id,tip&tip=like.DECONT ${encodeURIComponent(utilizator)}*PENDING*`, { headers: HEADERS });
+    const pending = await respPending.json();
+    if (Array.isArray(pending)) {
+      for (const p of pending) {
+        const newTip = p.tip.replace(' (PENDING)', '');
+        await fetch(`${API}/caiet?id=eq.${p.id}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ tip: newTip })
+        });
+      }
+    }
+
+    // 3. Adauga reincarcare fond
     const today = new Date().toISOString().slice(0, 10);
     await fetch(`${API}/caiet`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        data: today,
-        tip: 'DECONT',
-        beneficiar: utilizator,
-        intrare: 0,
-        iesire: suma,
-        observatii: 'DECONTARE CHELTUIELI',
+        data: today, tip: 'DECONT', beneficiar: utilizator,
+        intrare: 0, iesire: suma,
+        observatii: 'REÎNCĂRCARE FOND DECONT',
         utilizator: currentUser.nume
       })
     });
 
-    showToast(`Decontat ${suma.toFixed(2)} RON pentru ${utilizator}!`);
+    showToast(`Decont confirmat! ${utilizator} primește ${suma.toFixed(2)} RON`);
     await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi()]);
-  } catch(e) {
-    showToast('Eroare: ' + e.message);
-  }
+  } catch(e) { showToast('Eroare: ' + e.message); }
+}
+
+async function returneazaDecont(utilizator) {
+  const motiv = prompt(`De ce returnezi decontul lui ${utilizator}?`);
+  if (motiv === null) return;
+
+  try {
+    // 1. Marcheaza ca returnat
+    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ returnat: true, status: 'returnat', motiv_retur: motiv || 'Verifică și retrimite' })
+    });
+
+    // 2. Sterge PENDING din caiet
+    await fetch(`${API}/caiet?tip=like.DECONT ${encodeURIComponent(utilizator)}*PENDING*`, {
+      method: 'DELETE', headers: HEADERS
+    });
+
+    showToast(`Decont returnat către ${utilizator}`);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi()]);
+  } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
 let editData = {};
