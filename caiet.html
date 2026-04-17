@@ -226,7 +226,7 @@
           <label>Tip operațiune</label>
           <div style="position:relative;">
             <input type="text" id="f-tip" placeholder="ex: INCASARE" autocomplete="off"
-              oninput="showSuggestions('tip', this.value)" onfocus="showSuggestions('tip', this.value)">
+              oninput="showSuggestions('tip', this.value); checkTipDirection();" onfocus="showSuggestions('tip', this.value)">
             <div class="suggestions" id="sug-tip" style="display:none;"></div>
           </div>
         </div>
@@ -382,6 +382,39 @@ function showSuggestions(field, value) {
 function selectSuggestion(field, value) {
   document.getElementById(`f-${field}`).value = value;
   document.getElementById(`sug-${field}`).style.display = 'none';
+  if (field === 'tip') checkTipDirection();
+}
+
+function checkTipDirection() {
+  const tip = document.getElementById('f-tip').value.trim().toUpperCase();
+  const intrareEl = document.getElementById('f-intrare');
+  const iesireEl = document.getElementById('f-iesire');
+
+  // Tipuri care sunt doar INTRARE
+  const tipuriIntrare = ['INCASARE', 'RETRAGERE'];
+  // Tipuri care sunt doar IESIRE
+  const tipuriIesire = ['COMBUSTIBIL', 'DEPUNERE', 'CHIRIE SPATIU', 'UTILITATI', 'ROVINIETA', 'MANCARE', 'TRECERE POD'];
+
+  if (tipuriIntrare.includes(tip)) {
+    iesireEl.value = '';
+    iesireEl.disabled = true;
+    iesireEl.style.opacity = '0.4';
+    intrareEl.disabled = false;
+    intrareEl.style.opacity = '1';
+    intrareEl.focus();
+  } else if (tipuriIesire.includes(tip)) {
+    intrareEl.value = '';
+    intrareEl.disabled = true;
+    intrareEl.style.opacity = '0.4';
+    iesireEl.disabled = false;
+    iesireEl.style.opacity = '1';
+    iesireEl.focus();
+  } else {
+    intrareEl.disabled = false;
+    intrareEl.style.opacity = '1';
+    iesireEl.disabled = false;
+    iesireEl.style.opacity = '1';
+  }
 }
 
 // Hide suggestions on click outside
