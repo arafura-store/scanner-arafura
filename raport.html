@@ -661,6 +661,8 @@ function afiseazaRaport(raport, an, luna) {
       </div>
     </div>
 
+    ${renderBatchActions()}
+
     <div class="table-wrap">
     <table>
       <thead>
@@ -680,6 +682,7 @@ function afiseazaRaport(raport, an, luna) {
           <th class="num">Împrumut</th>
           <th class="num">Garanție</th>
           <th class="num bold">REST PLATĂ</th>
+          <th class="no-print">LICHIDARE</th>
         </tr>
       </thead>
       <tbody>`;
@@ -708,9 +711,10 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num" style="color:var(--red)">${r.imprumut ? r.imprumut.toFixed(2) : '—'}</td>
           <td class="num" style="color:#7c3aed" title="${r.garantieOprita}/${r.garantieTotal}">${r.garantieRata ? r.garantieRata.toFixed(0) : '—'}</td>
           <td class="num ${restCls}">${r.restPlata.toFixed(2)} RON</td>
+          <td class="no-print" onclick="event.stopPropagation()">${renderLichidareCell(r)}</td>
         </tr>
         <tr id="det-${r.angajat.id}" style="display:none">
-          <td colspan="15" style="padding:0;">
+          <td colspan="16" style="padding:0;">
             ${renderDetaliiComplet(r, isManager)}
           </td>
         </tr>`;
@@ -732,6 +736,7 @@ function afiseazaRaport(raport, an, luna) {
           <td class="num bold">${totalImprumut.toFixed(2)}</td>
           <td class="num bold">${raport.reduce((s,r)=>s+r.garantieRata,0).toFixed(0)}</td>
           <td class="num bold rest-plata">${totalRest.toFixed(2)} RON</td>
+          <td class="no-print"></td>
         </tr>`;
 
   html += '</tbody></table></div>';
@@ -982,6 +987,86 @@ async function stergeTranzactie(id) {
   } catch (e) {
     alert('Eroare: ' + e.message);
   }
+}
+
+function renderBatchActions() {
+  if (lunaEsteInchisa) return '';
+  let neTrecute = 0;
+  for (const lista of Object.values(tranzactiiCurent)) {
+    for (const t of lista) {
+      if (!t.trecut_in_caiet_id) neTrecute++;
+    }
+  }
+  if (neTrecute === 0) {
+    return `<div class="no-print" style="margin-bottom:16px; padding:12px 16px; background:#d4edda; border-radius:10px; color:#1e8449; font-weight:600;">
+      ✓ Toate avansurile și împrumuturile sunt în caiet
+    </div>`;
+  }
+  return `<div class="no-print" style="margin-bottom:16px; padding:14px 18px; background:#fff3cd; border:2px solid #f0b400; border-radius:10px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+    <span style="font-weight:700; color:#856404;">⚡ ${neTrecute} avans/împrumut încă NU sunt în caiet</span>
+    <button class="btn-lichidare" style="background:#f0b400; color:#333; margin:0;" onclick="trecToateInCaiet()">
+      → Trece TOATE în caiet
+    </button>
+  </div>`;
+}
+
+function renderLichidareCell(r) {
+  if (lunaEsteInchisa) return '';
+  const lichidare = lichidariPlatite[r.angajat.id];
+  if (lichidare) {
+    return `<span class="status-platit" title="${lichidare.data_plata} — ${lichidare.utilizator}">✓ ${parseFloat(lichidare.suma).toFixed(0)}</span>
+      <button class="tranz-del" onclick="anuleazaLichidare(${lichidare.id})" title="Anulează">↶</button>`;
+  }
+  if (r.restPlata <= 0) {
+    return `<span style="color:#999; font-size:12px;">—</span>`;
+  }
+  const angNumeEsc = r.angajat.nume.replace(/'/g, "\\'");
+  return `<button class="btn-trece" onclick="platesteLichidare(${r.angajat.id}, '${angNumeEsc}', ${r.restPlata})" style="background:var(--green);">
+    💰 Plătește
+  </button>`;
+}
+
+async function trecToateInCaiet() {
+  const neTrecute = [];
+  for (const lista of Object.values(tranzactiiCurent)) {
+    for (const t of lista) {
+      if (!t.trecut_in_caiet_id) neTrecute.push(t);
+    }
+  }
+  if (neTrecute.length === 0) { alert('Nimic de trecut'); return; }
+  if (!confirm(`Treci ${neTrecute.length} tranzacții în caiet?\n\nFiecare va intra cu data și suma exactă.`)) return;
+
+  let ok = 0, err = 0;
+  for (const tranz of neTrecute) {
+    try {
+      const tipCaiet = tranz.tip === 'avans' ? 'SALARIU AVANS' : 'SALARIU IMPRUMUT';
+      const obs = `${luni[lunaSelectata].toUpperCase().slice(0,3)} ${anSelectat}${tranz.descriere ? ' — ' + tranz.descriere : ''}`;
+      const resp = await fetch(`${API}/caiet`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          data: tranz.data,
+          tip: tipCaiet,
+          beneficiar: tranz.angajat_nume,
+          intrare: 0,
+          iesire: parseFloat(tranz.suma),
+          observatii: obs,
+          utilizator: currentUser.nume,
+          completat_la: new Date().toISOString()
+        })
+      });
+      const row = await resp.json();
+      if (!Array.isArray(row) || row.length === 0) throw new Error('insert');
+      await fetch(`${API}/tranzactii?id=eq.${tranz.id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ trecut_in_caiet_id: row[0].id })
+      });
+      ok++;
+    } catch (e) { err++; }
+  }
+  alert(`Gata!\nTrecute: ${ok}\nErori: ${err}`);
+  genereazaRaport();
 }
 
 async function trecTranzInCaiet(tranzId) {
