@@ -342,6 +342,18 @@
           </select>
         </div>
       </div>
+      <div class="form-row" id="fa-row-firma" style="display:none;">
+        <div class="form-group">
+          <label>Firma</label>
+          <select id="fa-firma">
+            <option value="">— Alege firma —</option>
+            <option value="ARAFURA">ARAFURA</option>
+            <option value="PERFECTA INVEST">PERFECTA INVEST</option>
+            <option value="DOMADAMI">DOMADAMI</option>
+            <option value="VIENEZ">VIENEZ</option>
+          </select>
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label>Nr. dispoziție / document</label>
@@ -581,10 +593,14 @@ function onTipAmanetChange() {
   const sumaLabel = document.getElementById('fa-suma-label');
   const benef = document.getElementById('fa-beneficiar');
 
+  const rowFirma = document.getElementById('fa-row-firma');
+  const firmaSelect = document.getElementById('fa-firma');
+
   if (!tip) {
     preview.style.display = 'none';
     sumaLabel.textContent = 'Sumă (RON)';
     benef.innerHTML = '<option value="">— Alege tipul întâi —</option>';
+    rowFirma.style.display = 'none';
     return;
   }
 
@@ -610,6 +626,15 @@ function onTipAmanetChange() {
     opts += `<option value="${name}">${name}</option>`;
   }
   benef.innerHTML = opts;
+
+  // Firma selector: doar pentru BANCA; pentru AMANET e fix PERFECTA INVEST
+  if (isBanca) {
+    rowFirma.style.display = '';
+    firmaSelect.value = '';
+  } else {
+    rowFirma.style.display = 'none';
+    firmaSelect.value = 'PERFECTA INVEST';
+  }
 }
 
 async function adaugaOperatiuneAmanet() {
@@ -617,6 +642,7 @@ async function adaugaOperatiuneAmanet() {
   const tip = document.getElementById('fa-tip').value;
   const nrDisp = document.getElementById('fa-nr').value.trim();
   const beneficiar = document.getElementById('fa-beneficiar').value.trim().toUpperCase();
+  const firma = document.getElementById('fa-firma').value.trim().toUpperCase();
   const suma = parseFloat(document.getElementById('fa-suma').value) || 0;
   const obs = document.getElementById('fa-obs').value.trim();
 
@@ -624,6 +650,7 @@ async function adaugaOperatiuneAmanet() {
   if (!tip) { showToast('Alege tipul operațiunii'); return; }
   if (!nrDisp) { showToast('Completează nr. dispoziție/document'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
+  if (!firma) { showToast('Alege firma'); return; }
   if (suma <= 0) { showToast('Completează suma'); return; }
 
   const isIntrare = tip === 'DP AMANET' || tip === 'RETRAGERE BANCA';
@@ -635,7 +662,7 @@ async function adaugaOperatiuneAmanet() {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        data, tip, beneficiar,
+        data, tip, beneficiar, firma,
         intrare, iesire,
         observatii: obs,
         nr_dispozitie: nrDisp,
@@ -647,7 +674,9 @@ async function adaugaOperatiuneAmanet() {
       showToast('Operațiune AMANET/BANCĂ adăugată!');
       document.getElementById('fa-tip').value = '';
       document.getElementById('fa-nr').value = '';
-      document.getElementById('fa-beneficiar').value = '';
+      document.getElementById('fa-beneficiar').innerHTML = '<option value="">— Alege tipul întâi —</option>';
+      document.getElementById('fa-firma').value = '';
+      document.getElementById('fa-row-firma').style.display = 'none';
       document.getElementById('fa-suma').value = '';
       document.getElementById('fa-obs').value = '';
       document.getElementById('fa-preview').style.display = 'none';
@@ -737,7 +766,9 @@ async function incarcaOperatiuni() {
       const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
-      const obsFinal = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong>${d.observatii ? ' ' + escHtml(d.observatii) : ''}` : escHtml(d.observatii || '');
+      const firmaChip = d.firma ? `<strong style="color:#0891b2; background:#cffafe; padding:2px 6px; border-radius:4px; font-size:11px;">${escHtml(d.firma)}</strong> ` : '';
+      const nrChip = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong> ` : '';
+      const obsFinal = (firmaChip + nrChip + escHtml(d.observatii || '')).trim() || '';
       const isAdmin = currentUser && currentUser.nume === 'EUGEN';
       const isPending = d.tip && d.tip.includes('PENDING');
       const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
