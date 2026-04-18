@@ -349,7 +349,9 @@
         </div>
         <div class="form-group">
           <label>Beneficiar</label>
-          <input type="text" id="fa-beneficiar" placeholder="auto-completat" autocomplete="off">
+          <select id="fa-beneficiar">
+            <option value="">— Alege tipul întâi —</option>
+          </select>
         </div>
       </div>
       <div class="form-row">
@@ -570,6 +572,9 @@ function switchTab(tab) {
   }
 }
 
+const AMANETURI = ['BABADAG', 'CUMPANA', 'TOMIS 3', 'KOGALNICEANU', 'MEDGIDIA', 'NAVODARI', 'MARVIMEX', 'POARTA 6', 'LUMINA', 'POPORULUI'];
+const BANCI = ['TRANSILVANIA', 'VISTA BANK', 'LIBRA BANK'];
+
 function onTipAmanetChange() {
   const tip = document.getElementById('fa-tip').value;
   const preview = document.getElementById('fa-preview');
@@ -579,6 +584,7 @@ function onTipAmanetChange() {
   if (!tip) {
     preview.style.display = 'none';
     sumaLabel.textContent = 'Sumă (RON)';
+    benef.innerHTML = '<option value="">— Alege tipul întâi —</option>';
     return;
   }
 
@@ -595,11 +601,15 @@ function onTipAmanetChange() {
   sumaLabel.textContent = isIntrare ? 'Sumă INTRARE (RON)' : 'Sumă IEȘIRE (RON)';
   sumaLabel.style.color = culoare;
 
-  // Auto-beneficiar sugerat
-  if (!benef.value) {
-    if (tip.includes('AMANET')) benef.value = 'AMANET';
-    else if (tip.includes('BANCA')) benef.value = 'BANCĂ';
+  // Populate beneficiar dropdown based on tip
+  const isBanca = tip.includes('BANCA');
+  const lista = isBanca ? BANCI : AMANETURI;
+  const label = isBanca ? 'bancă' : 'amanet';
+  let opts = `<option value="">— Alege ${label} —</option>`;
+  for (const name of lista) {
+    opts += `<option value="${name}">${name}</option>`;
   }
+  benef.innerHTML = opts;
 }
 
 async function adaugaOperatiuneAmanet() {
