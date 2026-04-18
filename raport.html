@@ -241,22 +241,113 @@
       .header button, .header select { display: none; }
       .no-print, .tranz-add, .tranz-del { display: none !important; }
     }
+
+    /* Login */
+    .login-screen {
+      max-width: 360px;
+      margin: 80px auto;
+      padding: 40px 30px;
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,.08);
+      text-align: center;
+    }
+    .login-screen h2 { font-size: 22px; margin-bottom: 6px; }
+    .login-screen p { color: var(--sub); margin-bottom: 20px; }
+    .login-screen input {
+      width: 200px;
+      padding: 14px;
+      font-size: 24px;
+      text-align: center;
+      letter-spacing: 8px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+    }
+    .header-user {
+      color: white;
+      background: rgba(255,255,255,.2);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Action buttons */
+    .btn-trece {
+      padding: 4px 10px;
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+    .btn-trece:hover { background: #1557b0; }
+    .btn-trece.platit {
+      background: #d4edda;
+      color: #1e8449;
+      cursor: default;
+    }
+    .btn-lichidare {
+      padding: 10px 20px;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    .btn-lichidare:hover { background: #166a3a; }
+    .btn-lichidare.platit {
+      background: #d4edda;
+      color: #1e8449;
+      cursor: default;
+    }
+    .status-platit {
+      display: inline-block;
+      background: #d4edda;
+      color: #1e8449;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 6px;
+    }
   </style>
 </head>
 <body>
 
+<!-- LOGIN -->
+<div id="screen-login" class="login-screen">
+  <div style="font-size:60px; line-height:1;">💰</div>
+  <h2>Raport Pontaj</h2>
+  <p>Introdu PIN-ul tău</p>
+  <input type="password" inputmode="numeric" maxlength="4" placeholder="****"
+    id="login-pin" oninput="onLoginPin()" autocomplete="off" autofocus>
+</div>
+
+<div id="screen-main" style="display:none;">
+
 <div class="header">
   <h1>ARAFURA — Raport Pontaj</h1>
   <div class="header-controls">
+    <span class="header-user" id="header-user"></span>
     <select id="sel-luna"></select>
     <select id="sel-an"></select>
     <button onclick="genereazaRaport()">Generează</button>
     <button class="btn-export" onclick="window.print()">Printează</button>
     <button id="btn-inchide" style="display:none; background:#c0392b; color:white;" onclick="inchideLuna()">Închide luna</button>
+    <button onclick="logout()" style="background:#c0392b; color:white;">Ieși</button>
   </div>
 </div>
 
 <div id="content"><div class="loading">Selectează luna și apasă Generează</div></div>
+
+</div>
 
 <script>
 const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
@@ -266,9 +357,46 @@ let raportCurent = null;
 let tranzactiiCurent = {};  // angajat_id -> [tranzactii]
 let concediiCurent = {};    // angajat_id -> [concedii]
 let angajatiCurent = [];
+let lichidariPlatite = {};  // angajat_id -> lichidare record
 let lunaSelectata = 0;
 let anSelectat = 0;
 let lunaEsteInchisa = false;
+let currentUser = null;
+
+async function onLoginPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin.length < 4) return;
+
+  try {
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      alert('PIN incorect');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    const user = data[0];
+    if (user.nume === 'NICU') {
+      alert('Nu ai acces la raport!');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    currentUser = user;
+    document.getElementById('header-user').textContent = currentUser.nume;
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-main').style.display = '';
+    document.getElementById('login-pin').value = '';
+  } catch (e) {
+    alert('Eroare conexiune');
+  }
+}
+
+function logout() {
+  currentUser = null;
+  document.getElementById('screen-login').style.display = '';
+  document.getElementById('screen-main').style.display = 'none';
+  document.getElementById('login-pin').focus();
+}
 
 const luni = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 const selLuna = document.getElementById('sel-luna');
@@ -337,6 +465,13 @@ async function genereazaRaport() {
     for (const t of tranzactii) {
       if (!tranzactiiCurent[t.angajat_id]) tranzactiiCurent[t.angajat_id] = [];
       tranzactiiCurent[t.angajat_id].push(t);
+    }
+
+    // Fetch lichidari platite luna curenta
+    const lichidari = await fetchAll(`${API}/lichidari_platite?select=*&luna=eq.${lunaSelectata+1}&an=eq.${anSelectat}`);
+    lichidariPlatite = {};
+    for (const l of lichidari) {
+      lichidariPlatite[l.angajat_id] = l;
     }
 
     raportCurent = calculeazaRaport(angajati, pontaje, concedii, anSelectat, lunaSelectata);
@@ -702,6 +837,23 @@ function renderDetaliiComplet(r, isManager) {
     <span>= <strong class="${r.restPlata < 0 ? 'rest-negativ' : 'rest-plata'}">${r.restPlata.toFixed(2)} RON REST PLATĂ</strong></span>
   </div>`;
 
+  // Buton plătește lichidare
+  const lichidare = lichidariPlatite[angId];
+  if (lichidare) {
+    html += `<div class="no-print" style="margin-top:12px;">
+      <span class="status-platit" style="font-size:13px; padding:6px 12px;">
+        ✓ LICHIDARE PLĂTITĂ la ${lichidare.data_plata} — ${parseFloat(lichidare.suma).toFixed(2)} RON (${lichidare.utilizator})
+      </span>
+      <button class="btn-trece no-print" onclick="event.stopPropagation(); anuleazaLichidare(${lichidare.id})" style="background:#c0392b;">Anulează</button>
+    </div>`;
+  } else if (r.restPlata > 0 && !lunaEsteInchisa) {
+    html += `<div class="no-print" style="margin-top:12px;">
+      <button class="btn-lichidare" onclick="event.stopPropagation(); platesteLichidare(${angId}, '${angNume.replace(/'/g, "\\'")}', ${r.restPlata})">
+        💰 Plătește lichidare (${r.restPlata.toFixed(2)} RON)
+      </button>
+    </div>`;
+  }
+
   // Detalii zilnice
   if (r.detaliiZile.length > 0) {
     html += '<div style="margin-top:16px;">' + renderDetaliiTable(r) + '</div>';
@@ -712,11 +864,16 @@ function renderDetaliiComplet(r, isManager) {
 }
 
 function renderTranzItem(t) {
+  const inCaiet = !!t.trecut_in_caiet_id;
+  const btnCaiet = inCaiet
+    ? `<span class="status-platit">✓ ÎN CAIET</span><button class="tranz-del no-print" onclick="event.stopPropagation(); anuleazaTrecerea(${t.id}, ${t.trecut_in_caiet_id})" title="Anulează trecerea în caiet">↶</button>`
+    : `<button class="btn-trece no-print" onclick="event.stopPropagation(); trecTranzInCaiet(${t.id})" title="Trece în caiet">→ Caiet</button>`;
   return `<div class="tranz-item ${t.tip}">
     <span class="tranz-data">${t.data}</span>
     <span class="tranz-suma">${parseFloat(t.suma).toFixed(2)} RON</span>
     <span class="tranz-desc">${t.descriere || '—'}</span>
-    ${!lunaEsteInchisa ? `<button class="tranz-del no-print" onclick="event.stopPropagation(); stergeTranzactie(${t.id})" title="Șterge">✕</button>` : ''}
+    ${btnCaiet}
+    ${!lunaEsteInchisa && !inCaiet ? `<button class="tranz-del no-print" onclick="event.stopPropagation(); stergeTranzactie(${t.id})" title="Șterge">✕</button>` : ''}
   </div>`;
 }
 
@@ -821,6 +978,146 @@ async function stergeTranzactie(id) {
       method: 'DELETE',
       headers: HEADERS
     });
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function trecTranzInCaiet(tranzId) {
+  // Găsește tranzacția
+  let tranz = null;
+  for (const lista of Object.values(tranzactiiCurent)) {
+    const t = lista.find(x => x.id === tranzId);
+    if (t) { tranz = t; break; }
+  }
+  if (!tranz) { alert('Tranzacție negăsită'); return; }
+  if (tranz.trecut_in_caiet_id) { alert('Deja trecut în caiet'); return; }
+
+  const tipCaiet = tranz.tip === 'avans' ? 'SALARIU AVANS' : 'SALARIU IMPRUMUT';
+  const obs = `${luni[lunaSelectata].toUpperCase().slice(0,3)} ${anSelectat}${tranz.descriere ? ' — ' + tranz.descriere : ''}`;
+
+  if (!confirm(`Treci în caiet?\n\n${tipCaiet}: ${tranz.angajat_nume}\nSumă: ${parseFloat(tranz.suma).toFixed(2)} RON\nData: ${tranz.data}`)) return;
+
+  try {
+    // 1. Insert în caiet
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        data: tranz.data,
+        tip: tipCaiet,
+        beneficiar: tranz.angajat_nume,
+        intrare: 0,
+        iesire: parseFloat(tranz.suma),
+        observatii: obs,
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
+      })
+    });
+    const caietRow = await resp.json();
+    if (!Array.isArray(caietRow) || caietRow.length === 0) throw new Error('Insert caiet failed');
+    const caietId = caietRow[0].id;
+
+    // 2. Update tranzactie cu link
+    await fetch(`${API}/tranzactii?id=eq.${tranzId}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ trecut_in_caiet_id: caietId })
+    });
+
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function platesteLichidare(angId, angNume, sumaDefault) {
+  const dataPlata = prompt('Data plății (YYYY-MM-DD):', new Date().toISOString().slice(0,10));
+  if (!dataPlata) return;
+  const sumaStr = prompt('Suma lichidare (RON):', sumaDefault.toFixed(2));
+  if (!sumaStr) return;
+  const suma = parseFloat(sumaStr);
+  if (!suma || suma <= 0) { alert('Sumă invalidă'); return; }
+
+  const obs = `LICHIDARE ${luni[lunaSelectata].toUpperCase().slice(0,3)} ${anSelectat}`;
+
+  try {
+    // 1. Insert în caiet
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        data: dataPlata,
+        tip: 'SALARIU LICHIDARE',
+        beneficiar: angNume,
+        intrare: 0,
+        iesire: suma,
+        observatii: obs,
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
+      })
+    });
+    const caietRow = await resp.json();
+    if (!Array.isArray(caietRow) || caietRow.length === 0) throw new Error('Insert caiet failed');
+    const caietId = caietRow[0].id;
+
+    // 2. Insert lichidare
+    await fetch(`${API}/lichidari_platite`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        angajat_id: angId,
+        luna: lunaSelectata + 1,
+        an: anSelectat,
+        suma,
+        data_plata: dataPlata,
+        caiet_id: caietId,
+        utilizator: currentUser.nume
+      })
+    });
+
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function anuleazaTrecerea(tranzId, caietId) {
+  if (!confirm('Anulezi trecerea în caiet? Se șterge rândul din caiet.')) return;
+  try {
+    // Șterge rândul din caiet
+    if (caietId) {
+      await fetch(`${API}/caiet?id=eq.${caietId}`, { method: 'DELETE', headers: HEADERS });
+    }
+    // Curăță link-ul
+    await fetch(`${API}/tranzactii?id=eq.${tranzId}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ trecut_in_caiet_id: null })
+    });
+    genereazaRaport();
+  } catch (e) {
+    alert('Eroare: ' + e.message);
+  }
+}
+
+async function anuleazaLichidare(lichId) {
+  if (!confirm('Sigur anulezi lichidarea? Se șterge și din caiet.')) return;
+  try {
+    // Găsește caiet_id
+    const resp = await fetch(`${API}/lichidari_platite?id=eq.${lichId}&select=caiet_id`, { headers: HEADERS });
+    const data = await resp.json();
+    const caietId = data[0]?.caiet_id;
+
+    // Șterge lichidarea
+    await fetch(`${API}/lichidari_platite?id=eq.${lichId}`, { method: 'DELETE', headers: HEADERS });
+
+    // Șterge rândul din caiet
+    if (caietId) {
+      await fetch(`${API}/caiet?id=eq.${caietId}`, { method: 'DELETE', headers: HEADERS });
+    }
+
     genereazaRaport();
   } catch (e) {
     alert('Eroare: ' + e.message);
