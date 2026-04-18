@@ -89,6 +89,22 @@
     }
     .btn-submit:active { background: #166a3a; }
 
+    /* Tabs */
+    .tab-btn {
+      background: #e5e7eb;
+      color: #6b7280;
+      transition: all .2s;
+    }
+    .tab-btn.tab-active {
+      background: var(--blue);
+      color: white;
+      box-shadow: 0 2px 8px rgba(26,115,232,.3);
+    }
+    #tab-amanet.tab-active {
+      background: #7c3aed;
+      box-shadow: 0 2px 8px rgba(124,58,237,.3);
+    }
+
     /* SOLD */
     .sold-bar {
       background: var(--card); border-radius: var(--radius); padding: 16px 20px;
@@ -256,7 +272,13 @@
     <div id="fond-display" style="display:none;"></div>
     <div id="alerta-decont" style="display:none;"></div>
 
-    <div class="form-card">
+    <!-- TABS: Normală / AMANET-BANCĂ -->
+    <div class="form-tabs" style="display:flex; gap:8px; margin-bottom:12px;">
+      <button type="button" id="tab-normala" class="tab-btn tab-active" onclick="switchTab('normala')" style="flex:1; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">📒 Operațiune normală</button>
+      <button type="button" id="tab-amanet" class="tab-btn" onclick="switchTab('amanet')" style="flex:1; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">💎 AMANET / BANCĂ</button>
+    </div>
+
+    <div class="form-card" id="form-normala">
       <h3>Operațiune nouă</h3>
       <div class="form-row">
         <div class="form-group" style="max-width:160px;">
@@ -299,6 +321,51 @@
         </div>
       </div>
       <button class="btn-submit" onclick="adaugaOperatiune()">Adaugă operațiune</button>
+    </div>
+
+    <!-- FORMULAR AMANET / BANCĂ -->
+    <div class="form-card" id="form-amanet" style="display:none; border-left:5px solid #7c3aed;">
+      <h3 style="color:#7c3aed;">💎 Operațiune AMANET / BANCĂ</h3>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;">
+          <label>Data chitanță</label>
+          <input type="date" id="fa-data">
+        </div>
+        <div class="form-group">
+          <label>Tip operațiune</label>
+          <select id="fa-tip" onchange="onTipAmanetChange()">
+            <option value="">— Alege —</option>
+            <option value="DP AMANET">DP AMANET — dispoziție plată (INTRARE)</option>
+            <option value="DI AMANET">DI AMANET — dispoziție încasare (IEȘIRE)</option>
+            <option value="RETRAGERE BANCA">RETRAGERE BANCĂ (INTRARE)</option>
+            <option value="DEPUNERE BANCA">DEPUNERE BANCĂ (IEȘIRE)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nr. dispoziție / document</label>
+          <input type="text" id="fa-nr" placeholder="ex: DP 1234 / OP 5678" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>Beneficiar</label>
+          <input type="text" id="fa-beneficiar" placeholder="auto-completat" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label id="fa-suma-label">Sumă (RON)</label>
+          <input type="number" step="0.01" id="fa-suma" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Observații</label>
+          <input type="text" id="fa-obs" placeholder="opțional">
+        </div>
+      </div>
+      <div id="fa-preview" style="display:none; padding:10px 14px; border-radius:10px; margin-bottom:10px; font-size:14px; font-weight:600;"></div>
+      <button class="btn-submit" onclick="adaugaOperatiuneAmanet()" style="background:#7c3aed;">Adaugă operațiune AMANET/BANCĂ</button>
     </div>
   </div>
 
@@ -482,6 +549,109 @@ document.addEventListener('click', (e) => {
   }
 });
 
+function switchTab(tab) {
+  const tabNorm = document.getElementById('tab-normala');
+  const tabAmanet = document.getElementById('tab-amanet');
+  const formNorm = document.getElementById('form-normala');
+  const formAmanet = document.getElementById('form-amanet');
+  if (tab === 'amanet') {
+    tabAmanet.classList.add('tab-active');
+    tabNorm.classList.remove('tab-active');
+    formAmanet.style.display = '';
+    formNorm.style.display = 'none';
+    if (!document.getElementById('fa-data').value) {
+      document.getElementById('fa-data').value = new Date().toISOString().slice(0, 10);
+    }
+  } else {
+    tabNorm.classList.add('tab-active');
+    tabAmanet.classList.remove('tab-active');
+    formNorm.style.display = '';
+    formAmanet.style.display = 'none';
+  }
+}
+
+function onTipAmanetChange() {
+  const tip = document.getElementById('fa-tip').value;
+  const preview = document.getElementById('fa-preview');
+  const sumaLabel = document.getElementById('fa-suma-label');
+  const benef = document.getElementById('fa-beneficiar');
+
+  if (!tip) {
+    preview.style.display = 'none';
+    sumaLabel.textContent = 'Sumă (RON)';
+    return;
+  }
+
+  const isIntrare = tip === 'DP AMANET' || tip === 'RETRAGERE BANCA';
+  const culoare = isIntrare ? '#16a34a' : '#c0392b';
+  const bgCol = isIntrare ? '#dcfce7' : '#fee2e2';
+  const textDir = isIntrare ? '↑ INTRARE în caiet' : '↓ IEȘIRE din caiet';
+
+  preview.style.display = '';
+  preview.style.background = bgCol;
+  preview.style.color = culoare;
+  preview.textContent = textDir;
+
+  sumaLabel.textContent = isIntrare ? 'Sumă INTRARE (RON)' : 'Sumă IEȘIRE (RON)';
+  sumaLabel.style.color = culoare;
+
+  // Auto-beneficiar sugerat
+  if (!benef.value) {
+    if (tip.includes('AMANET')) benef.value = 'AMANET';
+    else if (tip.includes('BANCA')) benef.value = 'BANCĂ';
+  }
+}
+
+async function adaugaOperatiuneAmanet() {
+  const data = document.getElementById('fa-data').value;
+  const tip = document.getElementById('fa-tip').value;
+  const nrDisp = document.getElementById('fa-nr').value.trim();
+  const beneficiar = document.getElementById('fa-beneficiar').value.trim().toUpperCase();
+  const suma = parseFloat(document.getElementById('fa-suma').value) || 0;
+  const obs = document.getElementById('fa-obs').value.trim();
+
+  if (!data) { showToast('Selectează data'); return; }
+  if (!tip) { showToast('Alege tipul operațiunii'); return; }
+  if (!nrDisp) { showToast('Completează nr. dispoziție/document'); return; }
+  if (!beneficiar) { showToast('Completează beneficiarul'); return; }
+  if (suma <= 0) { showToast('Completează suma'); return; }
+
+  const isIntrare = tip === 'DP AMANET' || tip === 'RETRAGERE BANCA';
+  const intrare = isIntrare ? suma : 0;
+  const iesire = isIntrare ? 0 : suma;
+
+  try {
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data, tip, beneficiar,
+        intrare, iesire,
+        observatii: obs,
+        nr_dispozitie: nrDisp,
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
+      })
+    });
+    if (resp.ok) {
+      showToast('Operațiune AMANET/BANCĂ adăugată!');
+      document.getElementById('fa-tip').value = '';
+      document.getElementById('fa-nr').value = '';
+      document.getElementById('fa-beneficiar').value = '';
+      document.getElementById('fa-suma').value = '';
+      document.getElementById('fa-obs').value = '';
+      document.getElementById('fa-preview').style.display = 'none';
+      document.getElementById('fa-suma-label').textContent = 'Sumă (RON)';
+      document.getElementById('fa-suma-label').style.color = '';
+      await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
+    } else {
+      showToast('Eroare la salvare');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  }
+}
+
 async function adaugaOperatiune() {
   const data = document.getElementById('f-data').value;
   const tip = document.getElementById('f-tip').value.trim().toUpperCase();
@@ -557,6 +727,7 @@ async function incarcaOperatiuni() {
       const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
       const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
+      const obsFinal = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong>${d.observatii ? ' ' + escHtml(d.observatii) : ''}` : escHtml(d.observatii || '');
       const isAdmin = currentUser && currentUser.nume === 'EUGEN';
       const isPending = d.tip && d.tip.includes('PENDING');
       const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
@@ -568,7 +739,7 @@ async function incarcaOperatiuni() {
         <td style="font-weight:500;">${escHtml(d.beneficiar)}</td>
         <td class="num">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
         <td class="num">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
-        <td style="color:#888; font-size:12px; max-width:150px;">${escHtml(d.observatii || '')}</td>
+        <td style="color:#888; font-size:12px; max-width:200px;">${obsFinal}</td>
         <td style="font-size:11px; color:#aaa;">${d.utilizator}</td>
         <td style="white-space:nowrap;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
       </tr>`;
