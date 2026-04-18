@@ -272,10 +272,11 @@
     <div id="fond-display" style="display:none;"></div>
     <div id="alerta-decont" style="display:none;"></div>
 
-    <!-- TABS: Normală / AMANET-BANCĂ -->
-    <div class="form-tabs" style="display:flex; gap:8px; margin-bottom:12px;">
-      <button type="button" id="tab-normala" class="tab-btn tab-active" onclick="switchTab('normala')" style="flex:1; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">📒 Operațiune normală</button>
-      <button type="button" id="tab-amanet" class="tab-btn" onclick="switchTab('amanet')" style="flex:1; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">💎 AMANET / BANCĂ</button>
+    <!-- TABS: Normală / AMANET-BANCĂ / ÎNCASĂRI -->
+    <div class="form-tabs" style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+      <button type="button" id="tab-normala" class="tab-btn tab-active" onclick="switchTab('normala')" style="flex:1; min-width:150px; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">📒 Operațiune normală</button>
+      <button type="button" id="tab-amanet" class="tab-btn" onclick="switchTab('amanet')" style="flex:1; min-width:150px; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">💎 AMANET / BANCĂ</button>
+      <button type="button" id="tab-incasare" class="tab-btn" onclick="switchTab('incasare')" style="flex:1; min-width:150px; padding:12px; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer;">💰 ÎNCASARE MAGAZIN</button>
     </div>
 
     <div class="form-card" id="form-normala">
@@ -380,6 +381,50 @@
       </div>
       <div id="fa-preview" style="display:none; padding:10px 14px; border-radius:10px; margin-bottom:10px; font-size:14px; font-weight:600;"></div>
       <button class="btn-submit" onclick="adaugaOperatiuneAmanet()" style="background:#7c3aed;">Adaugă operațiune AMANET/BANCĂ</button>
+    </div>
+
+    <!-- FORMULAR ÎNCASARE MAGAZIN -->
+    <div class="form-card" id="form-incasare" style="display:none; border-left:5px solid #16a34a;">
+      <h3 style="color:#16a34a;">💰 Încasare magazin (cash)</h3>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px;">
+          <label>Data chitanță</label>
+          <input type="date" id="fi-data">
+        </div>
+        <div class="form-group">
+          <label>Magazin</label>
+          <select id="fi-magazin">
+            <option value="">— Alege magazin —</option>
+            <option value="TOMIS 3">TOMIS 3</option>
+            <option value="SERVICII">SERVICII</option>
+            <option value="BABADAG">BABADAG</option>
+            <option value="MEDGIDIA">MEDGIDIA</option>
+            <option value="NAVODARI">NAVODARI</option>
+            <option value="MARVIMEX">MARVIMEX</option>
+            <option value="POARTA 6">POARTA 6</option>
+            <option value="KOGALNICEANU">KOGALNICEANU</option>
+            <option value="SHOWROOM">SHOWROOM</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:200px;">
+          <label>Nr. chitanță / bon</label>
+          <input type="text" id="fi-nr" placeholder="opțional" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label style="color:#16a34a;">Sumă ÎNCASARE (RON)</label>
+          <input type="number" step="0.01" id="fi-suma" placeholder="0.00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Observații</label>
+          <input type="text" id="fi-obs" placeholder="opțional">
+        </div>
+      </div>
+      <div style="padding:10px 14px; border-radius:10px; margin-bottom:10px; font-size:14px; font-weight:600; background:#dcfce7; color:#16a34a;">↑ INTRARE în caiet (cash)</div>
+      <button class="btn-submit" onclick="adaugaIncasare()" style="background:#16a34a;">Adaugă încasare</button>
     </div>
   </div>
 
@@ -564,23 +609,28 @@ document.addEventListener('click', (e) => {
 });
 
 function switchTab(tab) {
-  const tabNorm = document.getElementById('tab-normala');
-  const tabAmanet = document.getElementById('tab-amanet');
-  const formNorm = document.getElementById('form-normala');
-  const formAmanet = document.getElementById('form-amanet');
-  if (tab === 'amanet') {
-    tabAmanet.classList.add('tab-active');
-    tabNorm.classList.remove('tab-active');
-    formAmanet.style.display = '';
-    formNorm.style.display = 'none';
-    if (!document.getElementById('fa-data').value) {
-      document.getElementById('fa-data').value = new Date().toISOString().slice(0, 10);
+  const tabs = {
+    normala: { btn: 'tab-normala', form: 'form-normala' },
+    amanet:  { btn: 'tab-amanet',  form: 'form-amanet'  },
+    incasare:{ btn: 'tab-incasare',form: 'form-incasare'}
+  };
+  for (const k of Object.keys(tabs)) {
+    const btn = document.getElementById(tabs[k].btn);
+    const form = document.getElementById(tabs[k].form);
+    if (k === tab) {
+      btn.classList.add('tab-active');
+      form.style.display = '';
+    } else {
+      btn.classList.remove('tab-active');
+      form.style.display = 'none';
     }
-  } else {
-    tabNorm.classList.add('tab-active');
-    tabAmanet.classList.remove('tab-active');
-    formNorm.style.display = '';
-    formAmanet.style.display = 'none';
+  }
+  // Auto-completează data cu azi
+  if (tab === 'amanet' && !document.getElementById('fa-data').value) {
+    document.getElementById('fa-data').value = new Date().toISOString().slice(0, 10);
+  }
+  if (tab === 'incasare' && !document.getElementById('fi-data').value) {
+    document.getElementById('fi-data').value = new Date().toISOString().slice(0, 10);
   }
 }
 
@@ -682,6 +732,48 @@ async function adaugaOperatiuneAmanet() {
       document.getElementById('fa-preview').style.display = 'none';
       document.getElementById('fa-suma-label').textContent = 'Sumă (RON)';
       document.getElementById('fa-suma-label').style.color = '';
+      await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
+    } else {
+      showToast('Eroare la salvare');
+    }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  }
+}
+
+async function adaugaIncasare() {
+  const data = document.getElementById('fi-data').value;
+  const magazin = document.getElementById('fi-magazin').value.trim().toUpperCase();
+  const nrChit = document.getElementById('fi-nr').value.trim();
+  const suma = parseFloat(document.getElementById('fi-suma').value) || 0;
+  const obs = document.getElementById('fi-obs').value.trim();
+
+  if (!data) { showToast('Selectează data'); return; }
+  if (!magazin) { showToast('Alege magazinul'); return; }
+  if (suma <= 0) { showToast('Completează suma'); return; }
+
+  try {
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data,
+        tip: 'INCASARE',
+        beneficiar: magazin,
+        intrare: suma,
+        iesire: 0,
+        observatii: obs,
+        nr_dispozitie: nrChit || null,
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
+      })
+    });
+    if (resp.ok) {
+      showToast(`Încasare ${magazin}: ${suma} RON`);
+      document.getElementById('fi-magazin').value = '';
+      document.getElementById('fi-nr').value = '';
+      document.getElementById('fi-suma').value = '';
+      document.getElementById('fi-obs').value = '';
       await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
     } else {
       showToast('Eroare la salvare');
