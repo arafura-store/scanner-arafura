@@ -103,8 +103,9 @@
     </select>
     <select id="sel-an"></select>
     <button onclick="genereazaRapoarte()">Generează</button>
-    <button style="background:var(--orange); color:white;" onclick="document.getElementById('file-excel').click()">Import Excel Lunar</button>
+    <button id="btn-import-excel" style="background:var(--orange); color:white; display:none;" onclick="document.getElementById('file-excel').click()">Import Excel Lunar</button>
     <input type="file" id="file-excel" accept=".xlsx,.xls" style="display:none;" onchange="importExcel(event)">
+    <button id="btn-admin" style="background:rgba(255,255,255,.15); color:white; padding:10px 12px;" onclick="toggleAdmin()" title="Admin">🔒</button>
     <button style="background:var(--green); color:white;" onclick="window.print()">Printează</button>
   </div>
 </div>
@@ -150,6 +151,40 @@ const MAGAZINE_AMANET = ['CASIERIE CENTRALA','BABADAG','CUMPANA','POPORULUI','TO
 
 let allData = [];
 let allProgram = [];
+
+// ── Admin mode: deblochează butonul Import Excel cu PIN 6969 ──────
+const ADMIN_PIN = '6969';
+function isAdmin() { return localStorage.getItem('rapoarte_admin') === '1'; }
+function toggleAdmin() {
+  if (isAdmin()) {
+    if (confirm('Ieși din modul admin?')) {
+      localStorage.removeItem('rapoarte_admin');
+      applyAdminMode();
+    }
+    return;
+  }
+  const pin = prompt('PIN admin:');
+  if (pin === ADMIN_PIN) {
+    localStorage.setItem('rapoarte_admin', '1');
+    applyAdminMode();
+  } else if (pin !== null) {
+    alert('PIN incorect');
+  }
+}
+function applyAdminMode() {
+  const btn = document.getElementById('btn-import-excel');
+  const lock = document.getElementById('btn-admin');
+  if (isAdmin()) {
+    btn.style.display = '';
+    lock.textContent = '🔓';
+    lock.title = 'Admin activ — click pentru ieșire';
+  } else {
+    btn.style.display = 'none';
+    lock.textContent = '🔒';
+    lock.title = 'Admin';
+  }
+}
+applyAdminMode();
 
 // Populare an
 const selAn = document.getElementById('sel-an');
