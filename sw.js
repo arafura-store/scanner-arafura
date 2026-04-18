@@ -1,6 +1,6 @@
 // ── SERVICE WORKER — Scanner Produse ARAFURA ──────────────────────
 // Versiune cache — schimba acest string la fiecare deploy pentru a forta update
-const CACHE_VERSION = 'arafura-scanner-v46';
+const CACHE_VERSION = 'arafura-scanner-v47';
 const ASSETS = [
   './',
   './index.html',
@@ -47,8 +47,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Pentru index.html — network-first (sa primeasca update-urile)
-  if (url.pathname.endsWith('index.html') || url.pathname.endsWith('/')) {
+  // Pentru toate fișierele HTML — network-first (sa primeasca update-urile)
+  if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
     event.respondWith(
       fetch(event.request)
         .then(response => {
