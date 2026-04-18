@@ -188,6 +188,11 @@ async function genereazaRapoarte() {
     } else {
       dataStart = `${an}-01-01`;
       dataEnd = `${an}-12-31`;
+      // Dacă e anul curent, nu afișăm date viitoare
+      const azi = new Date();
+      if (an === azi.getFullYear()) {
+        dataEnd = azi.toISOString().slice(0, 10);
+      }
     }
 
     // Fetch all data (paginate per 1000)
@@ -586,22 +591,33 @@ function renderAmanet(an) {
 }
 
 // ══ BANCA ════════════════════════════════════════════════════════
+function detectBanca(d) {
+  const all = ((d.beneficiar || '') + ' ' + (d.observatii || '')).toUpperCase();
+  if (all.includes('LIBRA')) return 'LIBRA BANK';
+  if (all.includes('VISTA')) return 'VISTA BANK';
+  if (all.includes('BANORIENT') || all.includes('ORIENT')) return 'BANORIENT';
+  if (all.includes('TRANSILVANIA') || all.includes('BT ')) return 'TRANSILVANIA';
+  return 'ALTĂ BANCĂ';
+}
+
 function renderBanca(an) {
   const container = document.getElementById('tab-banca');
+  const lunaFilter = document.getElementById('sel-luna').value;
   const depuneri = allData.filter(d => d.tip === 'DEPUNERE');
   const retrageri = allData.filter(d => d.tip === 'RETRAGERE');
 
-  // Detecteaza banci din observatii/beneficiar
-  function detectBanca(d) {
-    const all = ((d.beneficiar || '') + ' ' + (d.observatii || '')).toUpperCase();
-    if (all.includes('LIBRA')) return 'LIBRA BANK';
-    if (all.includes('VISTA')) return 'VISTA BANK';
-    if (all.includes('BANORIENT') || all.includes('ORIENT')) return 'BANORIENT';
-    if (all.includes('TRANSILVANIA') || all.includes('BT ')) return 'TRANSILVANIA';
-    return 'ALTĂ BANCĂ';
+  // Dacă e filtru pe o lună → vedere detaliată zi cu zi
+  if (lunaFilter !== '') {
+    return renderBancaDetaliat(an, parseInt(lunaFilter), depuneri, retrageri);
   }
 
-  // Matrix: luna -> banca -> {depunere, retragere}
+  // Altfel → pivot pe luni
+  return renderBancaPivot(an, depuneri, retrageri);
+}
+
+function renderBancaPivot(an, depuneri, retrageri) {
+  const container = document.getElementById('tab-banca');
+
   const matrix = {};
   for (let m = 0; m < 12; m++) matrix[m] = {};
 
@@ -623,46 +639,133 @@ function renderBanca(an) {
     return false;
   });
 
+  if (banciActive.length === 0) {
+    container.innerHTML = '<div class="loading">Nu sunt operațiuni bancare pentru anul selectat.</div>';
+    return;
+  }
+
+  // Header simplu pe un singur rând: "LIBRA DEP" / "LIBRA RET"
   let html = '<table><thead><tr><th>LUNA</th>';
-  for (const b of banciActive) html += `<th colspan="2">${b}</th>`;
-  html += '</tr><tr><th></th>';
-  for (const b of banciActive) html += '<th>DEPUNERE</th><th>RETRAGERE</th>';
-  html += '</tr></thead><tbody>';
+  for (const b of banciActive) {
+    html += `<th style="background:#1e3a5f;">${b}<br><span style="font-size:10px; color:#a7f3d0;">DEPUNERE</span></th>`;
+    html += `<th style="background:#3d1e1e;">${b}<br><span style="font-size:10px; color:#fecaca;">RETRAGERE</span></th>`;
+  }
+  html += '<th style="background:var(--blue);">TOTAL LUNA</th></tr></thead><tbody>';
 
   const totalBanca = {};
   for (const b of banciActive) totalBanca[b] = { dep: 0, ret: 0 };
+  let grandDep = 0, grandRet = 0;
 
   for (let m = 0; m < 12; m++) {
     let hasData = false;
     for (const b of banciActive) if (matrix[m][b]) { hasData = true; break; }
     if (!hasData) continue;
 
+    let rowDep = 0, rowRet = 0;
     html += `<tr><td>${LUNI[m]}</td>`;
     for (const b of banciActive) {
       const dep = matrix[m][b]?.dep || 0;
       const ret = matrix[m][b]?.ret || 0;
       totalBanca[b].dep += dep;
       totalBanca[b].ret += ret;
+      rowDep += dep; rowRet += ret;
       html += `<td class="num green">${fmt(dep)}</td><td class="num red">${fmt(ret)}</td>`;
     }
-    html += '</tr>';
+    grandDep += rowDep; grandRet += rowRet;
+    html += `<td class="num" style="font-weight:700;"><span class="green">${fmt(rowDep)}</span> / <span class="red">${fmt(rowRet)}</span></td></tr>`;
   }
 
   html += '<tr class="total-row"><td>TOTAL</td>';
   for (const b of banciActive) {
     html += `<td class="num green">${fmt(totalBanca[b].dep)}</td><td class="num red">${fmt(totalBanca[b].ret)}</td>`;
   }
-  html += '</tr></tbody></table>';
-
-  const totalDep = Object.values(totalBanca).reduce((s, b) => s + b.dep, 0);
-  const totalRet = Object.values(totalBanca).reduce((s, b) => s + b.ret, 0);
+  html += `<td class="num" style="font-weight:800;"><span class="green">${fmt(grandDep)}</span> / <span class="red">${fmt(grandRet)}</span></td></tr>`;
+  html += '</tbody></table>';
 
   const sumHtml = `<div class="summary">
-    <div class="summary-card"><div class="label">Total depuneri</div><div class="value green">${fmt(totalDep)} RON</div></div>
-    <div class="summary-card"><div class="label">Total retrageri</div><div class="value red">${fmt(totalRet)} RON</div></div>
+    <div class="summary-card"><div class="label">Total depuneri ${an}</div><div class="value green">${fmt(grandDep)} RON</div></div>
+    <div class="summary-card"><div class="label">Total retrageri ${an}</div><div class="value red">${fmt(grandRet)} RON</div></div>
+    <div class="summary-card"><div class="label">Flux net</div><div class="value" style="color:${grandDep-grandRet>=0?'var(--green)':'var(--red)'};">${fmt(grandDep - grandRet)} RON</div></div>
   </div>`;
 
   container.innerHTML = sumHtml + html;
+}
+
+function renderBancaDetaliat(an, luna, depuneri, retrageri) {
+  const container = document.getElementById('tab-banca');
+
+  // Filtrează doar tranzacțiile din luna aleasă
+  const tranzactii = [...depuneri, ...retrageri]
+    .filter(d => new Date(d.data).getMonth() === luna)
+    .sort((a, b) => new Date(a.data) - new Date(b.data) || (a.created_at || '').localeCompare(b.created_at || ''));
+
+  if (tranzactii.length === 0) {
+    container.innerHTML = `<div class="loading">Nu sunt operațiuni bancare în ${LUNI[luna]} ${an}.</div>`;
+    return;
+  }
+
+  let totalDep = 0, totalRet = 0;
+  const perBanca = {};
+
+  let html = `<table><thead><tr>
+    <th>DATA</th><th>TIP</th><th>BANCA</th><th>BENEFICIAR / FIRMĂ</th>
+    <th>DEPUNERE</th><th>RETRAGERE</th><th>OBSERVAȚII</th>
+  </tr></thead><tbody>`;
+
+  for (const d of tranzactii) {
+    const banca = detectBanca(d);
+    const suma = parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
+    const isDep = d.tip === 'DEPUNERE';
+    const data = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    if (!perBanca[banca]) perBanca[banca] = { dep: 0, ret: 0 };
+    if (isDep) { totalDep += suma; perBanca[banca].dep += suma; }
+    else { totalRet += suma; perBanca[banca].ret += suma; }
+
+    html += `<tr>
+      <td>${data}</td>
+      <td style="font-weight:700; color:${isDep?'var(--green)':'var(--red)'};">${d.tip}</td>
+      <td>${banca}</td>
+      <td>${d.beneficiar || ''}</td>
+      <td class="num green">${isDep ? fmt(suma) : ''}</td>
+      <td class="num red">${isDep ? '' : fmt(suma)}</td>
+      <td style="font-size:12px; color:var(--sub);">${d.observatii || ''}</td>
+    </tr>`;
+  }
+
+  html += `<tr class="total-row">
+    <td colspan="4">TOTAL ${LUNI[luna].toUpperCase()} ${an}</td>
+    <td class="num green">${fmt(totalDep)}</td>
+    <td class="num red">${fmt(totalRet)}</td>
+    <td></td>
+  </tr>`;
+  html += '</tbody></table>';
+
+  // Totaluri per bancă
+  const banciCuDate = Object.keys(perBanca).sort();
+  let perBancaHtml = '<h3 style="margin:20px 0 12px;">Totaluri per bancă</h3>';
+  perBancaHtml += '<table><thead><tr><th>BANCA</th><th>DEPUNERI</th><th>RETRAGERI</th><th>FLUX NET</th></tr></thead><tbody>';
+  for (const b of banciCuDate) {
+    const v = perBanca[b];
+    const net = v.dep - v.ret;
+    perBancaHtml += `<tr>
+      <td>${b}</td>
+      <td class="num green">${fmt(v.dep)}</td>
+      <td class="num red">${fmt(v.ret)}</td>
+      <td class="num" style="font-weight:700; color:${net>=0?'var(--green)':'var(--red)'};">${fmt(net)}</td>
+    </tr>`;
+  }
+  perBancaHtml += `<tr class="total-row"><td>TOTAL</td><td class="num green">${fmt(totalDep)}</td><td class="num red">${fmt(totalRet)}</td><td class="num" style="color:${totalDep-totalRet>=0?'var(--green)':'var(--red)'};">${fmt(totalDep - totalRet)}</td></tr>`;
+  perBancaHtml += '</tbody></table>';
+
+  const sumHtml = `<div class="summary">
+    <div class="summary-card"><div class="label">Total depuneri ${LUNI[luna]}</div><div class="value green">${fmt(totalDep)} RON</div></div>
+    <div class="summary-card"><div class="label">Total retrageri ${LUNI[luna]}</div><div class="value red">${fmt(totalRet)} RON</div></div>
+    <div class="summary-card"><div class="label">Nr. operațiuni</div><div class="value">${tranzactii.length}</div></div>
+    <div class="summary-card"><div class="label">Flux net</div><div class="value" style="color:${totalDep-totalRet>=0?'var(--green)':'var(--red)'}; font-size:20px;">${fmt(totalDep - totalRet)} RON</div></div>
+  </div>`;
+
+  container.innerHTML = sumHtml + html + perBancaHtml;
 }
 
 // ══ COMBUSTIBIL ══════════════════════════════════════════════════
