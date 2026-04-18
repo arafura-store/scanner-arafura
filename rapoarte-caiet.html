@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rapoarte Caiet — ARAFURA</title>
   <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -102,9 +103,13 @@
     </select>
     <select id="sel-an"></select>
     <button onclick="genereazaRapoarte()">Generează</button>
+    <button style="background:var(--orange); color:white;" onclick="document.getElementById('file-excel').click()">Import Excel Lunar</button>
+    <input type="file" id="file-excel" accept=".xlsx,.xls" style="display:none;" onchange="importExcel(event)">
     <button style="background:var(--green); color:white;" onclick="window.print()">Printează</button>
   </div>
 </div>
+
+<div id="import-preview" style="display:none; background:var(--card); border-radius:12px; padding:20px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0,0,0,.08);"></div>
 
 <div class="tabs">
   <button class="tab active" onclick="switchTab('vanzari')">Vânzări</button>
@@ -126,11 +131,25 @@ const API = window.SUPABASE_URL + '/rest/v1';
 
 const LUNI = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
 const MAGAZINE = ['TOMIS 3','SERVICII','BABADAG','MEDGIDIA','NAVODARI','MARVIMEX','POARTA 6','SHOWROOM','BROTACEI','KOGALNICEANU','CUMPANA','POPORULUI'];
+const MAGAZINE_VANZARI = ['TOMIS 3','SERVICII','BABADAG','MEDGIDIA','NAVODARI','MARVIMEX','POARTA 6','KOGALNICEANU','SHOWROOM','VZ CU AMANUNTUL'];
+const EXCEL_MAGAZIN_MAP = {
+  'MAGAZIN TOMIS 3': 'TOMIS 3',
+  'MAGAZIN SERVICII': 'SERVICII',
+  'MAGAZIN BABADAG': 'BABADAG',
+  'MAGAZIN MEDGIDIA': 'MEDGIDIA',
+  'MAGAZIN NAVODARI': 'NAVODARI',
+  'MAGAZIN MARVIMEX': 'MARVIMEX',
+  'MAGAZIN POARTA 6': 'POARTA 6',
+  'MAGAZIN KOGALNICEANU': 'KOGALNICEANU',
+  'SHOWROOM': 'SHOWROOM',
+  'VZ CU AMANUNTUL': 'VZ CU AMANUNTUL'
+};
 const BANCI = ['LIBRA BANK','VISTA BANK','BANORIENT','TRANSILVANIA'];
 const FIRME_BANCA = ['ARAFURA','PERFECTA','DOMADAMI','ROCO','VIENEZ','FLOROM','IMONDIS'];
 const MAGAZINE_AMANET = ['CASIERIE CENTRALA','BABADAG','CUMPANA','POPORULUI','TOMIS 3','MARVIMEX','POARTA 6','MEDGIDIA','NAVODARI'];
 
 let allData = [];
+let allProgram = [];
 
 // Populare an
 const selAn = document.getElementById('sel-an');
@@ -186,6 +205,15 @@ async function genereazaRapoarte() {
       if (data.length < 1000) break;
     }
 
+    // Fetch incasari_program for the year
+    const lunaFilterProg = lunaFilter !== '' ? `&luna=eq.${parseInt(lunaFilter)}` : '';
+    const respProg = await fetch(
+      `${API}/incasari_program?select=*&an=eq.${an}${lunaFilterProg}`,
+      { headers: HEADERS }
+    );
+    allProgram = await respProg.json();
+    if (!Array.isArray(allProgram)) allProgram = [];
+
     renderVanzari(an);
     renderAmanet(an);
     renderBanca(an);
@@ -202,58 +230,287 @@ async function genereazaRapoarte() {
 // ══ VANZARI ══════════════════════════════════════════════════════
 function renderVanzari(an) {
   const container = document.getElementById('tab-vanzari');
-  const incasari = allData.filter(d => d.tip === 'INCASARE');
 
-  // Matrix: luna x magazin
-  const matrix = {};
-  for (let m = 0; m < 12; m++) matrix[m] = {};
-
-  for (const d of incasari) {
+  // Matrix cash caiet: luna -> magazin -> cash
+  const cashCaiet = {};
+  for (let m = 0; m < 12; m++) cashCaiet[m] = {};
+  for (const d of allData.filter(d => d.tip === 'INCASARE')) {
     const luna = new Date(d.data).getMonth();
-    const mag = d.beneficiar.trim();
-    if (!matrix[luna][mag]) matrix[luna][mag] = 0;
-    matrix[luna][mag] += parseFloat(d.intrare || 0);
+    const mag = (d.beneficiar || '').trim().toUpperCase();
+    if (!cashCaiet[luna][mag]) cashCaiet[luna][mag] = 0;
+    cashCaiet[luna][mag] += parseFloat(d.intrare || 0);
   }
 
-  // Detecteaza magazine active
-  const magActive = MAGAZINE.filter(mag => {
-    for (let m = 0; m < 12; m++) if (matrix[m][mag]) return true;
+  // Matrix program: luna -> magazin -> {cash, card, voucher}
+  const prog = {};
+  for (let m = 0; m < 12; m++) prog[m] = {};
+  for (const p of allProgram) {
+    if (!prog[p.luna][p.magazin]) prog[p.luna][p.magazin] = { cash: 0, card: 0, voucher: 0 };
+    prog[p.luna][p.magazin].cash += parseFloat(p.cash || 0);
+    prog[p.luna][p.magazin].card += parseFloat(p.card || 0);
+    prog[p.luna][p.magazin].voucher += parseFloat(p.voucher || 0);
+  }
+
+  // Active magazine: those with any data (caiet sau program)
+  const magActive = MAGAZINE_VANZARI.filter(mag => {
+    for (let m = 0; m < 12; m++) {
+      if (cashCaiet[m][mag]) return true;
+      if (prog[m][mag]) return true;
+    }
     return false;
   });
 
-  let html = `<table><thead><tr><th>LUNA</th>`;
+  if (magActive.length === 0) {
+    container.innerHTML = '<div class="loading">Nu sunt date pentru anul selectat. Importă Excel sau verifică caietul.</div>';
+    return;
+  }
+
+  let html = `<table><thead><tr><th>LUNA</th><th>TIP</th>`;
   for (const mag of magActive) html += `<th>${mag}</th>`;
   html += `<th style="background:var(--blue);">TOTAL</th></tr></thead><tbody>`;
 
-  const totalCol = {};
-  for (const mag of magActive) totalCol[mag] = 0;
-  let grandTotal = 0;
+  // Totale pe coloane (per-magazin, per-tip)
+  const tot = { cashCaiet: {}, cashProg: {}, card: {}, voucher: {} };
+  for (const mag of magActive) { tot.cashCaiet[mag] = 0; tot.cashProg[mag] = 0; tot.card[mag] = 0; tot.voucher[mag] = 0; }
+
+  const PRAG_DIFF = 50; // RON
 
   for (let m = 0; m < 12; m++) {
-    let rowTotal = 0;
-    html += `<tr><td>${LUNI[m]}</td>`;
+    let hasData = false;
     for (const mag of magActive) {
-      const val = matrix[m][mag] || 0;
-      totalCol[mag] += val;
-      rowTotal += val;
-      html += `<td class="num">${fmt(val)}</td>`;
+      if (cashCaiet[m][mag] || prog[m][mag]) { hasData = true; break; }
     }
-    grandTotal += rowTotal;
-    html += `<td class="num" style="font-weight:700; color:var(--blue);">${fmt(rowTotal)}</td></tr>`;
+    if (!hasData) continue;
+
+    // Row 1: CASH CAIET
+    let rowCashCaiet = 0;
+    html += `<tr><td rowspan="4" style="vertical-align:middle; background:#f4f6f9; font-weight:800;">${LUNI[m]}</td>`;
+    html += `<td style="color:var(--green); font-weight:600;">CASH CAIET</td>`;
+    for (const mag of magActive) {
+      const v = cashCaiet[m][mag] || 0;
+      rowCashCaiet += v;
+      tot.cashCaiet[mag] += v;
+      html += `<td class="num" style="color:var(--green);">${fmt(v)}</td>`;
+    }
+    html += `<td class="num green" style="font-weight:700;">${fmt(rowCashCaiet)}</td></tr>`;
+
+    // Row 2: CASH PROGRAM (cu marcaj roșu la diferențe)
+    let rowCashProg = 0;
+    html += `<tr><td style="color:#0b5d34; font-weight:600;">CASH PROGRAM</td>`;
+    for (const mag of magActive) {
+      const v = prog[m][mag]?.cash || 0;
+      const vCaiet = cashCaiet[m][mag] || 0;
+      const diff = Math.abs(v - vCaiet);
+      rowCashProg += v;
+      tot.cashProg[mag] += v;
+      const warn = (v > 0 && vCaiet > 0 && diff > PRAG_DIFF);
+      const style = warn ? 'color:var(--red); font-weight:700; background:#fee;' : 'color:#0b5d34;';
+      const title = warn ? ` title="Diferență ${fmt(diff)} RON față de caiet"` : '';
+      html += `<td class="num" style="${style}"${title}>${fmt(v)}</td>`;
+    }
+    html += `<td class="num" style="color:#0b5d34; font-weight:700;">${fmt(rowCashProg)}</td></tr>`;
+
+    // Row 3: CARD
+    let rowCard = 0;
+    html += `<tr><td style="color:var(--blue); font-weight:600;">CARD</td>`;
+    for (const mag of magActive) {
+      const v = prog[m][mag]?.card || 0;
+      rowCard += v;
+      tot.card[mag] += v;
+      html += `<td class="num" style="color:var(--blue);">${fmt(v)}</td>`;
+    }
+    html += `<td class="num" style="color:var(--blue); font-weight:700;">${fmt(rowCard)}</td></tr>`;
+
+    // Row 4: VOUCHER
+    let rowVch = 0;
+    html += `<tr style="border-bottom:2px solid var(--border);"><td style="color:var(--orange); font-weight:600;">VOUCHER</td>`;
+    for (const mag of magActive) {
+      const v = prog[m][mag]?.voucher || 0;
+      rowVch += v;
+      tot.voucher[mag] += v;
+      html += `<td class="num" style="color:var(--orange);">${fmt(v)}</td>`;
+    }
+    html += `<td class="num" style="color:var(--orange); font-weight:700;">${fmt(rowVch)}</td></tr>`;
   }
 
-  html += `<tr class="total-row"><td>TOTAL ${an}</td>`;
-  for (const mag of magActive) html += `<td class="num">${fmt(totalCol[mag])}</td>`;
-  html += `<td class="num" style="color:var(--blue);">${fmt(grandTotal)}</td></tr>`;
+  // Totaluri anuale per-magazin
+  let gCashCaiet=0, gCashProg=0, gCard=0, gVch=0;
+  for (const mag of magActive) {
+    gCashCaiet += tot.cashCaiet[mag];
+    gCashProg += tot.cashProg[mag];
+    gCard += tot.card[mag];
+    gVch += tot.voucher[mag];
+  }
+
+  html += `<tr class="total-row"><td rowspan="4" style="vertical-align:middle; background:#e8f0fe;">TOTAL ${an}</td>`;
+  html += `<td style="color:var(--green);">CASH CAIET</td>`;
+  for (const mag of magActive) html += `<td class="num green">${fmt(tot.cashCaiet[mag])}</td>`;
+  html += `<td class="num green">${fmt(gCashCaiet)}</td></tr>`;
+
+  html += `<tr class="total-row"><td style="color:#0b5d34;">CASH PROGRAM</td>`;
+  for (const mag of magActive) html += `<td class="num" style="color:#0b5d34;">${fmt(tot.cashProg[mag])}</td>`;
+  html += `<td class="num" style="color:#0b5d34;">${fmt(gCashProg)}</td></tr>`;
+
+  html += `<tr class="total-row"><td style="color:var(--blue);">CARD</td>`;
+  for (const mag of magActive) html += `<td class="num" style="color:var(--blue);">${fmt(tot.card[mag])}</td>`;
+  html += `<td class="num" style="color:var(--blue);">${fmt(gCard)}</td></tr>`;
+
+  html += `<tr class="total-row"><td style="color:var(--orange);">VOUCHER</td>`;
+  for (const mag of magActive) html += `<td class="num" style="color:var(--orange);">${fmt(tot.voucher[mag])}</td>`;
+  html += `<td class="num" style="color:var(--orange);">${fmt(gVch)}</td></tr>`;
+
+  // Rând cu TOTAL GENERAL per magazin (cash program + card + voucher)
+  html += `<tr class="total-row" style="border-top:3px double var(--blue);"><td colspan="2" style="background:var(--blue); color:white;">TOTAL GENERAL (program)</td>`;
+  let gTotal = 0;
+  for (const mag of magActive) {
+    const t = tot.cashProg[mag] + tot.card[mag] + tot.voucher[mag];
+    gTotal += t;
+    html += `<td class="num" style="background:var(--blue); color:white; font-weight:800;">${fmt(t)}</td>`;
+  }
+  html += `<td class="num" style="background:var(--blue); color:white; font-weight:800;">${fmt(gTotal)}</td></tr>`;
+
   html += '</tbody></table>';
 
-  // Summary
+  // Summary cards
+  const diff = gCashCaiet - gCashProg;
+  const diffColor = Math.abs(diff) < 50 ? 'var(--green)' : 'var(--red)';
   const sumHtml = `<div class="summary">
-    <div class="summary-card"><div class="label">Total încasări ${an}</div><div class="value green">${fmt(grandTotal)} RON</div></div>
-    ${magActive.slice(0, 4).map(mag => `<div class="summary-card"><div class="label">${mag}</div><div class="value" style="font-size:18px;">${fmt(totalCol[mag])}</div></div>`).join('')}
+    <div class="summary-card"><div class="label">Cash caiet</div><div class="value green">${fmt(gCashCaiet)}</div></div>
+    <div class="summary-card"><div class="label">Cash program</div><div class="value" style="color:#0b5d34;">${fmt(gCashProg)}</div></div>
+    <div class="summary-card"><div class="label">Diferență cash</div><div class="value" style="color:${diffColor}; font-size:18px;">${fmt(diff)} RON</div></div>
+    <div class="summary-card"><div class="label">Card</div><div class="value" style="color:var(--blue);">${fmt(gCard)}</div></div>
+    <div class="summary-card"><div class="label">Voucher</div><div class="value" style="color:var(--orange);">${fmt(gVch)}</div></div>
+    <div class="summary-card" style="border:2px solid var(--blue);"><div class="label" style="font-weight:700;">TOTAL GENERAL (program)</div><div class="value" style="color:var(--blue);">${fmt(gTotal)}</div></div>
   </div>`;
 
   container.innerHTML = sumHtml + html;
+}
+
+// ══ IMPORT EXCEL ═════════════════════════════════════════════════
+async function importExcel(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+
+  const preview = document.getElementById('import-preview');
+  preview.style.display = 'block';
+  preview.innerHTML = '<div class="loading">Se citește fișierul...</div>';
+
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+    // Găsim rândul cu headerele (căutăm "Nume Depozit")
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      if (rows[i] && rows[i].some(c => (c || '').toString().trim() === 'Nume Depozit')) {
+        headerIdx = i; break;
+      }
+    }
+    if (headerIdx === -1) throw new Error('Nu găsesc coloana "Nume Depozit" în fișier');
+
+    const headers = rows[headerIdx].map(h => (h || '').toString().trim());
+    const idxDepo = headers.indexOf('Nume Depozit');
+    const idxCash = headers.indexOf('Incasare numerar');
+    const idxCard = headers.indexOf('Incasare card');
+    const idxVch = headers.indexOf('Incasare voucher');
+    if (idxDepo === -1 || idxCash === -1 || idxCard === -1) {
+      throw new Error('Lipsesc coloanele obligatorii (Nume Depozit / Incasare numerar / Incasare card)');
+    }
+
+    // Detectăm perioada din rândul 2 ("De la data = 01/03/2026, La data = 31/03/2026 ...")
+    let an = null, luna = null;
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      const txt = (rows[i] || []).map(c => c || '').join(' ');
+      const m = txt.match(/De la data\s*=\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+      if (m) { luna = parseInt(m[2]) - 1; an = parseInt(m[3]); break; }
+    }
+    if (an === null || luna === null) {
+      // Fallback: extragem din numele fișierului
+      const m = file.name.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      if (m) { luna = parseInt(m[2]) - 1; an = parseInt(m[3]); }
+    }
+    if (an === null || luna === null) throw new Error('Nu pot detecta luna/anul din fișier');
+
+    // Agregăm pe magazin (doar cele din MAGAZINE_VANZARI)
+    const agg = {};
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || !r[idxDepo]) continue;
+      const depo = r[idxDepo].toString().trim().toUpperCase();
+      const mag = EXCEL_MAGAZIN_MAP[depo];
+      if (!mag) continue; // filtrăm B2B (Depozit Papetarie, etc.)
+      if (!agg[mag]) agg[mag] = { cash: 0, card: 0, voucher: 0 };
+      agg[mag].cash += parseFloat(r[idxCash] || 0);
+      agg[mag].card += parseFloat(r[idxCard] || 0);
+      agg[mag].voucher += idxVch >= 0 ? parseFloat(r[idxVch] || 0) : 0;
+    }
+
+    const magazine = Object.keys(agg).sort();
+    if (magazine.length === 0) throw new Error('Niciun magazin retail recunoscut în fișier');
+
+    // Preview + confirmare
+    let sumCash=0, sumCard=0, sumVch=0;
+    let html = `<h3 style="margin-bottom:12px; color:var(--blue);">Previzualizare import — ${LUNI[luna]} ${an}</h3>`;
+    html += '<table><thead><tr><th>MAGAZIN</th><th>CASH</th><th>CARD</th><th>VOUCHER</th><th>TOTAL</th></tr></thead><tbody>';
+    for (const mag of magazine) {
+      const v = agg[mag];
+      sumCash += v.cash; sumCard += v.card; sumVch += v.voucher;
+      html += `<tr><td>${mag}</td><td class="num green">${fmt(v.cash)}</td><td class="num" style="color:var(--blue);">${fmt(v.card)}</td><td class="num" style="color:var(--orange);">${fmt(v.voucher)}</td><td class="num" style="font-weight:700;">${fmt(v.cash + v.card + v.voucher)}</td></tr>`;
+    }
+    html += `<tr class="total-row"><td>TOTAL</td><td class="num green">${fmt(sumCash)}</td><td class="num" style="color:var(--blue);">${fmt(sumCard)}</td><td class="num" style="color:var(--orange);">${fmt(sumVch)}</td><td class="num" style="color:var(--blue);">${fmt(sumCash+sumCard+sumVch)}</td></tr>`;
+    html += '</tbody></table>';
+    html += `<div style="margin-top:16px; display:flex; gap:10px;">
+      <button onclick="confirmaImport()" style="background:var(--green); color:white; padding:12px 20px; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Confirmă și salvează</button>
+      <button onclick="document.getElementById('import-preview').style.display='none'" style="background:#e5e7eb; color:#333; padding:12px 20px; border:none; border-radius:8px; cursor:pointer;">Anulează</button>
+    </div>
+    <div style="margin-top:10px; color:var(--sub); font-size:13px;">Datele vor fi salvate pentru <b>${LUNI[luna]} ${an}</b>. Valorile existente vor fi suprascrise.</div>`;
+    window._pendingImport = { agg, an, luna };
+    preview.innerHTML = html;
+  } catch (e) {
+    preview.innerHTML = `<div style="color:var(--red); padding:20px;">Eroare: ${e.message}</div>`;
+  }
+
+  ev.target.value = ''; // reset file input
+}
+
+async function confirmaImport() {
+  if (!window._pendingImport) return;
+  const { agg, an, luna } = window._pendingImport;
+  const preview = document.getElementById('import-preview');
+  preview.innerHTML = '<div class="loading">Se salvează...</div>';
+
+  try {
+    const records = Object.entries(agg).map(([mag, v]) => ({
+      an, luna, magazin: mag,
+      cash: Math.round(v.cash * 100) / 100,
+      card: Math.round(v.card * 100) / 100,
+      voucher: Math.round(v.voucher * 100) / 100,
+      updated_at: new Date().toISOString()
+    }));
+
+    // Upsert prin header Prefer: resolution=merge-duplicates
+    const resp = await fetch(`${API}/incasari_program?on_conflict=an,luna,magazin`, {
+      method: 'POST',
+      headers: {
+        ...HEADERS,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      },
+      body: JSON.stringify(records)
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      throw new Error(`HTTP ${resp.status}: ${txt}`);
+    }
+
+    preview.innerHTML = `<div style="color:var(--green); padding:20px; font-weight:700;">✓ Salvat ${records.length} magazine pentru ${LUNI[luna]} ${an}. Apasă Generează pentru a vedea datele actualizate.</div>`;
+    setTimeout(() => { preview.style.display = 'none'; }, 4000);
+  } catch (e) {
+    preview.innerHTML = `<div style="color:var(--red); padding:20px;">Eroare la salvare: ${e.message}</div>`;
+  }
 }
 
 // ══ AMANET ═══════════════════════════════════════════════════════
