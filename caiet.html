@@ -1510,45 +1510,37 @@ async function editFond(id) {
 }
 
 async function confirmaDecont(utilizator, suma) {
-  if (!confirm(`Confirmi decontul de ${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nCheltuielile vor intra în sold.`)) return;
+  if (!confirm(`Confirmi decontul de ${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nCheltuielile sale (cu categorie COMBUSTIBIL/MATERIALE/etc.) vor deveni operațiuni normale în caiet și vor intra în sold.`)) return;
 
   try {
-    // 1. Marcheaza cheltuielile ca confirmate
+    // 1. Marcheaza cheltuielile din deconturi ca confirmate
     await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ confirmat: true, status: 'confirmat', confirmat_de: currentUser.nume })
     });
 
-    // 2. Cheltuielile raman ca INFO in caiet (nu afecteaza soldul)
-    // Doar marcam PENDING ca CONFIRMAT (tot fara sold)
-    const respPending = await fetch(`${API}/caiet?select=id,tip&tip=like.DECONT ${encodeURIComponent(utilizator)}*PENDING*`, { headers: HEADERS });
+    // 2. Găsește rândurile PENDING din caiet (format: "CATEGORIE (PENDING NICU)")
+    const respPending = await fetch(`${API}/caiet?select=id,tip,observatii&tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, { headers: HEADERS });
     const pending = await respPending.json();
+
     if (Array.isArray(pending)) {
+      // 3. Șterge markerul "(PENDING NICU)" → rămâne doar categoria curată
+      //    Rândurile devin operațiuni reale în caiet și AFECTEAZĂ soldul
       for (const p of pending) {
-        const newTip = p.tip.replace('(PENDING)', '(CONFIRMAT)');
+        const newTip = p.tip.replace(` (PENDING ${utilizator})`, '').trim();
+        const obsExist = p.observatii || '';
+        const marker = `[conf. ${currentUser.nume}]`;
+        const newObs = obsExist ? `${obsExist} ${marker}` : marker;
         await fetch(`${API}/caiet?id=eq.${p.id}`, {
           method: 'PATCH',
           headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ tip: newTip })
+          body: JSON.stringify({ tip: newTip, observatii: newObs })
         });
       }
     }
 
-    // 3. Adauga reincarcare fond (doar asta afecteaza soldul)
-    const today = new Date().toISOString().slice(0, 10);
-    await fetch(`${API}/caiet`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({
-        data: today, tip: 'DECONT', beneficiar: utilizator,
-        intrare: 0, iesire: suma,
-        observatii: 'REÎNCĂRCARE FOND DECONT',
-        utilizator: currentUser.nume
-      })
-    });
-
-    showToast(`Decont confirmat! ${utilizator} primește ${suma.toFixed(2)} RON`);
+    showToast(`Decont confirmat! ${pending.length} operațiuni au intrat în caiet pentru ${utilizator}.`);
     await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi()]);
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
@@ -1565,8 +1557,8 @@ async function returneazaDecont(utilizator) {
       body: JSON.stringify({ returnat: true, status: 'returnat', motiv_retur: motiv || 'Verifică și retrimite' })
     });
 
-    // 2. Sterge PENDING din caiet
-    await fetch(`${API}/caiet?tip=like.DECONT ${encodeURIComponent(utilizator)}*PENDING*`, {
+    // 2. Sterge PENDING din caiet (format nou: "CATEGORIE (PENDING NICU)")
+    await fetch(`${API}/caiet?tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, {
       method: 'DELETE', headers: HEADERS
     });
 
