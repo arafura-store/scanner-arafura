@@ -878,9 +878,28 @@ async function deschideAdaugaBeneficiar(numeSugerat) {
   }
 }
 
+const TIPURI_IESIRE = ['COMBUSTIBIL','MATERIALE','SALARIU','UTILITATI','CHIRII','TRANSPORT','REPARATII','ASIGURARI','TAXE','SERVICII','PROTOCOL','ALTE PLATI'];
+const TIPURI_INTRARE = ['CHIRIE INCASATA','VANZARI','IMPRUMUT INCASAT','DIVIDENDE','SPONSORIZARI','ALTE INCASARI'];
+
+function updateTipSelect(directie) {
+  const sel = document.getElementById('f-tip-select');
+  if (directie === 'in') {
+    sel.innerHTML = '<option value="">— Alege subcategorie ÎNCASARE —</option>' +
+      TIPURI_INTRARE.map(t => `<option value="${t}">${t}</option>`).join('');
+  } else if (directie === 'out') {
+    sel.innerHTML = '<option value="">— Alege subcategorie PLATĂ —</option>' +
+      TIPURI_IESIRE.map(t => `<option value="${t}">${t}</option>`).join('');
+  } else {
+    // Ambele (stare inițială sau reset)
+    sel.innerHTML = `<option value="">— Sau alt tip specific —</option>
+      <optgroup label="↓ PLĂȚI (ieșiri)">${TIPURI_IESIRE.map(t => `<option value="${t}">${t}</option>`).join('')}</optgroup>
+      <optgroup label="↑ ÎNCASĂRI (intrări)">${TIPURI_INTRARE.map(t => `<option value="${t}">${t}</option>`).join('')}</optgroup>`;
+  }
+}
+
 function setTipQuick(tip) {
   document.getElementById('f-tip').value = tip;
-  document.getElementById('f-tip-select').value = '';
+  updateTipSelect(tip === 'INCASARE' ? 'in' : 'out');
   checkTipDirection();
   highlightTipButtons();
 }
@@ -1177,6 +1196,7 @@ async function adaugaOperatiune() {
       document.getElementById('f-beneficiar').value = '';
       document.getElementById('f-suma').value = '';
       document.getElementById('f-obs').value = '';
+      updateTipSelect(null);
       highlightTipButtons();
       checkTipDirection();
       checkBeneficiarValid();
