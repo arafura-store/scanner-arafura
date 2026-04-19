@@ -1509,16 +1509,52 @@ async function verificaDeconturi() {
 }
 
 async function editFond(id) {
-  const suma = parseFloat(document.getElementById(`fond-edit-${id}`).value) || 0;
+  const sumaNoua = parseFloat(document.getElementById(`fond-edit-${id}`).value) || 0;
   try {
+    // Obține fondul vechi + utilizatorul
+    const respOld = await fetch(`${API}/fonduri?id=eq.${id}&select=suma,utilizator`, { headers: HEADERS });
+    const oldArr = await respOld.json();
+    if (!Array.isArray(oldArr) || oldArr.length === 0) { showToast('Fond negăsit'); return; }
+    const sumaVeche = parseFloat(oldArr[0].suma || 0);
+    const userFond = oldArr[0].utilizator;
+    const diff = Math.round((sumaNoua - sumaVeche) * 100) / 100;
+
+    if (diff === 0) { showToast('Nicio modificare'); return; }
+
+    const confirmMsg = diff > 0
+      ? `Suplimentezi fondul ${userFond} cu ${diff.toFixed(2)} RON?\n\nSe va crea automat o operațiune IEȘIRE în caiet pentru această sumă.\nSold nou: ${sumaVeche.toFixed(2)} → ${sumaNoua.toFixed(2)} RON`
+      : `Reduci fondul ${userFond} cu ${Math.abs(diff).toFixed(2)} RON?\n\nSe va crea automat o operațiune INTRARE în caiet pentru această sumă.\nSold nou: ${sumaVeche.toFixed(2)} → ${sumaNoua.toFixed(2)} RON`;
+
+    if (!confirm(confirmMsg)) return;
+
+    // 1. Actualizează fonduri
     await fetch(`${API}/fonduri?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ suma, updated_at: new Date().toISOString() })
+      body: JSON.stringify({ suma: sumaNoua, updated_at: new Date().toISOString() })
     });
-    showToast('Fond actualizat!');
-    await verificaDeconturi();
-  } catch(e) { showToast('Eroare'); }
+
+    // 2. Creează entry caiet
+    const today = new Date().toISOString().slice(0, 10);
+    const entry = {
+      data: today,
+      tip: diff > 0 ? 'SUPLIMENTARE FOND' : 'RETRAGERE FOND',
+      beneficiar: userFond,
+      intrare: diff > 0 ? 0 : Math.abs(diff),
+      iesire: diff > 0 ? diff : 0,
+      observatii: `Modificare fond: ${sumaVeche.toFixed(2)} → ${sumaNoua.toFixed(2)} RON`,
+      utilizator: currentUser.nume,
+      completat_la: new Date().toISOString()
+    };
+    await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(entry)
+    });
+
+    showToast(`✓ Fond actualizat + entry în caiet (${diff > 0 ? '-' : '+'}${Math.abs(diff).toFixed(2)})`);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi()]);
+  } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
 async function confirmaDecont(utilizator, suma) {
