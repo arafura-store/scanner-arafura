@@ -202,19 +202,19 @@
     .search-summary {
       background: var(--card);
       border-left: 3px solid var(--navy);
-      padding: 8px 16px; border-radius: var(--radius); margin-bottom: 12px;
-      font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center;
+      padding: 8px 14px; border-radius: var(--radius); margin-bottom: 12px;
+      font-size: 13px; display: flex; flex-wrap: nowrap; gap: 14px; align-items: center;
       box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04);
+      overflow-x: auto; white-space: nowrap;
     }
     .search-summary .ss-item {
-      display: flex; align-items: baseline; gap: 6px;
-      padding: 4px 0;
+      display: inline-flex; align-items: baseline; gap: 5px; flex-shrink: 0;
     }
-    .search-summary .ss-label { font-size: 10px; color: var(--sub); text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
-    .search-summary .ss-value { font-size: 15px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+    .search-summary .ss-label { font-size: 10px; color: var(--sub); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; }
+    .search-summary .ss-value { font-size: 14px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
     .search-summary .ss-value.green { color: var(--green); }
     .search-summary .ss-value.red { color: var(--red); }
-    .search-summary .ss-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+    .search-summary .ss-divider { width: 1px; height: 18px; background: var(--border); flex-shrink: 0; }
     .clickable-ben { cursor: pointer; text-decoration: underline dotted; text-decoration-color: #cbd5e1; }
     .clickable-ben:hover { color: var(--blue); }
     table {
