@@ -365,12 +365,32 @@ async function onLoginPin() {
 
 async function completeLogin(user) {
   currentUser = user;
-  document.getElementById('header-user').textContent = currentUser.nume;
+  const esteNicu = user.nume === 'NICU';
+  const esteAdmin = ['EUGEN','LIVIA','ELA'].includes(user.nume);
+  document.getElementById('header-user').textContent = currentUser.nume + (esteAdmin ? ' (admin — vizualizare)' : '');
   document.getElementById('btn-logout').style.display = '';
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-main').style.display = '';
   document.getElementById('login-pin').value = '';
   document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+
+  // ADMIN (EUGEN/LIVIA/ELA) — ascunde formularul, arată doar deconturi Nicu
+  const formZone = document.getElementById('form-zone');
+  if (!esteNicu && esteAdmin) {
+    formZone.style.display = 'none';
+    // Adaugă un banner informativ
+    const existing = document.getElementById('admin-banner');
+    if (!existing) {
+      const banner = document.createElement('div');
+      banner.id = 'admin-banner';
+      banner.style.cssText = 'background:#dbeafe; border-left:3px solid var(--blue); padding:12px 16px; border-radius:8px; margin-bottom:14px; color:#1e3a8a; font-size:14px;';
+      banner.innerHTML = `<b>Mod vizualizare</b> — vezi deconturile lui NICU. ${user.nume === 'EUGEN' ? 'Poți șterge din istoric.' : 'Doar citire.'}`;
+      document.getElementById('screen-main').insertBefore(banner, document.getElementById('screen-main').firstChild);
+    }
+  } else {
+    formZone.style.display = '';
+  }
+
   await incarcaBeneficiari();
   await incarcaDate();
 }
@@ -400,14 +420,18 @@ function logout() {
 
 async function incarcaDate() {
   try {
+    // Pentru admin (EUGEN/LIVIA/ELA) afișăm datele lui NICU; altfel datele utilizatorului curent
+    const esteAdmin = ['EUGEN','LIVIA','ELA'].includes(currentUser.nume);
+    const userCaut = esteAdmin ? 'NICU' : currentUser.nume;
+
     // Fetch fond
-    const respFond = await fetch(`${API}/fonduri?utilizator=eq.${encodeURIComponent(currentUser.nume)}&select=suma`, { headers: HEADERS });
+    const respFond = await fetch(`${API}/fonduri?utilizator=eq.${encodeURIComponent(userCaut)}&select=suma`, { headers: HEADERS });
     const fondData = await respFond.json();
     fondTotal = (Array.isArray(fondData) && fondData.length > 0) ? parseFloat(fondData[0].suma || 0) : 0;
 
     // Fetch cheltuieli curente (status=nou, netrimise sau trimise dar neconfirmate)
     const resp = await fetch(
-      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&status=in.(nou,trimis)&confirmat=not.eq.true&returnat=not.eq.true&order=data.desc,created_at.desc`,
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(userCaut)}&status=in.(nou,trimis)&confirmat=not.eq.true&returnat=not.eq.true&order=data.desc,created_at.desc`,
       { headers: HEADERS }
     );
     cheltuieliCurente = await resp.json();
@@ -415,7 +439,7 @@ async function incarcaDate() {
 
     // Check for returned deconts
     const respRetur = await fetch(
-      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&returnat=eq.true&confirmat=not.eq.true&order=created_at.desc&limit=10`,
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(userCaut)}&returnat=eq.true&confirmat=not.eq.true&order=created_at.desc&limit=10`,
       { headers: HEADERS }
     );
     const returnate = await respRetur.json();
@@ -466,8 +490,10 @@ async function incarcaDate() {
 async function incarcaIstoric() {
   const container = document.getElementById('istoric-deconturi');
   try {
+    const esteAdmin = ['EUGEN','LIVIA','ELA'].includes(currentUser.nume);
+    const userCaut = esteAdmin ? 'NICU' : currentUser.nume;
     const resp = await fetch(
-      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&status=eq.confirmat&order=created_at.desc&limit=50`,
+      `${API}/deconturi?select=*&utilizator=eq.${encodeURIComponent(userCaut)}&status=eq.confirmat&order=created_at.desc&limit=50`,
       { headers: HEADERS }
     );
     const data = await resp.json();
