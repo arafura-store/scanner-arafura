@@ -455,15 +455,23 @@ async function incarcaIstoric() {
 
     if (deconturi.length === 0) { container.innerHTML = ''; return; }
 
+    const esteEugen = currentUser && currentUser.nume === 'EUGEN';
     let html = '<h3 style="font-size:16px; margin-bottom:12px; color:var(--sub);">Ultimele deconturi</h3>';
 
     for (let i = 0; i < deconturi.length; i++) {
       const dec = deconturi[i];
       const dt = new Date(dec.items[0].created_at).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
+      const ids = dec.items.map(d => d.id).join(',');
+      const btnDel = esteEugen
+        ? `<button onclick="event.preventDefault(); event.stopPropagation(); stergeIstoricDecont('${ids}', '${dt}')" style="background:var(--red); color:white; border:none; border-radius:6px; padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer; margin-left:10px;" title="Șterge acest decont din istoric (doar EUGEN)">🗑 Șterge</button>`
+        : '';
       html += `<details style="margin-bottom:10px; background:var(--card); border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); overflow:hidden;">
         <summary style="padding:14px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-weight:600;">
           <span>Decont ${dt} — ${dec.items.length} cheltuieli</span>
-          <span style="color:var(--green); font-weight:700;">${dec.total.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON — CONFIRMAT</span>
+          <span style="display:flex; align-items:center;">
+            <span style="color:var(--green); font-weight:700;">${dec.total.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON — CONFIRMAT</span>
+            ${btnDel}
+          </span>
         </summary>
         <table style="box-shadow:none; border-radius:0;">
           <thead><tr><th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th></tr></thead>
@@ -650,6 +658,46 @@ async function trimiteDecont() {
     // Scroll sus
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (e) { showToast('Eroare: ' + e.message); }
+}
+
+async function stergeIstoricDecont(idsStr, dtLabel) {
+  if (!currentUser || currentUser.nume !== 'EUGEN') {
+    showToast('Doar EUGEN poate șterge');
+    return;
+  }
+  if (!confirm(`Șterge definitiv decontul din ${dtLabel}?\n\nSe vor șterge:\n- ${idsStr.split(',').length} operațiuni din deconturi\n- operațiunile corespondente din caiet\n\nAcțiunea este IREVERSIBILĂ.`)) return;
+
+  try {
+    const ids = idsStr.split(',').map(Number);
+    // Găsește beneficiari + data + sume din deconturi ca să identifice rândurile corespondente din caiet
+    const respDec = await fetch(`${API}/deconturi?id=in.(${ids.join(',')})&select=*`, { headers: HEADERS });
+    const decItems = await respDec.json();
+
+    // Șterge operațiunile corespondente din caiet
+    // Caiet entries au: data, beneficiar, suma, utilizator=utilizatorul decontului
+    for (const d of decItems) {
+      const sumaVal = parseFloat(d.suma);
+      const intrare = sumaVal < 0 ? Math.abs(sumaVal) : 0;
+      const iesire = sumaVal >= 0 ? sumaVal : 0;
+      // Match pe: data, beneficiar, intrare, iesire, utilizator
+      const benEnc = encodeURIComponent(d.beneficiar);
+      await fetch(`${API}/caiet?data=eq.${d.data}&beneficiar=eq.${benEnc}&intrare=eq.${intrare}&iesire=eq.${iesire}&utilizator=eq.${encodeURIComponent(d.utilizator)}`, {
+        method: 'DELETE',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' }
+      });
+    }
+
+    // Șterge din deconturi
+    await fetch(`${API}/deconturi?id=in.(${ids.join(',')})`, {
+      method: 'DELETE',
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' }
+    });
+
+    showToast(`✓ Decont ${dtLabel} șters`);
+    await incarcaDate();
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  }
 }
 
 async function acceptaRetur() {
