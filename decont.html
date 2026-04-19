@@ -232,6 +232,23 @@ let currentUser = null;
 let fondTotal = 0;
 let cheltuieliCurente = [];
 
+// ── Sesiune persistentă 7 zile (nu cere PIN la refresh) ──────────
+const SESSION_KEY = 'decont_session';
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+function saveSession(user) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + SESSION_DURATION_MS })); } catch {}
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const { user, expires } = JSON.parse(raw);
+    if (!user || !expires || Date.now() > expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return user;
+  } catch { return null; }
+}
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
 // Beneficiari permiși pentru Nicu (categorii filtrate)
 const CATEGORII_PERMISE = ['VEHICUL','MAGAZIN','PERSOANA','SPATIU','FURNIZOR','UTILITATE','ALTUL'];
 let beneficiariCunoscuti = [];
@@ -339,26 +356,47 @@ async function onLoginPin() {
       document.getElementById('login-pin').value = '';
       return;
     }
-    currentUser = data[0];
-    document.getElementById('header-user').textContent = currentUser.nume;
-    document.getElementById('btn-logout').style.display = '';
-    document.getElementById('screen-login').style.display = 'none';
-    document.getElementById('screen-main').style.display = '';
-    document.getElementById('login-pin').value = '';
-    document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
-    await incarcaBeneficiari();
-    await incarcaDate();
+    saveSession(data[0]);
+    await completeLogin(data[0]);
   } catch (e) {
     showToast('Eroare conexiune');
   }
 }
 
+async function completeLogin(user) {
+  currentUser = user;
+  document.getElementById('header-user').textContent = currentUser.nume;
+  document.getElementById('btn-logout').style.display = '';
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-main').style.display = '';
+  document.getElementById('login-pin').value = '';
+  document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+  await incarcaBeneficiari();
+  await incarcaDate();
+}
+
 function logout() {
+  clearSession();
   currentUser = null;
   document.getElementById('screen-login').style.display = '';
   document.getElementById('screen-main').style.display = 'none';
   document.getElementById('btn-logout').style.display = 'none';
+  setTimeout(() => document.getElementById('login-pin').focus(), 50);
 }
+
+// ── Auto-login dupa refresh + focus pe PIN daca nu e logat ────────
+(function init() {
+  const saved = loadSession();
+  if (saved) {
+    completeLogin(saved);
+  } else {
+    // focus pe PIN input
+    setTimeout(() => {
+      const el = document.getElementById('login-pin');
+      if (el) el.focus();
+    }, 100);
+  }
+})();
 
 async function incarcaDate() {
   try {
