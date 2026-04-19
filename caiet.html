@@ -382,15 +382,21 @@
         </div>
         <div class="form-group">
           <label>Tip operațiune</label>
-          <div style="display:flex; gap:6px; margin-bottom:6px;">
+          <div style="display:flex; gap:6px; margin-bottom:8px;">
             <button type="button" id="btn-tip-incasare" onclick="setTipQuick('INCASARE')" style="flex:1; padding:10px; border:2px solid var(--green); background:white; color:var(--green); border-radius:8px; font-weight:700; cursor:pointer; font-size:14px;">↑ INCASARE</button>
             <button type="button" id="btn-tip-plata" onclick="setTipQuick('PLATA')" style="flex:1; padding:10px; border:2px solid var(--red); background:white; color:var(--red); border-radius:8px; font-weight:700; cursor:pointer; font-size:14px;">↓ PLATA</button>
           </div>
-          <div style="position:relative;">
-            <input type="text" id="f-tip" placeholder="sau scrie alt tip: COMBUSTIBIL, CHIRIE..." autocomplete="off"
-              oninput="showSuggestions('tip', this.value); checkTipDirection(); highlightTipButtons();" onfocus="showSuggestions('tip', this.value)">
-            <div class="suggestions" id="sug-tip" style="display:none;"></div>
-          </div>
+          <select id="f-tip-select" onchange="setTipFromDropdown(this.value)" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:white;">
+            <option value="">— Sau alt tip —</option>
+            <option value="COMBUSTIBIL">COMBUSTIBIL</option>
+            <option value="UTILITATI">UTILITATI</option>
+            <option value="CHIRII">CHIRII</option>
+            <option value="DP AMANET">DP AMANET (intrare)</option>
+            <option value="DI AMANET">DI AMANET (ieșire)</option>
+            <option value="DEPUNERE">DEPUNERE (la bancă)</option>
+            <option value="RETRAGERE">RETRAGERE (de la bancă)</option>
+          </select>
+          <input type="hidden" id="f-tip">
         </div>
       </div>
       <div class="form-row">
@@ -734,9 +740,15 @@ function selectSuggestion(field, value) {
 
 function setTipQuick(tip) {
   document.getElementById('f-tip').value = tip;
+  document.getElementById('f-tip-select').value = '';
   checkTipDirection();
   highlightTipButtons();
-  document.getElementById('sug-tip').style.display = 'none';
+}
+
+function setTipFromDropdown(tip) {
+  document.getElementById('f-tip').value = tip;
+  checkTipDirection();
+  highlightTipButtons();
 }
 
 function highlightTipButtons() {
@@ -762,8 +774,8 @@ function highlightTipButtons() {
 }
 
 function tipDirection(tip) {
-  const tipuriIntrare = ['INCASARE', 'RETRAGERE'];
-  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'DEPUNERE', 'CHIRIE SPATIU', 'UTILITATI', 'ROVINIETA', 'MANCARE', 'TRECERE POD'];
+  const tipuriIntrare = ['INCASARE', 'RETRAGERE', 'DP AMANET'];
+  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'UTILITATI', 'CHIRII', 'DI AMANET', 'DEPUNERE'];
   if (tipuriIntrare.includes(tip)) return 'in';
   if (tipuriIesire.includes(tip)) return 'out';
   return null;
@@ -1010,6 +1022,7 @@ async function adaugaOperatiune() {
       showToast('Operațiune adăugată!');
       // Reset form (keep date)
       document.getElementById('f-tip').value = '';
+      document.getElementById('f-tip-select').value = '';
       document.getElementById('f-beneficiar').value = '';
       document.getElementById('f-suma').value = '';
       document.getElementById('f-obs').value = '';
