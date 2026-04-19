@@ -377,13 +377,13 @@
       <h3>Operațiune nouă</h3>
       <div class="form-row">
         <div class="form-group" style="max-width:160px;">
-          <label>Data chitanță</label>
+          <label>Data operațiune</label>
           <input type="date" id="f-data">
         </div>
         <div class="form-group">
           <label>Tip operațiune</label>
           <div style="position:relative;">
-            <input type="text" id="f-tip" placeholder="ex: INCASARE" autocomplete="off"
+            <input type="text" id="f-tip" value="INCASARE-PLATA" placeholder="ex: INCASARE" autocomplete="off"
               oninput="showSuggestions('tip', this.value); checkTipDirection();" onfocus="showSuggestions('tip', this.value)">
             <div class="suggestions" id="sug-tip" style="display:none;"></div>
           </div>
@@ -974,8 +974,8 @@ async function adaugaOperatiune() {
     });
     if (resp.ok) {
       showToast('Operațiune adăugată!');
-      // Reset form (keep date)
-      document.getElementById('f-tip').value = '';
+      // Reset form (keep date, presetează tip înapoi)
+      document.getElementById('f-tip').value = 'INCASARE-PLATA';
       document.getElementById('f-beneficiar').value = '';
       document.getElementById('f-intrare').value = '';
       document.getElementById('f-iesire').value = '';
