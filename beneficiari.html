@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Beneficiari — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #1e293b; --navy-dark: #0f172a;
+      --blue: #1e40af; --blue-light: #dbeafe;
+      --green: #047857; --green-light: #d1fae5;
+      --red: #b91c1c; --red-light: #fee2e2;
+      --orange: #c2410c; --orange-light: #ffedd5;
+      --purple: #6d28d9; --purple-light: #ede9fe;
+      --teal: #0f766e; --bg: #f8fafc; --card: #fff;
+      --text: #0f172a; --sub: #64748b; --border: #e2e8f0;
+      --radius: 12px;
+    }
+    body { font-family: 'Segoe UI', -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+    .header {
+      background: linear-gradient(135deg, var(--navy), var(--navy-dark));
+      color: white; padding: 12px 24px; display: flex; justify-content: space-between;
+      align-items: center; box-shadow: 0 2px 12px rgba(15,23,42,.25);
+      position: sticky; top: 0; z-index: 100; gap: 16px;
+    }
+    .header h1 { font-size: 19px; font-weight: 700; }
+    .header button {
+      padding: 8px 16px; font-size: 13px; font-weight: 600;
+      border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+      background: rgba(255,255,255,.1); color: white; cursor: pointer;
+    }
+    .header a { color: rgba(255,255,255,.8); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid rgba(255,255,255,.15); border-radius: 6px; }
+    .header a:hover { background: rgba(255,255,255,.1); }
+
+    .login-screen { display: flex; flex-direction: column; align-items: center; padding: 60px 24px; gap: 20px; }
+    .login-screen input { width: 200px; padding: 18px; font-size: 32px; text-align: center; letter-spacing: 12px; border: 2px solid var(--border); border-radius: var(--radius); }
+    .login-screen input:focus { border-color: var(--blue); outline: none; }
+
+    .container { max-width: 1400px; margin: 20px auto; padding: 0 16px; }
+
+    .stats {
+      display: flex; gap: 14px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .stat-card {
+      background: var(--card); border-radius: var(--radius); padding: 12px 18px;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04);
+      min-width: 140px;
+    }
+    .stat-card .label { font-size: 10px; color: var(--sub); text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+    .stat-card .value { font-size: 22px; font-weight: 800; color: var(--navy); margin-top: 2px; }
+
+    .toolbar {
+      background: var(--card); border-radius: var(--radius); padding: 14px;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04);
+      margin-bottom: 14px;
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .toolbar input, .toolbar select {
+      padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 13px; font-family: inherit; background: white;
+    }
+    .toolbar input[type=text] { min-width: 220px; flex: 1; }
+    .toolbar button {
+      padding: 9px 16px; border: none; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 700; font-family: inherit;
+    }
+    .btn-add { background: var(--green); color: white; }
+    .btn-merge { background: var(--orange); color: white; }
+    .btn-merge:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+
+    table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      background: var(--card); border-radius: var(--radius); overflow: hidden;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04);
+      font-size: 13px;
+    }
+    th { background: var(--navy); color: white; padding: 12px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+    tr:hover td { background: #f8fafc; }
+    tr.inactiv td { opacity: 0.45; background: #fafafa; }
+    tr.selected td { background: #fef3c7 !important; }
+
+    .cat-chip { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; color: white; }
+    .cat-MAGAZIN   { background: #1a56a8; }
+    .cat-BANCA     { background: #0891b2; }
+    .cat-FURNIZOR  { background: var(--orange); }
+    .cat-VEHICUL   { background: var(--purple); }
+    .cat-PERSOANA  { background: var(--green); }
+    .cat-SPATIU    { background: #7c3aed; }
+    .cat-AMANET    { background: #be185d; }
+    .cat-UTILITATE { background: var(--teal); }
+    .cat-ALTUL     { background: #6b7280; }
+
+    .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+    .row-actions button {
+      padding: 4px 8px; border: 1px solid var(--border); background: white; border-radius: 6px;
+      cursor: pointer; font-size: 11px; font-weight: 600; color: var(--sub);
+    }
+    .row-actions button:hover { border-color: var(--navy); color: var(--navy); }
+    .row-actions .btn-split { color: var(--orange); border-color: #fed7aa; }
+    .row-actions .btn-del { color: var(--red); border-color: #fecaca; }
+
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    th.num, td.num { text-align: right; }
+
+    /* Modal */
+    .modal-bg {
+      position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal {
+      background: var(--card); border-radius: var(--radius); padding: 24px;
+      max-width: 520px; width: 100%; box-shadow: 0 20px 50px rgba(0,0,0,.3);
+    }
+    .modal h2 { font-size: 18px; color: var(--navy); margin-bottom: 16px; }
+    .modal label { display: block; font-size: 12px; font-weight: 700; color: var(--sub); margin-bottom: 4px; margin-top: 10px; text-transform: uppercase; letter-spacing: .5px; }
+    .modal input, .modal select, .modal textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 14px; font-family: inherit;
+    }
+    .modal textarea { resize: vertical; min-height: 60px; }
+    .modal .actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+    .modal .actions button {
+      padding: 10px 18px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px;
+    }
+    .btn-primary { background: var(--navy); color: white; }
+    .btn-danger { background: var(--red); color: white; }
+    .btn-cancel { background: #f1f5f9; color: var(--sub); }
+
+    .info-box {
+      background: #eff6ff; border-left: 3px solid var(--blue); padding: 10px 14px;
+      border-radius: 6px; font-size: 13px; color: #1e3a8a; margin: 12px 0;
+    }
+    .warn-box {
+      background: #fef3c7; border-left: 3px solid #d97706; padding: 10px 14px;
+      border-radius: 6px; font-size: 13px; color: #92400e; margin: 12px 0;
+    }
+
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e; color: white; padding: 12px 22px; border-radius: 24px;
+      font-size: 15px; z-index: 300; transition: transform .3s;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.err { background: var(--red); }
+    .toast.ok { background: var(--green); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARAFURA — Beneficiari</h1>
+  <div style="display:flex; gap:8px;">
+    <a href="caiet.html">← Caiet</a>
+    <button onclick="logout()" id="btn-logout" style="display:none;">Ieși</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- LOGIN -->
+<div id="screen-login" class="login-screen">
+  <div style="font-size:48px;">🔐</div>
+  <h2>Admin Beneficiari</h2>
+  <p style="color:var(--sub);">Doar EUGEN are acces</p>
+  <input type="password" inputmode="numeric" maxlength="4" id="login-pin" placeholder="****" oninput="onLoginPin()" autofocus>
+</div>
+
+<!-- MAIN -->
+<div id="screen-main" style="display:none;">
+  <div class="container">
+    <div class="stats" id="stats"></div>
+
+    <div class="toolbar">
+      <input type="text" id="q-search" placeholder="🔍 Caută nume..." oninput="renderTable()">
+      <select id="q-categorie" onchange="renderTable()">
+        <option value="">Toate categoriile</option>
+        <option value="MAGAZIN">MAGAZIN</option>
+        <option value="BANCA">BANCA</option>
+        <option value="FURNIZOR">FURNIZOR</option>
+        <option value="VEHICUL">VEHICUL</option>
+        <option value="PERSOANA">PERSOANA</option>
+        <option value="SPATIU">SPATIU</option>
+        <option value="AMANET">AMANET</option>
+        <option value="UTILITATE">UTILITATE</option>
+        <option value="ALTUL">ALTUL</option>
+      </select>
+      <select id="q-activ" onchange="renderTable()">
+        <option value="">Toți (activi + inactivi)</option>
+        <option value="true" selected>Doar activi</option>
+        <option value="false">Doar inactivi</option>
+      </select>
+      <select id="q-sort" onchange="renderTable()">
+        <option value="nume">Sortare: Nume A-Z</option>
+        <option value="nume-desc">Nume Z-A</option>
+        <option value="nr-desc" selected>Cele mai folosite</option>
+        <option value="nr">Cele mai puțin folosite</option>
+        <option value="recent">Cele mai recent folosite</option>
+        <option value="categorie">Categorie</option>
+      </select>
+      <div style="flex:1;"></div>
+      <button class="btn-add" onclick="deschideAdaugaModal()">+ Adaugă nou</button>
+      <button class="btn-merge" id="btn-merge" disabled onclick="deschideMergeModal()">Unifică selectate</button>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px;"><input type="checkbox" id="chk-all" onchange="toggleAll(this.checked)"></th>
+          <th>Nume</th>
+          <th>Categorie</th>
+          <th class="num">Operațiuni</th>
+          <th>Ultima folosire</th>
+          <th style="width:120px;">Status</th>
+          <th style="width:220px;">Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MODAL: EDIT / ADD -->
+<div id="modal-edit" class="modal-bg" style="display:none;">
+  <div class="modal">
+    <h2 id="modal-edit-title">Editează beneficiar</h2>
+    <label>Nume</label>
+    <input type="text" id="m-nume" style="text-transform:uppercase;">
+    <label>Categorie</label>
+    <select id="m-categorie">
+      <option value="MAGAZIN">MAGAZIN</option>
+      <option value="BANCA">BANCA</option>
+      <option value="FURNIZOR">FURNIZOR</option>
+      <option value="VEHICUL">VEHICUL</option>
+      <option value="PERSOANA">PERSOANA</option>
+      <option value="SPATIU">SPATIU</option>
+      <option value="AMANET">AMANET</option>
+      <option value="UTILITATE">UTILITATE</option>
+      <option value="ALTUL">ALTUL</option>
+    </select>
+    <label>Activ</label>
+    <select id="m-activ">
+      <option value="true">DA (apare în caiet)</option>
+      <option value="false">NU (dezactivat)</option>
+    </select>
+    <label>Observații interne (opțional)</label>
+    <textarea id="m-observatii" rows="2"></textarea>
+    <div id="m-info" class="info-box" style="display:none;"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="inchideModal('modal-edit')">Anulează</button>
+      <button class="btn-primary" onclick="salveazaBeneficiar()">Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MERGE DUPLICATES -->
+<div id="modal-merge" class="modal-bg" style="display:none;">
+  <div class="modal">
+    <h2>🔗 Unifică beneficiari</h2>
+    <div id="merge-info"></div>
+    <label>Păstrează ca beneficiar final:</label>
+    <select id="m-target"></select>
+    <div class="warn-box">
+      ⚠ Toate operațiunile istorice care au beneficiar din cei selectați vor fi mutate la beneficiarul final. Ceilalți vor fi șterși din listă. Acțiunea este ireversibilă.
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="inchideModal('modal-merge')">Anulează</button>
+      <button class="btn-danger" onclick="executaMerge()">Unifică</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SPLIT HYBRID -->
+<div id="modal-split" class="modal-bg" style="display:none;">
+  <div class="modal">
+    <h2>✂️ Desparte hibrid</h2>
+    <p style="color:var(--sub); font-size:13px; margin-bottom:10px;">
+      Desparți un beneficiar hibrid (ex: "SALARIU ANITA") în entitate curată + descriere în observații.
+    </p>
+    <label>Beneficiar actual (hibrid)</label>
+    <input type="text" id="s-original" readonly style="background:#f8fafc; color:var(--sub);">
+
+    <label>Entitate reală (beneficiar curat)</label>
+    <input type="text" id="s-entitate" style="text-transform:uppercase;" placeholder="ex: ANITA">
+
+    <label>Categorie pentru entitate</label>
+    <select id="s-categorie">
+      <option value="PERSOANA">PERSOANA</option>
+      <option value="MAGAZIN">MAGAZIN</option>
+      <option value="BANCA">BANCA</option>
+      <option value="FURNIZOR">FURNIZOR</option>
+      <option value="VEHICUL">VEHICUL</option>
+      <option value="SPATIU">SPATIU</option>
+      <option value="AMANET">AMANET</option>
+      <option value="UTILITATE">UTILITATE</option>
+      <option value="ALTUL">ALTUL</option>
+    </select>
+
+    <label>Descriere care merge la observații (fără paranteze)</label>
+    <input type="text" id="s-descriere" placeholder="ex: salariu">
+    <div id="s-preview" class="info-box" style="display:none;"></div>
+
+    <div class="actions">
+      <button class="btn-cancel" onclick="inchideModal('modal-split')">Anulează</button>
+      <button class="btn-primary" onclick="executaSplit()">Desparte și Aplică</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+
+// Sesiune partajată cu caiet.html
+const SESSION_KEY = 'caiet_session';
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const { user, expires } = JSON.parse(raw);
+    if (!user || Date.now() > expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return user;
+  } catch { return null; }
+}
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+let currentUser = null;
+let allBeneficiari = [];  // toată lista din DB
+let operatiuniStats = {}; // nume -> {nr, ultima}
+let selectedIds = new Set();
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function onLoginPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin.length < 4) return;
+  try {
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect', 'err');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    const user = data[0];
+    if (user.nume !== 'EUGEN') {
+      showToast('Acces refuzat — doar EUGEN', 'err');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    saveSession(user);
+    await completeLogin(user);
+  } catch (e) { showToast('Eroare conexiune', 'err'); }
+}
+
+function saveSession(user) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 12*60*60*1000 }));
+}
+
+async function completeLogin(user) {
+  currentUser = user;
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-main').style.display = '';
+  document.getElementById('btn-logout').style.display = '';
+  document.getElementById('login-pin').value = '';
+  await incarcaTot();
+}
+
+function logout() {
+  clearSession();
+  currentUser = null;
+  document.getElementById('screen-login').style.display = '';
+  document.getElementById('screen-main').style.display = 'none';
+  document.getElementById('btn-logout').style.display = 'none';
+}
+
+async function incarcaTot() {
+  try {
+    const [benResp, statsResp] = await Promise.all([
+      fetch(`${API}/beneficiari?select=*&order=nume.asc&limit=5000`, { headers: HEADERS }),
+      fetchAllCaietStats()
+    ]);
+    allBeneficiari = await benResp.json();
+    operatiuniStats = statsResp;
+    renderStats();
+    renderTable();
+  } catch (e) { showToast('Eroare la încărcare', 'err'); }
+}
+
+async function fetchAllCaietStats() {
+  // Agregăm client-side — fetch TOATE înregistrările cu beneficiar, apoi count
+  let all = [];
+  let off = 0;
+  while (true) {
+    const resp = await fetch(`${API}/caiet?select=beneficiar,data&limit=1000&offset=${off}`, { headers: HEADERS });
+    const d = await resp.json();
+    if (!Array.isArray(d) || d.length === 0) break;
+    all.push(...d);
+    off += 1000;
+    if (d.length < 1000) break;
+  }
+  const stats = {};
+  for (const r of all) {
+    const k = (r.beneficiar || '').trim().toUpperCase();
+    if (!k) continue;
+    if (!stats[k]) stats[k] = { nr: 0, ultima: null };
+    stats[k].nr++;
+    if (!stats[k].ultima || r.data > stats[k].ultima) stats[k].ultima = r.data;
+  }
+  return stats;
+}
+
+function renderStats() {
+  const total = allBeneficiari.length;
+  const activi = allBeneficiari.filter(b => b.activ).length;
+  const inactivi = total - activi;
+  const perCat = {};
+  for (const b of allBeneficiari) {
+    if (!b.activ) continue;
+    perCat[b.categorie] = (perCat[b.categorie] || 0) + 1;
+  }
+  const stats = document.getElementById('stats');
+  let html = `
+    <div class="stat-card"><div class="label">Total</div><div class="value">${total}</div></div>
+    <div class="stat-card"><div class="label">Activi</div><div class="value" style="color:var(--green);">${activi}</div></div>
+    <div class="stat-card"><div class="label">Inactivi</div><div class="value" style="color:var(--sub);">${inactivi}</div></div>
+  `;
+  for (const [cat, nr] of Object.entries(perCat).sort((a,b) => b[1]-a[1])) {
+    html += `<div class="stat-card"><div class="label">${cat}</div><div class="value">${nr}</div></div>`;
+  }
+  stats.innerHTML = html;
+}
+
+function renderTable() {
+  const q = document.getElementById('q-search').value.trim().toUpperCase();
+  const fCat = document.getElementById('q-categorie').value;
+  const fActiv = document.getElementById('q-activ').value;
+  const sort = document.getElementById('q-sort').value;
+
+  let list = allBeneficiari.slice();
+  if (q) list = list.filter(b => b.nume.includes(q));
+  if (fCat) list = list.filter(b => b.categorie === fCat);
+  if (fActiv === 'true') list = list.filter(b => b.activ);
+  else if (fActiv === 'false') list = list.filter(b => !b.activ);
+
+  // Enrich with stats
+  list.forEach(b => {
+    const s = operatiuniStats[b.nume] || { nr: 0, ultima: null };
+    b._nr = s.nr; b._ultima = s.ultima;
+  });
+
+  // Sort
+  switch (sort) {
+    case 'nume':       list.sort((a,b) => a.nume.localeCompare(b.nume)); break;
+    case 'nume-desc':  list.sort((a,b) => b.nume.localeCompare(a.nume)); break;
+    case 'nr-desc':    list.sort((a,b) => (b._nr||0) - (a._nr||0) || a.nume.localeCompare(b.nume)); break;
+    case 'nr':         list.sort((a,b) => (a._nr||0) - (b._nr||0) || a.nume.localeCompare(b.nume)); break;
+    case 'recent':     list.sort((a,b) => (b._ultima||'').localeCompare(a._ultima||'') || a.nume.localeCompare(b.nume)); break;
+    case 'categorie':  list.sort((a,b) => a.categorie.localeCompare(b.categorie) || a.nume.localeCompare(b.nume)); break;
+  }
+
+  const tb = document.getElementById('tbody');
+  if (list.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--sub);">Niciun beneficiar nu corespunde filtrelor</td></tr>';
+    return;
+  }
+  let html = '';
+  for (const b of list) {
+    const isSel = selectedIds.has(b.id);
+    const ultimaTxt = b._ultima ? new Date(b._ultima).toLocaleDateString('ro-RO') : '—';
+    html += `<tr class="${b.activ ? '' : 'inactiv'} ${isSel ? 'selected' : ''}" data-id="${b.id}">
+      <td><input type="checkbox" ${isSel ? 'checked' : ''} onchange="toggleSelect(${b.id}, this.checked)"></td>
+      <td style="font-weight:600;">${escapeHtml(b.nume)}</td>
+      <td><span class="cat-chip cat-${b.categorie}">${b.categorie}</span></td>
+      <td class="num" style="font-weight:700;">${b._nr || 0}</td>
+      <td style="color:var(--sub); font-size:12px;">${ultimaTxt}</td>
+      <td>${b.activ ? '<span style="color:var(--green); font-weight:700;">✓ ACTIV</span>' : '<span style="color:var(--sub);">✗ INACTIV</span>'}</td>
+      <td><div class="row-actions">
+        <button onclick="deschideEditModal(${b.id})">Editează</button>
+        <button onclick="toggleActiv(${b.id})">${b.activ ? 'Dezactivează' : 'Activează'}</button>
+        <button class="btn-split" onclick="deschideSplitModal(${b.id})">Desparte</button>
+        <button class="btn-del" onclick="stergeBeneficiar(${b.id})">Șterge</button>
+      </div></td>
+    </tr>`;
+  }
+  tb.innerHTML = html;
+  updateMergeButton();
+}
+
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  const tr = document.querySelector(`tr[data-id="${id}"]`);
+  if (tr) tr.classList.toggle('selected', checked);
+  updateMergeButton();
+}
+function toggleAll(checked) {
+  selectedIds.clear();
+  if (checked) {
+    document.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+      selectedIds.add(parseInt(tr.dataset.id));
+    });
+  }
+  renderTable();
+  document.getElementById('chk-all').checked = checked;
+}
+function updateMergeButton() {
+  const btn = document.getElementById('btn-merge');
+  btn.disabled = selectedIds.size < 2;
+  btn.textContent = selectedIds.size >= 2 ? `Unifică ${selectedIds.size} selectați` : 'Unifică selectate';
+}
+
+function escapeHtml(s) {
+  return (s || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ══ EDIT / ADD ═══════════════════════════════════════════════════
+let editingId = null;
+function deschideAdaugaModal() {
+  editingId = null;
+  document.getElementById('modal-edit-title').textContent = 'Adaugă beneficiar nou';
+  document.getElementById('m-nume').value = '';
+  document.getElementById('m-categorie').value = 'ALTUL';
+  document.getElementById('m-activ').value = 'true';
+  document.getElementById('m-observatii').value = '';
+  document.getElementById('m-info').style.display = 'none';
+  document.getElementById('modal-edit').style.display = 'flex';
+  document.getElementById('m-nume').focus();
+}
+function deschideEditModal(id) {
+  const b = allBeneficiari.find(x => x.id === id);
+  if (!b) return;
+  editingId = id;
+  document.getElementById('modal-edit-title').textContent = `Editează: ${b.nume}`;
+  document.getElementById('m-nume').value = b.nume;
+  document.getElementById('m-categorie').value = b.categorie;
+  document.getElementById('m-activ').value = String(b.activ);
+  document.getElementById('m-observatii').value = b.observatii || '';
+  const nr = (operatiuniStats[b.nume] || {}).nr || 0;
+  if (nr > 0) {
+    document.getElementById('m-info').style.display = '';
+    document.getElementById('m-info').innerHTML = `ℹ Acest beneficiar apare în <b>${nr}</b> operațiuni istorice. Dacă redenumești, istoricul se actualizează automat.`;
+  } else {
+    document.getElementById('m-info').style.display = 'none';
+  }
+  document.getElementById('modal-edit').style.display = 'flex';
+}
+function inchideModal(id) { document.getElementById(id).style.display = 'none'; }
+
+async function salveazaBeneficiar() {
+  const nume = document.getElementById('m-nume').value.trim().toUpperCase();
+  const categorie = document.getElementById('m-categorie').value;
+  const activ = document.getElementById('m-activ').value === 'true';
+  const obs = document.getElementById('m-observatii').value.trim();
+  if (!nume) { showToast('Completează numele', 'err'); return; }
+
+  try {
+    if (editingId === null) {
+      // INSERT
+      const resp = await fetch(`${API}/beneficiari`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ nume, categorie, activ, observatii: obs || null })
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        showToast(txt.includes('duplicate') ? 'Beneficiar există deja' : 'Eroare: ' + txt, 'err');
+        return;
+      }
+      showToast('✓ Adăugat', 'ok');
+    } else {
+      // UPDATE
+      const old = allBeneficiari.find(b => b.id === editingId);
+      const resp = await fetch(`${API}/beneficiari?id=eq.${editingId}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ nume, categorie, activ, observatii: obs || null, updated_at: new Date().toISOString() })
+      });
+      if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+      // Dacă s-a schimbat numele, actualizează și în caiet
+      if (old && old.nume !== nume) {
+        await fetch(`${API}/caiet?beneficiar=eq.${encodeURIComponent(old.nume)}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ beneficiar: nume })
+        });
+      }
+      showToast('✓ Salvat', 'ok');
+    }
+    inchideModal('modal-edit');
+    await incarcaTot();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function toggleActiv(id) {
+  const b = allBeneficiari.find(x => x.id === id);
+  if (!b) return;
+  try {
+    await fetch(`${API}/beneficiari?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ activ: !b.activ, updated_at: new Date().toISOString() })
+    });
+    showToast(b.activ ? '✗ Dezactivat' : '✓ Activat', 'ok');
+    await incarcaTot();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function stergeBeneficiar(id) {
+  const b = allBeneficiari.find(x => x.id === id);
+  if (!b) return;
+  const nr = (operatiuniStats[b.nume] || {}).nr || 0;
+  if (nr > 0) {
+    if (!confirm(`${b.nume} apare în ${nr} operațiuni. Ștergi DOAR din listă (operațiunile rămân intacte). Continui?`)) return;
+  } else {
+    if (!confirm(`Ștergi "${b.nume}"?`)) return;
+  }
+  try {
+    await fetch(`${API}/beneficiari?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' }
+    });
+    showToast('✓ Șters', 'ok');
+    selectedIds.delete(id);
+    await incarcaTot();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+// ══ MERGE ════════════════════════════════════════════════════════
+function deschideMergeModal() {
+  if (selectedIds.size < 2) return;
+  const selected = allBeneficiari.filter(b => selectedIds.has(b.id));
+  const info = document.getElementById('merge-info');
+  const totalOps = selected.reduce((s, b) => s + ((operatiuniStats[b.nume] || {}).nr || 0), 0);
+  info.innerHTML = `<p style="font-size:13px; color:var(--sub);">Beneficiari selectați (${selected.length}), total operațiuni istorice: <b>${totalOps}</b></p>
+    <ul style="padding-left:20px; margin:8px 0; font-size:13px;">` +
+    selected.map(b => `<li><b>${escapeHtml(b.nume)}</b> (${(operatiuniStats[b.nume]||{}).nr||0} op.) — ${b.categorie}</li>`).join('') +
+    `</ul>`;
+
+  const tgt = document.getElementById('m-target');
+  tgt.innerHTML = selected.map(b => `<option value="${b.id}">${escapeHtml(b.nume)} — ${b.categorie} (${(operatiuniStats[b.nume]||{}).nr||0} op.)</option>`).join('');
+  // Default: cel cu cele mai multe operațiuni
+  const best = selected.reduce((max, b) => ((operatiuniStats[b.nume]||{}).nr||0) > ((operatiuniStats[max.nume]||{}).nr||0) ? b : max, selected[0]);
+  tgt.value = best.id;
+
+  document.getElementById('modal-merge').style.display = 'flex';
+}
+
+async function executaMerge() {
+  const targetId = parseInt(document.getElementById('m-target').value);
+  const target = allBeneficiari.find(b => b.id === targetId);
+  const sources = allBeneficiari.filter(b => selectedIds.has(b.id) && b.id !== targetId);
+  if (!target || sources.length === 0) { showToast('Selecție invalidă', 'err'); return; }
+
+  try {
+    // 1. Update caiet: toate sursele -> target.nume
+    for (const s of sources) {
+      await fetch(`${API}/caiet?beneficiar=eq.${encodeURIComponent(s.nume)}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ beneficiar: target.nume })
+      });
+    }
+    // 2. Delete sources din beneficiari
+    for (const s of sources) {
+      await fetch(`${API}/beneficiari?id=eq.${s.id}`, {
+        method: 'DELETE',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' }
+      });
+    }
+    showToast(`✓ Unificat în ${target.nume}`, 'ok');
+    selectedIds.clear();
+    inchideModal('modal-merge');
+    await incarcaTot();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+// ══ SPLIT HYBRID ═══════════════════════════════════════════════════
+let splittingId = null;
+function deschideSplitModal(id) {
+  const b = allBeneficiari.find(x => x.id === id);
+  if (!b) return;
+  splittingId = id;
+  document.getElementById('s-original').value = b.nume;
+  // Sugestie automată: ia ultima parte (numele propriu) ca entitate
+  const parts = b.nume.split(/\s+/);
+  const suggested = parts[parts.length - 1];
+  const prefix = parts.slice(0, -1).join(' ');
+  document.getElementById('s-entitate').value = suggested;
+  document.getElementById('s-descriere').value = prefix.toLowerCase();
+  document.getElementById('s-categorie').value = 'PERSOANA';
+  updateSplitPreview();
+  document.getElementById('s-entitate').oninput = updateSplitPreview;
+  document.getElementById('s-descriere').oninput = updateSplitPreview;
+  document.getElementById('modal-split').style.display = 'flex';
+}
+
+function updateSplitPreview() {
+  const b = allBeneficiari.find(x => x.id === splittingId);
+  if (!b) return;
+  const entitate = document.getElementById('s-entitate').value.trim().toUpperCase();
+  const descriere = document.getElementById('s-descriere').value.trim().toUpperCase();
+  const nr = (operatiuniStats[b.nume] || {}).nr || 0;
+  const preview = document.getElementById('s-preview');
+  if (!entitate || !descriere) { preview.style.display = 'none'; return; }
+  preview.style.display = '';
+  preview.innerHTML = `
+    <b>Preview:</b><br>
+    • <b>${nr}</b> operațiuni cu beneficiar "${escapeHtml(b.nume)}"<br>
+    • Vor deveni: <b>beneficiar = ${entitate}</b>, <b>observații = [${descriere}]</b> + obs existente<br>
+    • "${escapeHtml(b.nume)}" va fi șters din listă<br>
+    • "${entitate}" va fi creat (dacă nu există deja)
+  `;
+}
+
+async function executaSplit() {
+  const b = allBeneficiari.find(x => x.id === splittingId);
+  if (!b) return;
+  const entitate = document.getElementById('s-entitate').value.trim().toUpperCase();
+  const descriere = document.getElementById('s-descriere').value.trim().toUpperCase();
+  const categorie = document.getElementById('s-categorie').value;
+  if (!entitate || !descriere) { showToast('Completează ambele câmpuri', 'err'); return; }
+
+  try {
+    // 1. Creează entitatea curată (dacă nu există)
+    await fetch(`${API}/beneficiari`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ nume: entitate, categorie })
+    });
+
+    // 2. Fetch toate caiet entries cu beneficiar = old
+    const resp = await fetch(`${API}/caiet?beneficiar=eq.${encodeURIComponent(b.nume)}&select=id,observatii`, { headers: HEADERS });
+    const rows = await resp.json();
+
+    // 3. Update fiecare: beneficiar + observatii prefix
+    for (const r of rows) {
+      const newObs = `[${descriere}]` + (r.observatii ? ' ' + r.observatii : '');
+      await fetch(`${API}/caiet?id=eq.${r.id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ beneficiar: entitate, observatii: newObs })
+      });
+    }
+
+    // 4. Delete beneficiarul hibrid
+    await fetch(`${API}/beneficiari?id=eq.${b.id}`, {
+      method: 'DELETE', headers: { ...HEADERS, 'Prefer': 'return=minimal' }
+    });
+
+    showToast(`✓ Despărțit: ${rows.length} operațiuni mutate`, 'ok');
+    splittingId = null;
+    inchideModal('modal-split');
+    await incarcaTot();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+// ══ Auto-login la încărcare ═══════════════════════════════════════
+(function autoLogin() {
+  const saved = loadSession();
+  if (saved && saved.nume === 'EUGEN') completeLogin(saved);
+})();
+</script>
+
+</body>
+</html>
