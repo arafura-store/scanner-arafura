@@ -400,11 +400,29 @@
             <button type="button" id="btn-tip-plata" onclick="setTipQuick('PLATA')" style="flex:1; padding:10px; border:2px solid var(--red); background:white; color:var(--red); border-radius:8px; font-weight:700; cursor:pointer; font-size:14px;">↓ PLATA</button>
           </div>
           <select id="f-tip-select" onchange="setTipFromDropdown(this.value)" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:white;">
-            <option value="">— Sau alt tip —</option>
-            <option value="COMBUSTIBIL">COMBUSTIBIL</option>
-            <option value="UTILITATI">UTILITATI</option>
-            <option value="CHIRII">CHIRII</option>
-            <option value="PROTOCOL">PROTOCOL</option>
+            <option value="">— Sau alt tip specific —</option>
+            <optgroup label="↓ PLĂȚI (ieșiri)">
+              <option value="COMBUSTIBIL">COMBUSTIBIL</option>
+              <option value="MATERIALE">MATERIALE</option>
+              <option value="SALARIU">SALARIU</option>
+              <option value="UTILITATI">UTILITATI</option>
+              <option value="CHIRII">CHIRII (plătite)</option>
+              <option value="TRANSPORT">TRANSPORT</option>
+              <option value="REPARATII">REPARATII</option>
+              <option value="ASIGURARI">ASIGURARI</option>
+              <option value="TAXE">TAXE</option>
+              <option value="SERVICII">SERVICII</option>
+              <option value="PROTOCOL">PROTOCOL</option>
+              <option value="ALTE PLATI">ALTE PLATI</option>
+            </optgroup>
+            <optgroup label="↑ ÎNCASĂRI (intrări)">
+              <option value="CHIRIE INCASATA">CHIRIE INCASATA</option>
+              <option value="VANZARI">VANZARI (non-retail)</option>
+              <option value="IMPRUMUT INCASAT">IMPRUMUT INCASAT (restituire)</option>
+              <option value="DIVIDENDE">DIVIDENDE</option>
+              <option value="SPONSORIZARI">SPONSORIZARI</option>
+              <option value="ALTE INCASARI">ALTE INCASARI</option>
+            </optgroup>
           </select>
           <input type="hidden" id="f-tip">
         </div>
@@ -896,9 +914,16 @@ function highlightTipButtons() {
 }
 
 function tipDirection(tip) {
-  // Doar tipurile valide pentru "Operațiune normală"
-  const tipuriIntrare = ['INCASARE'];
-  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'UTILITATI', 'CHIRII', 'PROTOCOL'];
+  // Tipuri valide pentru "Operațiune normală"
+  const tipuriIntrare = [
+    'INCASARE',
+    'CHIRIE INCASATA', 'VANZARI', 'IMPRUMUT INCASAT', 'DIVIDENDE', 'SPONSORIZARI', 'ALTE INCASARI'
+  ];
+  const tipuriIesire = [
+    'PLATA',
+    'COMBUSTIBIL', 'MATERIALE', 'SALARIU', 'UTILITATI', 'CHIRII', 'TRANSPORT',
+    'REPARATII', 'ASIGURARI', 'TAXE', 'SERVICII', 'PROTOCOL', 'ALTE PLATI'
+  ];
   if (tipuriIntrare.includes(tip)) return 'in';
   if (tipuriIesire.includes(tip)) return 'out';
   return null;
