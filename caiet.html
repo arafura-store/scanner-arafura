@@ -391,10 +391,6 @@
             <option value="COMBUSTIBIL">COMBUSTIBIL</option>
             <option value="UTILITATI">UTILITATI</option>
             <option value="CHIRII">CHIRII</option>
-            <option value="DP AMANET">DP AMANET (intrare)</option>
-            <option value="DI AMANET">DI AMANET (ieșire)</option>
-            <option value="DEPUNERE">DEPUNERE (la bancă)</option>
-            <option value="RETRAGERE">RETRAGERE (de la bancă)</option>
           </select>
           <input type="hidden" id="f-tip">
         </div>
@@ -774,8 +770,9 @@ function highlightTipButtons() {
 }
 
 function tipDirection(tip) {
-  const tipuriIntrare = ['INCASARE', 'RETRAGERE', 'DP AMANET'];
-  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'UTILITATI', 'CHIRII', 'DI AMANET', 'DEPUNERE'];
+  // Doar tipurile valide pentru "Operațiune normală"
+  const tipuriIntrare = ['INCASARE'];
+  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'UTILITATI', 'CHIRII'];
   if (tipuriIntrare.includes(tip)) return 'in';
   if (tipuriIesire.includes(tip)) return 'out';
   return null;
