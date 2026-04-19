@@ -400,8 +400,8 @@
         <div class="form-group">
           <label>Beneficiar</label>
           <div style="position:relative;">
-            <input type="text" id="f-beneficiar" placeholder="ex: TOMIS 3" autocomplete="off"
-              oninput="showSuggestions('beneficiar', this.value)" onfocus="showSuggestions('beneficiar', this.value)">
+            <input type="text" id="f-beneficiar" placeholder="Caută beneficiar (2-3 litere)" autocomplete="off"
+              oninput="showSuggestions('beneficiar', this.value); checkBeneficiarValid();" onfocus="showSuggestions('beneficiar', this.value)">
             <div class="suggestions" id="sug-beneficiar" style="display:none;"></div>
           </div>
         </div>
@@ -409,7 +409,7 @@
       <div class="form-row">
         <div class="form-group">
           <label id="f-suma-label">Sumă (RON)</label>
-          <input type="number" step="0.01" id="f-suma" placeholder="0.00">
+          <input type="number" step="0.01" id="f-suma" placeholder="Completează întâi beneficiarul" disabled style="opacity:0.4; background:#f1f5f9;">
         </div>
       </div>
       <div class="form-row">
@@ -719,7 +719,7 @@ function showSuggestions(field, value) {
   if (!val) { container.style.display = 'none'; return; }
 
   const matches = beneficiariCunoscuti.filter(item => item.includes(val)).slice(0, 10);
-  const isAdmin = currentUser && ['EUGEN','LIVIA','ELA'].includes(currentUser.nume);
+  const isAdmin = currentUser && currentUser.nume === 'EUGEN';
 
   let html = '';
   if (matches.length === 0) {
@@ -754,6 +754,26 @@ function selectSuggestion(field, value) {
   document.getElementById(`f-${field}`).value = value;
   document.getElementById(`sug-${field}`).style.display = 'none';
   if (field === 'tip') checkTipDirection();
+  if (field === 'beneficiar') checkBeneficiarValid();
+}
+
+function checkBeneficiarValid() {
+  const val = (document.getElementById('f-beneficiar').value || '').trim().toUpperCase();
+  const sumaEl = document.getElementById('f-suma');
+  const isValid = val && beneficiariCunoscuti.includes(val);
+  if (isValid) {
+    sumaEl.disabled = false;
+    sumaEl.style.opacity = '';
+    sumaEl.style.background = '';
+    sumaEl.placeholder = '0.00';
+    sumaEl.focus();
+  } else {
+    sumaEl.disabled = true;
+    sumaEl.style.opacity = '0.4';
+    sumaEl.style.background = '#f1f5f9';
+    sumaEl.placeholder = 'Completează întâi beneficiarul';
+    sumaEl.value = '';
+  }
 }
 
 async function deschideAdaugaBeneficiar(numeSugerat) {
@@ -790,6 +810,7 @@ async function deschideAdaugaBeneficiar(numeSugerat) {
     await incarcaSugestii();
     document.getElementById('f-beneficiar').value = numeFinal;
     document.getElementById('sug-beneficiar').style.display = 'none';
+    checkBeneficiarValid();
   } catch (e) {
     showToast('Eroare: ' + e.message);
   }
@@ -1090,6 +1111,7 @@ async function adaugaOperatiune() {
       document.getElementById('f-obs').value = '';
       highlightTipButtons();
       checkTipDirection();
+      checkBeneficiarValid();
       // Refresh
       await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
     } else {
