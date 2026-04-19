@@ -702,30 +702,51 @@ async function incarcaSold() {
 
 async function incarcaSugestii() {
   try {
-    const resp = await fetch(`${API}/caiet?select=tip,beneficiar&limit=5000`, { headers: HEADERS });
+    const resp = await fetch(`${API}/beneficiari?select=nume,categorie&activ=eq.true&order=nume.asc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data)) return;
-    const tipSet = new Set(), benSet = new Set();
-    for (const d of data) {
-      if (d.tip) tipSet.add(d.tip.trim().toUpperCase());
-      if (d.beneficiar) benSet.add(d.beneficiar.trim().toUpperCase());
-    }
-    tipuriCunoscute = [...tipSet].sort();
-    beneficiariCunoscuti = [...benSet].sort();
+    beneficiariCunoscuti = data.map(b => b.nume);
+    window.beneficiariCategorii = {};
+    for (const b of data) window.beneficiariCategorii[b.nume] = b.categorie;
   } catch (e) {}
 }
 
 function showSuggestions(field, value) {
-  const list = field === 'tip' ? tipuriCunoscute : beneficiariCunoscuti;
-  const container = document.getElementById(`sug-${field}`);
+  if (field !== 'beneficiar') return;
+  const container = document.getElementById('sug-beneficiar');
   const val = value.trim().toUpperCase();
 
   if (!val) { container.style.display = 'none'; return; }
 
-  const matches = list.filter(item => item.includes(val)).slice(0, 8);
-  if (matches.length === 0) { container.style.display = 'none'; return; }
+  const matches = beneficiariCunoscuti.filter(item => item.includes(val)).slice(0, 10);
+  const isAdmin = currentUser && ['EUGEN','LIVIA','ELA'].includes(currentUser.nume);
 
-  container.innerHTML = matches.map(m => `<div onclick="selectSuggestion('${field}', '${m.replace(/'/g, "\\'")}')">${m}</div>`).join('');
+  let html = '';
+  if (matches.length === 0) {
+    if (isAdmin) {
+      html = `<div class="sug-add-new" onclick="deschideAdaugaBeneficiar('${val.replace(/'/g, "\\'")}')" style="padding:12px; background:#dcfce7; color:#16a34a; font-weight:700; cursor:pointer; border-radius:6px;">
+        + Adaugă beneficiar nou: <b>${val}</b>
+      </div>`;
+    } else {
+      html = `<div style="padding:12px; color:#c0392b; font-size:13px;">
+        Beneficiarul "${val}" nu există. Roagă EUGEN/LIVIA/ELA să-l adauge.
+      </div>`;
+    }
+  } else {
+    html = matches.map(m => {
+      const cat = (window.beneficiariCategorii || {})[m] || 'ALTUL';
+      const catColor = { MAGAZIN:'#1a56a8', BANCA:'#0891b2', FURNIZOR:'#c2410c', VEHICUL:'#6d28d9', PERSOANA:'#047857', SPATIU:'#7c3aed', AMANET:'#be185d', UTILITATE:'#0f766e', ALTUL:'#6b7280' }[cat] || '#6b7280';
+      return `<div onclick="selectSuggestion('beneficiar', '${m.replace(/'/g, "\\'")}')">
+        ${m} <span style="background:${catColor}; color:white; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-left:6px;">${cat}</span>
+      </div>`;
+    }).join('');
+    if (isAdmin) {
+      html += `<div class="sug-add-new" onclick="deschideAdaugaBeneficiar('${val.replace(/'/g, "\\'")}')" style="padding:10px 12px; background:#f0fdf4; color:#16a34a; font-weight:600; cursor:pointer; border-top:1px solid #dcfce7; font-size:12px;">
+        + Adaugă nou: "${val}"
+      </div>`;
+    }
+  }
+  container.innerHTML = html;
   container.style.display = '';
 }
 
@@ -733,6 +754,45 @@ function selectSuggestion(field, value) {
   document.getElementById(`f-${field}`).value = value;
   document.getElementById(`sug-${field}`).style.display = 'none';
   if (field === 'tip') checkTipDirection();
+}
+
+async function deschideAdaugaBeneficiar(numeSugerat) {
+  const nume = prompt('Nume beneficiar nou:', numeSugerat || '');
+  if (!nume) return;
+  const numeFinal = nume.trim().toUpperCase();
+  if (!numeFinal) return;
+
+  const categorii = ['MAGAZIN','BANCA','FURNIZOR','VEHICUL','PERSOANA','SPATIU','AMANET','UTILITATE','ALTUL'];
+  const cat = prompt(`Categorie (${categorii.join(', ')}):`, 'ALTUL');
+  if (!cat) return;
+  const catFinal = cat.trim().toUpperCase();
+  if (!categorii.includes(catFinal)) {
+    alert(`Categorie invalidă. Alege din: ${categorii.join(', ')}`);
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${API}/beneficiari`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ nume: numeFinal, categorie: catFinal })
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      if (txt.includes('duplicate')) {
+        showToast('Beneficiarul există deja');
+      } else {
+        showToast('Eroare: ' + txt);
+      }
+      return;
+    }
+    showToast(`✓ Adăugat: ${numeFinal} (${catFinal})`);
+    await incarcaSugestii();
+    document.getElementById('f-beneficiar').value = numeFinal;
+    document.getElementById('sug-beneficiar').style.display = 'none';
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  }
 }
 
 function setTipQuick(tip) {
@@ -994,6 +1054,10 @@ async function adaugaOperatiune() {
   if (!data) { showToast('Selectează data'); return; }
   if (!tip) { showToast('Completează tipul operațiunii'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
+  if (!beneficiariCunoscuti.includes(beneficiar)) {
+    showToast(`Beneficiar necunoscut: "${beneficiar}". Alege din listă sau adaugă nou.`);
+    return;
+  }
   if (suma <= 0) { showToast('Completează suma'); return; }
 
   const dir = tipDirection(tip);
