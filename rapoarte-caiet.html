@@ -117,6 +117,7 @@
   <button class="tab" onclick="switchTab('amanet')">Amanet</button>
   <button class="tab" onclick="switchTab('banca')">Bancă</button>
   <button class="tab" onclick="switchTab('combustibil')">Combustibil</button>
+  <button class="tab" onclick="switchTab('personal')">Personal (LIVIA / BEBE / L+B)</button>
   <button class="tab" onclick="switchTab('rezumat')">Rezumat</button>
 </div>
 
@@ -124,6 +125,7 @@
 <div id="tab-amanet" class="tab-content"><div class="loading">Apasă Generează</div></div>
 <div id="tab-banca" class="tab-content"><div class="loading">Apasă Generează</div></div>
 <div id="tab-combustibil" class="tab-content"><div class="loading">Apasă Generează</div></div>
+<div id="tab-personal" class="tab-content"><div class="loading">Apasă Generează</div></div>
 <div id="tab-rezumat" class="tab-content"><div class="loading">Apasă Generează</div></div>
 
 <script>
@@ -258,6 +260,7 @@ async function genereazaRapoarte() {
     renderAmanet(an);
     renderBanca(an);
     renderCombustibil(an);
+    renderPersonal(an);
     renderRezumat(an);
 
   } catch (e) {
@@ -850,6 +853,111 @@ function renderCombustibil(an) {
     <div class="summary-card"><div class="label">Nr. alimentări</div><div class="value">${combustibil.length}</div></div>
     <div class="summary-card"><div class="label">Medie/lună</div><div class="value" style="font-size:18px;">${fmt(totalComb / (Object.keys(perLuna).length || 1))}</div></div>
   </div>`;
+
+  container.innerHTML = sumHtml + html;
+}
+
+// ══ PERSONAL (LIVIA / BEBE / L+B) ════════════════════════════════
+function renderPersonal(an) {
+  const container = document.getElementById('tab-personal');
+  const PERSOANE = ['LIVIA', 'BEBE', 'L+B'];
+
+  // Filtrăm operațiunile unde beneficiarul e unul din cele 3 persoane
+  const personale = allData.filter(d => {
+    const ben = (d.beneficiar || '').trim().toUpperCase();
+    return PERSOANE.includes(ben);
+  });
+
+  if (personale.length === 0) {
+    container.innerHTML = '<div class="loading">Nu sunt operațiuni pentru LIVIA / BEBE / L+B în anul selectat.</div>';
+    return;
+  }
+
+  // Matrix: luna x persoana -> { intrare, iesire }
+  const matrix = {};
+  for (let m = 0; m < 12; m++) matrix[m] = {};
+  for (const d of personale) {
+    const luna = new Date(d.data).getMonth();
+    const ben = (d.beneficiar || '').trim().toUpperCase();
+    if (!matrix[luna][ben]) matrix[luna][ben] = { intrare: 0, iesire: 0 };
+    matrix[luna][ben].intrare += parseFloat(d.intrare || 0);
+    matrix[luna][ben].iesire += parseFloat(d.iesire || 0);
+  }
+
+  // Tabel luni x persoane
+  const persoaneActive = PERSOANE.filter(p => personale.some(d => (d.beneficiar || '').trim().toUpperCase() === p));
+
+  let html = '<h3 style="margin-bottom:12px;">Sumar lunar — sume primite de fiecare persoană</h3>';
+  html += '<table><thead><tr><th>LUNA</th>';
+  for (const p of persoaneActive) html += `<th>${p}</th>`;
+  html += '<th style="background:var(--blue);">TOTAL LUNA</th></tr></thead><tbody>';
+
+  const totalPers = {};
+  for (const p of persoaneActive) totalPers[p] = 0;
+  let grandTotal = 0;
+
+  for (let m = 0; m < 12; m++) {
+    let hasData = false;
+    for (const p of persoaneActive) {
+      if (matrix[m][p] && matrix[m][p].iesire) { hasData = true; break; }
+    }
+    if (!hasData) continue;
+
+    let rowTotal = 0;
+    html += `<tr><td>${LUNI[m]}</td>`;
+    for (const p of persoaneActive) {
+      const val = matrix[m][p]?.iesire || 0;
+      totalPers[p] += val;
+      rowTotal += val;
+      html += `<td class="num red">${fmt(val)}</td>`;
+    }
+    grandTotal += rowTotal;
+    html += `<td class="num" style="font-weight:700; color:var(--blue);">${fmt(rowTotal)}</td></tr>`;
+  }
+
+  html += '<tr class="total-row"><td>TOTAL ' + an + '</td>';
+  for (const p of persoaneActive) html += `<td class="num red">${fmt(totalPers[p])}</td>`;
+  html += `<td class="num" style="color:var(--blue);">${fmt(grandTotal)}</td></tr>`;
+  html += '</tbody></table>';
+
+  // Detaliu operațiuni
+  html += '<h3 style="margin:24px 0 12px;">Detaliu operațiuni</h3>';
+  html += '<table><thead><tr><th>DATA</th><th>PERSOANĂ</th><th>TIP</th><th class="num">INTRARE</th><th class="num">IEȘIRE</th><th>OBSERVAȚII</th><th>UTILIZATOR</th></tr></thead><tbody>';
+
+  const sortate = [...personale].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+  for (const d of sortate) {
+    const data = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const ben = (d.beneficiar || '').trim().toUpperCase();
+    const intrareStr = d.intrare > 0 ? fmt(d.intrare) : '';
+    const iesireStr = d.iesire > 0 ? fmt(d.iesire) : '';
+    html += `<tr>
+      <td>${data}</td>
+      <td style="font-weight:700; color:var(--purple);">${ben}</td>
+      <td>${d.tip || ''}</td>
+      <td class="num green">${intrareStr}</td>
+      <td class="num red">${iesireStr}</td>
+      <td style="font-size:12px; color:var(--sub);">${d.observatii || ''}</td>
+      <td style="font-size:11px; color:#aaa;">${d.utilizator || ''}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  // Summary cards
+  let totalGeneral = 0;
+  for (const p of persoaneActive) totalGeneral += totalPers[p];
+  const sumHtml = '<div class="summary">' +
+    persoaneActive.map(p =>
+      `<div class="summary-card"><div class="label">${p}</div><div class="value red">${fmt(totalPers[p])} RON</div></div>`
+    ).join('') +
+    `<div class="summary-card" style="border:2px solid var(--border);">
+      <div class="label" style="font-size:14px; font-weight:700;">TOTAL ${an}</div>
+      <div class="value" style="color:var(--blue);">${fmt(totalGeneral)} RON</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Nr. operațiuni</div>
+      <div class="value">${personale.length}</div>
+    </div>` +
+    '</div>';
 
   container.innerHTML = sumHtml + html;
 }
