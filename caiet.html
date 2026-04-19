@@ -697,6 +697,7 @@ function logout() {
   document.getElementById('btn-logout').style.display = 'none';
   document.getElementById('header-sold').style.display = 'none';
   document.getElementById('header-user').textContent = '';
+  setTimeout(() => document.getElementById('login-pin').focus(), 50);
 }
 
 // ── Device auth + Auto-login ──────────────────────────────────────
@@ -729,11 +730,16 @@ function checkDeviceCode(event) {
   const deviceAuth = localStorage.getItem(DEVICE_AUTH_KEY) === 'true';
   if (!deviceAuth) {
     document.getElementById('screen-device-auth').style.display = '';
+    setTimeout(() => document.getElementById('device-code').focus(), 100);
     return;
   }
   const saved = loadSession();
-  if (saved) completeLogin(saved);
-  else document.getElementById('screen-login').style.display = '';
+  if (saved) {
+    completeLogin(saved);
+  } else {
+    document.getElementById('screen-login').style.display = '';
+    setTimeout(() => document.getElementById('login-pin').focus(), 100);
+  }
 })();
 
 async function incarcaSold() {
