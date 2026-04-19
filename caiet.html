@@ -226,13 +226,15 @@
     }
     th {
       background: var(--navy); color: white; padding: 12px;
-      text-align: left; font-size: 11px; white-space: nowrap;
+      text-align: center; font-size: 11px; white-space: nowrap;
       letter-spacing: .5px; text-transform: uppercase; font-weight: 700;
     }
+    th.th-left { text-align: left; }
     td {
       padding: 11px 12px;
       border-bottom: 1px solid #f1f5f9;
     }
+    td.td-center { text-align: center; }
     tr:last-child td { border-bottom: none; }
     tr:nth-child(even) td { background: #fafbfc; }
     tr:hover td { background: #f1f5f9; }
@@ -1101,8 +1103,8 @@ function renderOperatiuni() {
   let html = `<table>
     <thead><tr>
       <th>Completat</th><th>Data chitanță</th><th>Tip</th><th>Beneficiar</th>
-      <th class="num">Intrare</th><th class="num">Ieșire</th>
-      <th>Obs</th><th>Cine</th><th></th>
+      <th>Intrare</th><th>Ieșire</th>
+      <th class="th-left" style="padding-left:20px;">Observații</th><th>Cine</th><th></th>
     </tr></thead><tbody>`;
 
   for (const d of data) {
@@ -1119,15 +1121,15 @@ function renderOperatiuni() {
     const rowStyle = isPending ? 'opacity:0.45; background:#fffef0;' : (isConfirmat ? 'opacity:0.7; background:#f0fdf4;' : '');
     const benEsc = escHtml(d.beneficiar || '').replace(/'/g, "\\'");
     html += `<tr id="row-${d.id}" style="${rowStyle}">
-      <td style="white-space:nowrap; font-size:12px; color:#555;">${dtCompletat}</td>
-      <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
-      <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
-      <td style="font-weight:500;"><span class="clickable-ben" onclick="filtreazaBeneficiar('${benEsc}')" title="Click: filtrează după acest beneficiar">${escHtml(d.beneficiar)}</span></td>
-      <td class="num">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
-      <td class="num">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
-      <td style="color:#888; font-size:12px; max-width:200px;">${obsFinal}</td>
-      <td style="font-size:11px; color:#aaa;">${d.utilizator}</td>
-      <td style="white-space:nowrap;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
+      <td style="white-space:nowrap; font-size:12px; color:#555; text-align:center;">${dtCompletat}</td>
+      <td style="font-weight:600; white-space:nowrap; text-align:center;">${dtChitanta}</td>
+      <td style="text-align:center;"><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
+      <td style="font-weight:500; text-align:center;"><span class="clickable-ben" onclick="filtreazaBeneficiar('${benEsc}')" title="Click: filtrează după acest beneficiar">${escHtml(d.beneficiar)}</span></td>
+      <td class="td-center">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
+      <td class="td-center">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
+      <td style="color:#888; font-size:12px; max-width:260px; padding-left:20px;">${obsFinal}</td>
+      <td style="font-size:11px; color:#aaa; text-align:center;">${d.utilizator}</td>
+      <td style="white-space:nowrap; text-align:center;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
     </tr>`;
   }
 
