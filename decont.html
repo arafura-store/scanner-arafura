@@ -410,13 +410,12 @@ async function incarcaDate() {
       returZone.innerHTML = '';
     }
 
-    // Check if any items are "trimis" (waiting confirmation)
-    const esteTrimis = cheltuieliCurente.some(d => d.status === 'trimis');
-    const formZone = document.getElementById('form-zone');
-    formZone.style.display = esteTrimis ? 'none' : '';
+    // Formularul rămâne VIZIBIL mereu — Nicu poate adăuga operațiuni noi
+    // pentru următorul decont, chiar dacă unele sunt deja trimise
+    document.getElementById('form-zone').style.display = '';
 
     // Render tabel
-    renderTabel(totalCheltuit, esteTrimis);
+    renderTabel(totalCheltuit, false);
 
     // Istoric ultimele 5 deconturi confirmate
     await incarcaIstoric();
@@ -498,18 +497,19 @@ function renderTabel(totalCheltuit, esteTrimis) {
   }
 
   let html = `<table><thead><tr>
-    <th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th><th>Status</th>${!esteTrimis ? '<th></th>' : ''}
+    <th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th><th>Status</th><th></th>
   </tr></thead><tbody>`;
 
   for (const d of cheltuieliCurente) {
     const dt = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const sumaVal = parseFloat(d.suma);
     const esteInc = sumaVal < 0;
-    const statusBadge = d.status === 'trimis'
+    const esteTrimisRow = d.status === 'trimis';
+    const statusBadge = esteTrimisRow
       ? '<span class="status-badge status-trimis">TRIMIS</span>'
       : '<span class="status-badge" style="background:#fef3c7; color:#92400e;">DRAFT</span>';
 
-    html += `<tr>
+    html += `<tr style="${esteTrimisRow ? 'opacity:0.7;' : ''}">
       <td style="white-space:nowrap;">${dt}</td>
       <td style="font-weight:600;">${escHtml(d.beneficiar)}</td>
       <td class="num" style="font-weight:700; color:${esteInc ? 'var(--green)' : 'var(--red)'};">
@@ -517,26 +517,27 @@ function renderTabel(totalCheltuit, esteTrimis) {
       </td>
       <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
       <td>${statusBadge}</td>
-      ${!esteTrimis ? `<td style="white-space:nowrap;">
+      <td style="white-space:nowrap;">${!esteTrimisRow ? `
         <button class="btn-del" onclick="editCheltuiala(${d.id})" title="Editează" style="color:#1a73e8;">✎</button>
         <button class="btn-del" onclick="stergeCheltuiala(${d.id})" title="Șterge">✕</button>
-      </td>` : `<td></td>`}
+      ` : ''}</td>
     </tr>`;
   }
 
   html += `<tr class="total-row">
     <td colspan="2">TOTAL CHELTUIT</td>
     <td class="num" style="color:var(--red);">${totalCheltuit.toLocaleString('ro-RO', { minimumFractionDigits: 2 })}</td>
-    <td colspan="${esteTrimis ? '2' : '3'}"></td>
+    <td colspan="3"></td>
   </tr>`;
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Buton trimite - doar daca are cheltuieli si nu sunt deja trimise
-  if (!esteTrimis && cheltuieliCurente.length > 0) {
-    btnTrimite.style.display = '';
-  } else {
-    btnTrimite.style.display = 'none';
+  // Buton trimite - doar dacă există operațiuni DRAFT (neexpediate)
+  const areDraft = cheltuieliCurente.some(d => d.status === 'nou');
+  btnTrimite.style.display = areDraft ? '' : 'none';
+  if (areDraft) {
+    const nrDraft = cheltuieliCurente.filter(d => d.status === 'nou').length;
+    btnTrimite.textContent = `Trimite decont (${nrDraft} operațiuni draft)`;
   }
 }
 
@@ -611,21 +612,21 @@ async function stergeCheltuiala(id) {
 }
 
 async function trimiteDecont() {
-  if (!confirm('Trimiți decontul pentru verificare?\n\nNu vei mai putea modifica cheltuielile până la confirmare.')) return;
+  const drafturi = cheltuieliCurente.filter(d => d.status === 'nou');
+  if (drafturi.length === 0) { showToast('Nicio cheltuială draft de trimis'); return; }
+  if (!confirm(`Trimiți ${drafturi.length} operațiuni pentru verificare?\n\nNu vei mai putea modifica aceste operațiuni până la confirmare. Poți adăuga în continuare noi operațiuni.`)) return;
   try {
-    // Marcheaza toate cheltuielile curente ca "trimis"
-    for (const d of cheltuieliCurente) {
-      if (d.status === 'nou') {
-        await fetch(`${API}/deconturi?id=eq.${d.id}`, {
-          method: 'PATCH',
-          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ status: 'trimis' })
-        });
-      }
+    // Marcheaza DOAR draft-urile ca "trimis"
+    for (const d of drafturi) {
+      await fetch(`${API}/deconturi?id=eq.${d.id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'trimis' })
+      });
     }
 
-    // Scrie cheltuielile in caiet ca PENDING (nu afecteaza soldul)
-    for (const d of cheltuieliCurente) {
+    // Scrie DOAR draft-urile in caiet ca PENDING (nu afecteaza soldul)
+    for (const d of drafturi) {
       const sumaVal = parseFloat(d.suma);
       const subtip = d.tip_subcategorie || 'ALTE PLATI';
       await fetch(`${API}/caiet`, {
