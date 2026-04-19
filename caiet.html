@@ -382,9 +382,13 @@
         </div>
         <div class="form-group">
           <label>Tip operațiune</label>
+          <div style="display:flex; gap:6px; margin-bottom:6px;">
+            <button type="button" id="btn-tip-incasare" onclick="setTipQuick('INCASARE')" style="flex:1; padding:10px; border:2px solid var(--green); background:white; color:var(--green); border-radius:8px; font-weight:700; cursor:pointer; font-size:14px;">↑ INCASARE</button>
+            <button type="button" id="btn-tip-plata" onclick="setTipQuick('PLATA')" style="flex:1; padding:10px; border:2px solid var(--red); background:white; color:var(--red); border-radius:8px; font-weight:700; cursor:pointer; font-size:14px;">↓ PLATA</button>
+          </div>
           <div style="position:relative;">
-            <input type="text" id="f-tip" value="INCASARE-PLATA" placeholder="ex: INCASARE" autocomplete="off"
-              oninput="showSuggestions('tip', this.value); checkTipDirection();" onfocus="showSuggestions('tip', this.value)">
+            <input type="text" id="f-tip" placeholder="sau scrie alt tip: COMBUSTIBIL, CHIRIE..." autocomplete="off"
+              oninput="showSuggestions('tip', this.value); checkTipDirection(); highlightTipButtons();" onfocus="showSuggestions('tip', this.value)">
             <div class="suggestions" id="sug-tip" style="display:none;"></div>
           </div>
         </div>
@@ -732,6 +736,35 @@ function selectSuggestion(field, value) {
   if (field === 'tip') checkTipDirection();
 }
 
+function setTipQuick(tip) {
+  document.getElementById('f-tip').value = tip;
+  checkTipDirection();
+  highlightTipButtons();
+  document.getElementById('sug-tip').style.display = 'none';
+}
+
+function highlightTipButtons() {
+  const tip = (document.getElementById('f-tip').value || '').trim().toUpperCase();
+  const btnIn = document.getElementById('btn-tip-incasare');
+  const btnPl = document.getElementById('btn-tip-plata');
+  if (tip === 'INCASARE') {
+    btnIn.style.background = 'var(--green)';
+    btnIn.style.color = 'white';
+    btnPl.style.background = 'white';
+    btnPl.style.color = 'var(--red)';
+  } else if (tip === 'PLATA') {
+    btnPl.style.background = 'var(--red)';
+    btnPl.style.color = 'white';
+    btnIn.style.background = 'white';
+    btnIn.style.color = 'var(--green)';
+  } else {
+    btnIn.style.background = 'white';
+    btnIn.style.color = 'var(--green)';
+    btnPl.style.background = 'white';
+    btnPl.style.color = 'var(--red)';
+  }
+}
+
 function checkTipDirection() {
   const tip = document.getElementById('f-tip').value.trim().toUpperCase();
   const intrareEl = document.getElementById('f-intrare');
@@ -740,7 +773,7 @@ function checkTipDirection() {
   // Tipuri care sunt doar INTRARE
   const tipuriIntrare = ['INCASARE', 'RETRAGERE'];
   // Tipuri care sunt doar IESIRE
-  const tipuriIesire = ['COMBUSTIBIL', 'DEPUNERE', 'CHIRIE SPATIU', 'UTILITATI', 'ROVINIETA', 'MANCARE', 'TRECERE POD'];
+  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'DEPUNERE', 'CHIRIE SPATIU', 'UTILITATI', 'ROVINIETA', 'MANCARE', 'TRECERE POD'];
 
   if (tipuriIntrare.includes(tip)) {
     iesireEl.value = '';
@@ -974,12 +1007,18 @@ async function adaugaOperatiune() {
     });
     if (resp.ok) {
       showToast('Operațiune adăugată!');
-      // Reset form (keep date, presetează tip înapoi)
-      document.getElementById('f-tip').value = 'INCASARE-PLATA';
+      // Reset form (keep date)
+      document.getElementById('f-tip').value = '';
       document.getElementById('f-beneficiar').value = '';
       document.getElementById('f-intrare').value = '';
       document.getElementById('f-iesire').value = '';
       document.getElementById('f-obs').value = '';
+      highlightTipButtons();
+      // Resetează starea intrare/ieșire
+      const intrEl = document.getElementById('f-intrare');
+      const iesEl = document.getElementById('f-iesire');
+      intrEl.disabled = false; intrEl.style.opacity = '1';
+      iesEl.disabled = false; iesEl.style.opacity = '1';
       // Refresh
       await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
     } else {
