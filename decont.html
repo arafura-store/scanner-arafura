@@ -107,6 +107,21 @@
       font-size: 15px; z-index: 200; transition: transform .3s ease;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
+    .suggestions {
+      position: absolute; background: white; border: 1px solid var(--border);
+      border-radius: 8px; max-height: 240px; overflow-y: auto;
+      box-shadow: 0 4px 12px rgba(0,0,0,.1); z-index: 50; width: 100%; top: 100%;
+    }
+    .suggestions div { padding: 10px 12px; cursor: pointer; font-size: 14px; }
+    .suggestions div:hover { background: #f4f6f9; }
+    .cat-chip { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; color: white; margin-left: 6px; }
+    .cat-MAGAZIN   { background: #1a56a8; }
+    .cat-FURNIZOR  { background: #c2410c; }
+    .cat-VEHICUL   { background: #6d28d9; }
+    .cat-PERSOANA  { background: #047857; }
+    .cat-SPATIU    { background: #7c3aed; }
+    .cat-UTILITATE { background: #0f766e; }
+    .cat-ALTUL     { background: #6b7280; }
   </style>
 </head>
 <body>
@@ -151,28 +166,49 @@
             <label>Data</label>
             <input type="date" id="f-data">
           </div>
-          <div class="form-group" style="max-width:160px;">
-            <label>Tip</label>
-            <select id="f-tip" style="padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
-              <option value="cheltuiala">Cheltuială</option>
-              <option value="incasare">Încasare</option>
+          <div class="form-group">
+            <label>Tip operațiune</label>
+            <select id="f-tip" onchange="onTipChange()" style="padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+              <option value="">— Alege tipul —</option>
+              <optgroup label="↓ Cheltuieli">
+                <option value="COMBUSTIBIL">COMBUSTIBIL</option>
+                <option value="MATERIALE">MATERIALE</option>
+                <option value="TRANSPORT">TRANSPORT</option>
+                <option value="SERVICII">SERVICII</option>
+                <option value="REPARATII">REPARATII</option>
+                <option value="PROTOCOL">PROTOCOL</option>
+                <option value="UTILITATI">UTILITATI</option>
+                <option value="TAXE">TAXE</option>
+                <option value="ASIGURARI">ASIGURARI</option>
+                <option value="ALTE PLATI">ALTE PLATI</option>
+              </optgroup>
+              <optgroup label="↑ Încasare (rar)">
+                <option value="ALTE INCASARI">ALTE INCASARI</option>
+              </optgroup>
             </select>
           </div>
+        </div>
+        <div class="form-row">
           <div class="form-group">
-            <label>Suma (RON)</label>
-            <input type="number" step="0.01" id="f-suma" placeholder="0.00">
+            <label>Beneficiar</label>
+            <div style="position:relative;">
+              <input type="text" id="f-beneficiar" placeholder="Caută beneficiar (2-3 litere)" autocomplete="off"
+                oninput="showSuggestions(this.value); checkBeneficiarValid();" onfocus="showSuggestions(this.value)">
+              <div class="suggestions" id="sug-beneficiar" style="display:none;"></div>
+            </div>
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Beneficiar / Ce ai cumpărat</label>
-            <input type="text" id="f-beneficiar" placeholder="ex: BENZINĂ, BUTELII, MATERIALE">
+            <label id="f-suma-label">Sumă (RON)</label>
+            <input type="number" step="0.01" id="f-suma" placeholder="Completează întâi tipul și beneficiarul"
+              disabled style="opacity:0.4; background:#f1f5f9;">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Observații</label>
-            <input type="text" id="f-obs" placeholder="opțional">
+            <label>Observații (ex: furnizor, detalii)</label>
+            <input type="text" id="f-obs" placeholder="opțional — ex: Petrom, Brico Depot">
           </div>
         </div>
         <button class="btn-submit" onclick="adaugaCheltuiala()">Adaugă cheltuială</button>
@@ -196,6 +232,102 @@ let currentUser = null;
 let fondTotal = 0;
 let cheltuieliCurente = [];
 
+// Beneficiari permiși pentru Nicu (categorii filtrate)
+const CATEGORII_PERMISE = ['VEHICUL','MAGAZIN','PERSOANA','SPATIU','FURNIZOR','UTILITATE','ALTUL'];
+let beneficiariCunoscuti = [];
+let beneficiariCategorii = {};
+
+// Tipuri cu direcție (pentru convertire în caiet)
+const TIPURI_IESIRE = ['COMBUSTIBIL','MATERIALE','TRANSPORT','SERVICII','REPARATII','PROTOCOL','UTILITATI','TAXE','ASIGURARI','ALTE PLATI'];
+const TIPURI_INTRARE = ['ALTE INCASARI'];
+
+async function incarcaBeneficiari() {
+  try {
+    const cats = CATEGORII_PERMISE.map(c => `"${c}"`).join(',');
+    const resp = await fetch(`${API}/beneficiari?select=nume,categorie&activ=eq.true&categorie=in.(${cats})&order=nume.asc`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+    beneficiariCunoscuti = data.map(b => b.nume);
+    beneficiariCategorii = {};
+    for (const b of data) beneficiariCategorii[b.nume] = b.categorie;
+  } catch (e) {}
+}
+
+function showSuggestions(value) {
+  const container = document.getElementById('sug-beneficiar');
+  const val = (value || '').trim().toUpperCase();
+  if (!val || val.length < 1) { container.style.display = 'none'; return; }
+
+  const matches = beneficiariCunoscuti.filter(item => item.includes(val)).slice(0, 10);
+  if (matches.length === 0) {
+    container.innerHTML = `<div style="padding:12px; color:#c0392b; font-size:13px;">Beneficiarul "${val}" nu există în listă. Roagă EUGEN să-l adauge.</div>`;
+    container.style.display = '';
+    return;
+  }
+  container.innerHTML = matches.map(m => {
+    const cat = beneficiariCategorii[m] || 'ALTUL';
+    return `<div onclick="selectBeneficiar('${m.replace(/'/g, "\\'")}')">${m} <span class="cat-chip cat-${cat}">${cat}</span></div>`;
+  }).join('');
+  container.style.display = '';
+}
+
+function selectBeneficiar(val) {
+  document.getElementById('f-beneficiar').value = val;
+  document.getElementById('sug-beneficiar').style.display = 'none';
+  checkBeneficiarValid();
+}
+
+function onTipChange() { checkBeneficiarValid(); }
+
+function checkBeneficiarValid() {
+  const tip = document.getElementById('f-tip').value;
+  const ben = (document.getElementById('f-beneficiar').value || '').trim().toUpperCase();
+  const sumaEl = document.getElementById('f-suma');
+  const sumaLabel = document.getElementById('f-suma-label');
+
+  const tipValid = !!tip;
+  const benValid = ben && beneficiariCunoscuti.includes(ben);
+  const isIncasare = TIPURI_INTRARE.includes(tip);
+
+  if (tipValid) {
+    if (isIncasare) {
+      sumaLabel.textContent = 'Sumă ÎNCASARE (RON)';
+      sumaLabel.style.color = 'var(--green)';
+      sumaEl.style.borderColor = 'var(--green)';
+    } else {
+      sumaLabel.textContent = 'Sumă CHELTUIALĂ (RON)';
+      sumaLabel.style.color = 'var(--red)';
+      sumaEl.style.borderColor = 'var(--red)';
+    }
+  } else {
+    sumaLabel.textContent = 'Sumă (RON)';
+    sumaLabel.style.color = '';
+    sumaEl.style.borderColor = '';
+  }
+
+  if (tipValid && benValid) {
+    sumaEl.disabled = false;
+    sumaEl.style.opacity = '';
+    sumaEl.style.background = '';
+    sumaEl.placeholder = '0.00';
+    sumaEl.focus();
+  } else {
+    sumaEl.disabled = true;
+    sumaEl.style.opacity = '0.4';
+    sumaEl.style.background = '#f1f5f9';
+    if (!tipValid) sumaEl.placeholder = 'Alege TIP întâi';
+    else if (!benValid) sumaEl.placeholder = 'Completează beneficiarul din listă';
+    sumaEl.value = '';
+  }
+}
+
+// Hide suggestions on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.form-group')) {
+    document.querySelectorAll('.suggestions').forEach(s => s.style.display = 'none');
+  }
+});
+
 async function onLoginPin() {
   const pin = document.getElementById('login-pin').value;
   if (pin.length < 4) return;
@@ -214,6 +346,7 @@ async function onLoginPin() {
     document.getElementById('screen-main').style.display = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+    await incarcaBeneficiari();
     await incarcaDate();
   } catch (e) {
     showToast('Eroare conexiune');
@@ -413,11 +546,16 @@ async function adaugaCheltuiala() {
   const beneficiar = document.getElementById('f-beneficiar').value.trim().toUpperCase();
   const obs = document.getElementById('f-obs').value.trim();
   const tipOp = document.getElementById('f-tip').value;
-  const esteIncasare = tipOp === 'incasare';
+  const esteIncasare = TIPURI_INTRARE.includes(tipOp);
 
   if (!data) { showToast('Selectează data'); return; }
-  if (!suma || suma <= 0) { showToast('Introdu suma'); return; }
+  if (!tipOp) { showToast('Alege tipul operațiunii'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
+  if (!beneficiariCunoscuti.includes(beneficiar)) {
+    showToast(`Beneficiar necunoscut: "${beneficiar}". Roagă EUGEN să-l adauge.`);
+    return;
+  }
+  if (!suma || suma <= 0) { showToast('Introdu suma'); return; }
 
   try {
     const resp = await fetch(`${API}/deconturi`, {
@@ -427,15 +565,22 @@ async function adaugaCheltuiala() {
         utilizator: currentUser.nume,
         data, beneficiar,
         suma: esteIncasare ? -Math.round(suma * 100) / 100 : Math.round(suma * 100) / 100,
-        observatii: obs, status: 'nou'
+        observatii: obs,
+        status: 'nou',
+        tip_subcategorie: tipOp
       })
     });
     if (resp.ok) {
       showToast('Cheltuială adăugată!');
+      document.getElementById('f-tip').value = '';
       document.getElementById('f-suma').value = '';
       document.getElementById('f-beneficiar').value = '';
       document.getElementById('f-obs').value = '';
+      checkBeneficiarValid();
       await incarcaDate();
+    } else {
+      const txt = await resp.text();
+      showToast('Eroare: ' + txt);
     }
   } catch (e) { showToast('Eroare'); }
 }
@@ -445,15 +590,16 @@ async function editCheltuiala(id) {
   if (!item) return;
   // Pre-completeaza formularul cu datele existente
   document.getElementById('f-data').value = item.data;
-  document.getElementById('f-tip').value = parseFloat(item.suma) < 0 ? 'incasare' : 'cheltuiala';
-  document.getElementById('f-suma').value = Math.abs(parseFloat(item.suma));
+  document.getElementById('f-tip').value = item.tip_subcategorie || '';
   document.getElementById('f-beneficiar').value = item.beneficiar;
   document.getElementById('f-obs').value = item.observatii || '';
-  // Stergem randul vechi
+  // Stergem randul vechi (suma se recompletează)
   await fetch(`${API}/deconturi?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
   await incarcaDate();
+  checkBeneficiarValid();
+  // Re-populează suma dupa checkBeneficiarValid (care o resetează)
+  setTimeout(() => { document.getElementById('f-suma').value = Math.abs(parseFloat(item.suma)); }, 100);
   showToast('Editează și salvează din nou');
-  document.getElementById('f-beneficiar').focus();
 }
 
 async function stergeCheltuiala(id) {
@@ -481,12 +627,13 @@ async function trimiteDecont() {
     // Scrie cheltuielile in caiet ca PENDING (nu afecteaza soldul)
     for (const d of cheltuieliCurente) {
       const sumaVal = parseFloat(d.suma);
+      const subtip = d.tip_subcategorie || 'ALTE PLATI';
       await fetch(`${API}/caiet`, {
         method: 'POST',
         headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({
           data: d.data,
-          tip: 'DECONT ' + currentUser.nume + ' (PENDING)',
+          tip: `${subtip} (PENDING ${currentUser.nume})`,
           beneficiar: d.beneficiar,
           intrare: sumaVal < 0 ? Math.abs(sumaVal) : 0,
           iesire: sumaVal >= 0 ? sumaVal : 0,
