@@ -366,29 +366,42 @@ async function onLoginPin() {
 async function completeLogin(user) {
   currentUser = user;
   const esteNicu = user.nume === 'NICU';
-  const esteAdmin = ['EUGEN','LIVIA','ELA'].includes(user.nume);
-  document.getElementById('header-user').textContent = currentUser.nume + (esteAdmin ? ' (admin — vizualizare)' : '');
+  const esteEugen = user.nume === 'EUGEN';
+  const esteViewOnly = ['LIVIA','ELA'].includes(user.nume);
+  const esteAdmin = esteEugen || esteViewOnly;
+
+  let label = '';
+  if (esteEugen) label = ' (admin — edit/delete pentru NICU)';
+  else if (esteViewOnly) label = ' (vizualizare doar)';
+  document.getElementById('header-user').textContent = currentUser.nume + label;
+
   document.getElementById('btn-logout').style.display = '';
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-main').style.display = '';
   document.getElementById('login-pin').value = '';
   document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
 
-  // ADMIN (EUGEN/LIVIA/ELA) — ascunde formularul, arată doar deconturi Nicu
+  // Form-zone:
+  // - NICU: vizibil (face propriul decont)
+  // - EUGEN: vizibil (editează pe contul lui NICU)
+  // - LIVIA/ELA: ASCUNS (doar vizualizare)
   const formZone = document.getElementById('form-zone');
-  if (!esteNicu && esteAdmin) {
-    formZone.style.display = 'none';
-    // Adaugă un banner informativ
-    const existing = document.getElementById('admin-banner');
-    if (!existing) {
-      const banner = document.createElement('div');
+  formZone.style.display = esteViewOnly ? 'none' : '';
+
+  // Banner informativ pentru admin
+  let banner = document.getElementById('admin-banner');
+  if (esteAdmin) {
+    if (!banner) {
+      banner = document.createElement('div');
       banner.id = 'admin-banner';
       banner.style.cssText = 'background:#dbeafe; border-left:3px solid var(--blue); padding:12px 16px; border-radius:8px; margin-bottom:14px; color:#1e3a8a; font-size:14px;';
-      banner.innerHTML = `<b>Mod vizualizare</b> — vezi deconturile lui NICU. ${user.nume === 'EUGEN' ? 'Poți șterge din istoric.' : 'Doar citire.'}`;
       document.getElementById('screen-main').insertBefore(banner, document.getElementById('screen-main').firstChild);
     }
-  } else {
-    formZone.style.display = '';
+    banner.innerHTML = esteEugen
+      ? '<b>Mod admin — vezi deconturile lui NICU.</b> Poți edita (✎), șterge (✕) și șterge decontul întreg din istoric.'
+      : '<b>Mod vizualizare — vezi deconturile lui NICU.</b> Doar citire.';
+  } else if (banner) {
+    banner.remove();
   }
 
   await incarcaBeneficiari();
@@ -572,6 +585,8 @@ function renderTabel(totalCheltuit, esteTrimis) {
     <th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th><th>Status</th><th></th>
   </tr></thead><tbody>`;
 
+  const esteNicu = currentUser && currentUser.nume === 'NICU';
+  const esteEugen = currentUser && currentUser.nume === 'EUGEN';
   for (const d of cheltuieliCurente) {
     const dt = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const sumaVal = parseFloat(d.suma);
@@ -580,6 +595,13 @@ function renderTabel(totalCheltuit, esteTrimis) {
     const statusBadge = esteTrimisRow
       ? '<span class="status-badge status-trimis">TRIMIS</span>'
       : '<span class="status-badge" style="background:#fef3c7; color:#92400e;">DRAFT</span>';
+    // NICU poate edita; EUGEN edit+delete; restul doar văd. TRIMIS nu se mai modifică.
+    const poateEdita = (esteNicu || esteEugen) && !esteTrimisRow;
+    const poateSterge = esteEugen && !esteTrimisRow;
+
+    let actiuni = '';
+    if (poateEdita) actiuni += `<button class="btn-del" onclick="editCheltuiala(${d.id})" title="Editează" style="color:#1a73e8;">✎</button>`;
+    if (poateSterge) actiuni += `<button class="btn-del" onclick="stergeCheltuiala(${d.id})" title="Șterge">✕</button>`;
 
     html += `<tr style="${esteTrimisRow ? 'opacity:0.7;' : ''}">
       <td style="white-space:nowrap;">${dt}</td>
@@ -589,10 +611,7 @@ function renderTabel(totalCheltuit, esteTrimis) {
       </td>
       <td style="color:#888; font-size:12px;">${escHtml(d.observatii || '')}</td>
       <td>${statusBadge}</td>
-      <td style="white-space:nowrap;">${!esteTrimisRow ? `
-        <button class="btn-del" onclick="editCheltuiala(${d.id})" title="Editează" style="color:#1a73e8;">✎</button>
-        <button class="btn-del" onclick="stergeCheltuiala(${d.id})" title="Șterge">✕</button>
-      ` : ''}</td>
+      <td style="white-space:nowrap;">${actiuni}</td>
     </tr>`;
   }
 
@@ -604,10 +623,11 @@ function renderTabel(totalCheltuit, esteTrimis) {
   html += '</tbody></table>';
   container.innerHTML = html;
 
-  // Buton trimite - doar dacă există operațiuni DRAFT (neexpediate)
+  // Buton trimite - doar NICU, doar dacă există operațiuni DRAFT
   const areDraft = cheltuieliCurente.some(d => d.status === 'nou');
-  btnTrimite.style.display = areDraft ? '' : 'none';
-  if (areDraft) {
+  const poateTrimite = esteNicu && areDraft;
+  btnTrimite.style.display = poateTrimite ? '' : 'none';
+  if (poateTrimite) {
     const nrDraft = cheltuieliCurente.filter(d => d.status === 'nou').length;
     btnTrimite.textContent = `Trimite decont (${nrDraft} operațiuni draft)`;
   }
@@ -630,12 +650,15 @@ async function adaugaCheltuiala() {
   }
   if (!suma || suma <= 0) { showToast('Introdu suma'); return; }
 
+  // Dacă admin (EUGEN) editează, salvează tot pe contul lui NICU
+  const targetUser = ['EUGEN','LIVIA','ELA'].includes(currentUser.nume) ? 'NICU' : currentUser.nume;
+
   try {
     const resp = await fetch(`${API}/deconturi`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        utilizator: currentUser.nume,
+        utilizator: targetUser,
         data, beneficiar,
         suma: esteIncasare ? -Math.round(suma * 100) / 100 : Math.round(suma * 100) / 100,
         observatii: obs,
