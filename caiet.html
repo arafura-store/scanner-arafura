@@ -797,10 +797,14 @@ function selectSuggestion(field, value) {
 }
 
 function checkBeneficiarValid() {
-  const val = (document.getElementById('f-beneficiar').value || '').trim().toUpperCase();
+  const tip = (document.getElementById('f-tip').value || '').trim();
+  const ben = (document.getElementById('f-beneficiar').value || '').trim().toUpperCase();
   const sumaEl = document.getElementById('f-suma');
-  const isValid = val && beneficiariCunoscuti.includes(val);
-  if (isValid) {
+
+  const tipValid = !!tip;
+  const benValid = ben && beneficiariCunoscuti.includes(ben);
+
+  if (tipValid && benValid) {
     sumaEl.disabled = false;
     sumaEl.style.opacity = '';
     sumaEl.style.background = '';
@@ -810,7 +814,8 @@ function checkBeneficiarValid() {
     sumaEl.disabled = true;
     sumaEl.style.opacity = '0.4';
     sumaEl.style.background = '#f1f5f9';
-    sumaEl.placeholder = 'Completează întâi beneficiarul';
+    if (!tipValid) sumaEl.placeholder = 'Alege TIP întâi';
+    else if (!benValid) sumaEl.placeholder = 'Completează beneficiarul';
     sumaEl.value = '';
   }
 }
@@ -909,17 +914,16 @@ function checkTipDirection() {
     sumaLabel.textContent = 'Sumă ÎNCASARE (RON)';
     sumaLabel.style.color = 'var(--green)';
     sumaEl.style.borderColor = 'var(--green)';
-    sumaEl.focus();
   } else if (dir === 'out') {
     sumaLabel.textContent = 'Sumă PLATĂ (RON)';
     sumaLabel.style.color = 'var(--red)';
     sumaEl.style.borderColor = 'var(--red)';
-    sumaEl.focus();
   } else {
     sumaLabel.textContent = 'Sumă (RON)';
     sumaLabel.style.color = '';
     sumaEl.style.borderColor = '';
   }
+  checkBeneficiarValid();
 }
 
 // Hide suggestions on click outside
