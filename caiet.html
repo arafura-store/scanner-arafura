@@ -646,16 +646,8 @@ async function onLoginPin() {
     const user = data[0];
     if (user.nume === 'NICU') {
       document.getElementById('login-pin').value = '';
-      document.getElementById('screen-login').innerHTML = `
-        <div style="text-align:center; padding:60px 24px;">
-          <div style="font-size:120px; line-height:1;">&#9888;</div>
-          <div style="font-size:32px; font-weight:800; color:#c0392b; margin-top:20px; letter-spacing:1px;">
-            FOLOSEȘTE PAGINA DE DECONT!
-          </div>
-          <div style="font-size:16px; color:#6b7280; margin-top:16px;">
-            Nu ai acces la registrul de casă.
-          </div>
-        </div>`;
+      showToast('⚠ NICU — folosește pagina de DECONT, nu caietul!');
+      setTimeout(() => document.getElementById('login-pin').focus(), 100);
       return;
     }
     saveSession(user);
