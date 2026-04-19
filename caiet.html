@@ -351,13 +351,26 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- DEVICE AUTH (doar pe device-uri neautorizate) -->
+<div id="screen-device-auth" class="login-screen" style="display:none;">
+  <div class="icon">🔒</div>
+  <h2>Device neautorizat</h2>
+  <p style="color:var(--sub); max-width:400px; text-align:center;">
+    Acest computer nu are acces la caiet.<br>Introdu codul de autorizare.
+  </p>
+  <input type="password" id="device-code" placeholder="cod autorizare"
+    style="width:280px; padding:16px; font-size:18px; text-align:center; letter-spacing:2px;"
+    onkeyup="checkDeviceCode(event)" autofocus>
+  <div id="device-error" style="color:var(--red); font-size:13px; height:16px;"></div>
+</div>
+
 <!-- LOGIN -->
-<div id="screen-login" class="login-screen">
+<div id="screen-login" class="login-screen" style="display:none;">
   <div class="icon">📒</div>
   <h2>Registru de casă</h2>
   <p style="color:var(--sub);">Introdu PIN-ul tău</p>
   <input type="password" inputmode="numeric" maxlength="4" placeholder="****"
-    id="login-pin" oninput="onLoginPin()" autocomplete="off" autofocus>
+    id="login-pin" oninput="onLoginPin()" autocomplete="off">
 </div>
 
 <!-- MAIN -->
@@ -667,10 +680,41 @@ function logout() {
   document.getElementById('header-user').textContent = '';
 }
 
-// ── Auto-login din localStorage (după refresh) ────────────────────
-(function autoLogin() {
+// ── Device auth + Auto-login ──────────────────────────────────────
+const DEVICE_AUTH_KEY = 'caiet_device_autorizat';
+const DEVICE_AUTH_CODE = 'august1947';
+
+function checkDeviceCode(event) {
+  if (event.key !== 'Enter') return;
+  const code = document.getElementById('device-code').value;
+  const errEl = document.getElementById('device-error');
+  if (code === DEVICE_AUTH_CODE) {
+    localStorage.setItem(DEVICE_AUTH_KEY, 'true');
+    document.getElementById('screen-device-auth').style.display = 'none';
+    document.getElementById('device-code').value = '';
+    errEl.textContent = '';
+    // Continuă fluxul normal: auto-login dacă avem sesiune, altfel PIN
+    const saved = loadSession();
+    if (saved) completeLogin(saved);
+    else {
+      document.getElementById('screen-login').style.display = '';
+      document.getElementById('login-pin').focus();
+    }
+  } else {
+    errEl.textContent = 'Cod incorect';
+    document.getElementById('device-code').value = '';
+  }
+}
+
+(function init() {
+  const deviceAuth = localStorage.getItem(DEVICE_AUTH_KEY) === 'true';
+  if (!deviceAuth) {
+    document.getElementById('screen-device-auth').style.display = '';
+    return;
+  }
   const saved = loadSession();
-  if (saved) { completeLogin(saved); }
+  if (saved) completeLogin(saved);
+  else document.getElementById('screen-login').style.display = '';
 })();
 
 async function incarcaSold() {
