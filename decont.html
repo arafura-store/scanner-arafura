@@ -379,7 +379,10 @@ async function completeLogin(user) {
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-main').style.display = '';
   document.getElementById('login-pin').value = '';
-  document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const fData = document.getElementById('f-data');
+  fData.value = todayStr;
+  fData.setAttribute('max', todayStr); // Nu permite date viitoare
 
   // Form-zone:
   // - NICU: vizibil (face propriul decont)
@@ -640,6 +643,8 @@ async function adaugaCheltuiala() {
   const esteIncasare = TIPURI_INTRARE.includes(tipOp);
 
   if (!data) { showToast('Selectează data'); return; }
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (data > todayStr) { showToast('⚠ Data e în viitor! Nu poți înregistra operațiuni pentru zile viitoare.'); return; }
   if (!tipOp) { showToast('Alege tipul operațiunii'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
   if (!beneficiariCunoscuti.includes(beneficiar)) {

@@ -674,11 +674,17 @@ async function completeLogin(user) {
   document.getElementById('screen-main').style.display = '';
   document.getElementById('login-pin').value = '';
 
-  document.getElementById('f-data').value = new Date().toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  document.getElementById('f-data').value = todayStr;
+  // Blocare vizuală: nu poate selecta zile viitoare la formulare
+  ['f-data','fa-data','fi-data'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('max', todayStr);
+  });
   const today = new Date();
   const primaZi = new Date(today.getFullYear(), today.getMonth(), 1);
   document.getElementById('t-data-start').value = primaZi.toISOString().slice(0, 10);
-  document.getElementById('t-data-end').value = today.toISOString().slice(0, 10);
+  document.getElementById('t-data-end').value = todayStr;
 
   await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii(), verificaDeconturi()]);
 }
@@ -897,6 +903,13 @@ function updateTipSelect(directie) {
   }
 }
 
+// Verifică dacă data e în viitor (strict — azi sau în trecut OK)
+function dataInViitor(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return dateStr > today;
+}
+
 function setTipQuick(tip) {
   document.getElementById('f-tip').value = tip;
   updateTipSelect(tip === 'INCASARE' ? 'in' : 'out');
@@ -1066,6 +1079,7 @@ async function adaugaOperatiuneAmanet() {
   const obs = document.getElementById('fa-obs').value.trim();
 
   if (!data) { showToast('Selectează data'); return; }
+  if (dataInViitor(data)) { showToast('⚠ Data e în viitor! Nu poți înregistra operațiuni pentru zile viitoare.'); return; }
   if (!tip) { showToast('Alege tipul operațiunii'); return; }
   if (!nrDisp) { showToast('Completează nr. dispoziție/document'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
@@ -1118,6 +1132,7 @@ async function adaugaIncasare() {
   const obs = document.getElementById('fi-obs').value.trim();
 
   if (!data) { showToast('Selectează data'); return; }
+  if (dataInViitor(data)) { showToast('⚠ Data e în viitor! Nu poți înregistra operațiuni pentru zile viitoare.'); return; }
   if (!magazin) { showToast('Alege magazinul'); return; }
   if (suma <= 0) { showToast('Completează suma'); return; }
 
@@ -1160,6 +1175,7 @@ async function adaugaOperatiune() {
   const obs = document.getElementById('f-obs').value.trim();
 
   if (!data) { showToast('Selectează data'); return; }
+  if (dataInViitor(data)) { showToast('⚠ Data e în viitor! Nu poți înregistra operațiuni pentru zile viitoare.'); return; }
   if (!tip) { showToast('Completează tipul operațiunii'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
   if (!beneficiariCunoscuti.includes(beneficiar)) {
@@ -1663,6 +1679,7 @@ async function salveazaEdit(id) {
   const obs = document.getElementById('edit-obs').value.trim();
 
   if (!data || !tip || !beneficiar) { showToast('Completează câmpurile obligatorii'); return; }
+  if (dataInViitor(data)) { showToast('⚠ Data e în viitor! Modificare respinsă.'); return; }
 
   try {
     const resp = await fetch(`${API}/caiet?id=eq.${id}`, {
