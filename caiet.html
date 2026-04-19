@@ -405,12 +405,8 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Intrare (RON)</label>
-          <input type="number" step="0.01" id="f-intrare" placeholder="0.00">
-        </div>
-        <div class="form-group">
-          <label>Ieșire (RON)</label>
-          <input type="number" step="0.01" id="f-iesire" placeholder="0.00">
+          <label id="f-suma-label">Sumă (RON)</label>
+          <input type="number" step="0.01" id="f-suma" placeholder="0.00">
         </div>
       </div>
       <div class="form-row">
@@ -765,35 +761,34 @@ function highlightTipButtons() {
   }
 }
 
-function checkTipDirection() {
-  const tip = document.getElementById('f-tip').value.trim().toUpperCase();
-  const intrareEl = document.getElementById('f-intrare');
-  const iesireEl = document.getElementById('f-iesire');
-
-  // Tipuri care sunt doar INTRARE
+function tipDirection(tip) {
   const tipuriIntrare = ['INCASARE', 'RETRAGERE'];
-  // Tipuri care sunt doar IESIRE
   const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'DEPUNERE', 'CHIRIE SPATIU', 'UTILITATI', 'ROVINIETA', 'MANCARE', 'TRECERE POD'];
+  if (tipuriIntrare.includes(tip)) return 'in';
+  if (tipuriIesire.includes(tip)) return 'out';
+  return null;
+}
 
-  if (tipuriIntrare.includes(tip)) {
-    iesireEl.value = '';
-    iesireEl.disabled = true;
-    iesireEl.style.opacity = '0.4';
-    intrareEl.disabled = false;
-    intrareEl.style.opacity = '1';
-    intrareEl.focus();
-  } else if (tipuriIesire.includes(tip)) {
-    intrareEl.value = '';
-    intrareEl.disabled = true;
-    intrareEl.style.opacity = '0.4';
-    iesireEl.disabled = false;
-    iesireEl.style.opacity = '1';
-    iesireEl.focus();
+function checkTipDirection() {
+  const tip = (document.getElementById('f-tip').value || '').trim().toUpperCase();
+  const sumaEl = document.getElementById('f-suma');
+  const sumaLabel = document.getElementById('f-suma-label');
+  const dir = tipDirection(tip);
+
+  if (dir === 'in') {
+    sumaLabel.textContent = 'Sumă ÎNCASARE (RON)';
+    sumaLabel.style.color = 'var(--green)';
+    sumaEl.style.borderColor = 'var(--green)';
+    sumaEl.focus();
+  } else if (dir === 'out') {
+    sumaLabel.textContent = 'Sumă PLATĂ (RON)';
+    sumaLabel.style.color = 'var(--red)';
+    sumaEl.style.borderColor = 'var(--red)';
+    sumaEl.focus();
   } else {
-    intrareEl.disabled = false;
-    intrareEl.style.opacity = '1';
-    iesireEl.disabled = false;
-    iesireEl.style.opacity = '1';
+    sumaLabel.textContent = 'Sumă (RON)';
+    sumaLabel.style.color = '';
+    sumaEl.style.borderColor = '';
   }
 }
 
@@ -983,14 +978,21 @@ async function adaugaOperatiune() {
   const data = document.getElementById('f-data').value;
   const tip = document.getElementById('f-tip').value.trim().toUpperCase();
   const beneficiar = document.getElementById('f-beneficiar').value.trim().toUpperCase();
-  const intrare = parseFloat(document.getElementById('f-intrare').value) || 0;
-  const iesire = parseFloat(document.getElementById('f-iesire').value) || 0;
+  const suma = parseFloat(document.getElementById('f-suma').value) || 0;
   const obs = document.getElementById('f-obs').value.trim();
 
   if (!data) { showToast('Selectează data'); return; }
   if (!tip) { showToast('Completează tipul operațiunii'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
-  if (intrare === 0 && iesire === 0) { showToast('Completează intrare sau ieșire'); return; }
+  if (suma <= 0) { showToast('Completează suma'); return; }
+
+  const dir = tipDirection(tip);
+  if (!dir) {
+    showToast('Tip necunoscut — alege INCASARE/PLATA sau un tip cu direcție clară');
+    return;
+  }
+  const intrare = dir === 'in' ? suma : 0;
+  const iesire = dir === 'out' ? suma : 0;
 
   try {
     const resp = await fetch(`${API}/caiet`, {
@@ -998,8 +1000,7 @@ async function adaugaOperatiune() {
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
         data, tip, beneficiar,
-        intrare: intrare || 0,
-        iesire: iesire || 0,
+        intrare, iesire,
         observatii: obs,
         utilizator: currentUser.nume,
         completat_la: new Date().toISOString()
@@ -1010,15 +1011,10 @@ async function adaugaOperatiune() {
       // Reset form (keep date)
       document.getElementById('f-tip').value = '';
       document.getElementById('f-beneficiar').value = '';
-      document.getElementById('f-intrare').value = '';
-      document.getElementById('f-iesire').value = '';
+      document.getElementById('f-suma').value = '';
       document.getElementById('f-obs').value = '';
       highlightTipButtons();
-      // Resetează starea intrare/ieșire
-      const intrEl = document.getElementById('f-intrare');
-      const iesEl = document.getElementById('f-iesire');
-      intrEl.disabled = false; intrEl.style.opacity = '1';
-      iesEl.disabled = false; iesEl.style.opacity = '1';
+      checkTipDirection();
       // Refresh
       await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii()]);
     } else {
