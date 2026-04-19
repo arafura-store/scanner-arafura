@@ -391,6 +391,7 @@
             <option value="COMBUSTIBIL">COMBUSTIBIL</option>
             <option value="UTILITATI">UTILITATI</option>
             <option value="CHIRII">CHIRII</option>
+            <option value="PROTOCOL">PROTOCOL</option>
           </select>
           <input type="hidden" id="f-tip">
         </div>
@@ -772,7 +773,7 @@ function highlightTipButtons() {
 function tipDirection(tip) {
   // Doar tipurile valide pentru "Operațiune normală"
   const tipuriIntrare = ['INCASARE'];
-  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'UTILITATI', 'CHIRII'];
+  const tipuriIesire = ['PLATA', 'COMBUSTIBIL', 'UTILITATI', 'CHIRII', 'PROTOCOL'];
   if (tipuriIntrare.includes(tip)) return 'in';
   if (tipuriIesire.includes(tip)) return 'out';
   return null;
