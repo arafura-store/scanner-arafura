@@ -388,18 +388,16 @@ async function completeLogin(user) {
   const formZone = document.getElementById('form-zone');
   formZone.style.display = esteViewOnly ? 'none' : '';
 
-  // Banner informativ pentru admin
+  // Banner informativ DOAR pentru EUGEN (LIVIA/ELA/NICU nu-l văd)
   let banner = document.getElementById('admin-banner');
-  if (esteAdmin) {
+  if (esteEugen) {
     if (!banner) {
       banner = document.createElement('div');
       banner.id = 'admin-banner';
       banner.style.cssText = 'background:#dbeafe; border-left:3px solid var(--blue); padding:12px 16px; border-radius:8px; margin-bottom:14px; color:#1e3a8a; font-size:14px;';
       document.getElementById('screen-main').insertBefore(banner, document.getElementById('screen-main').firstChild);
     }
-    banner.innerHTML = esteEugen
-      ? '<b>Mod admin — vezi deconturile lui NICU.</b> Poți edita (✎), șterge (✕) și șterge decontul întreg din istoric.'
-      : '<b>Mod vizualizare — vezi deconturile lui NICU.</b> Doar citire.';
+    banner.innerHTML = '<b>Mod admin — vezi deconturile lui NICU.</b> Poți edita (✎), șterge (✕) și șterge decontul întreg din istoric.';
   } else if (banner) {
     banner.remove();
   }
