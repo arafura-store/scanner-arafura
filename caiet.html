@@ -1103,7 +1103,7 @@ function renderOperatiuni() {
   let html = `<table>
     <thead><tr>
       <th>Completat</th><th>Data chitanță</th><th>Tip</th><th>Beneficiar</th>
-      <th>Intrare</th><th>Ieșire</th>
+      <th>Intrare</th><th style="padding-left:30px;">Ieșire</th>
       <th style="padding-left:40px;">Observații</th><th>Completat de:</th><th></th>
     </tr></thead><tbody>`;
 
@@ -1126,7 +1126,7 @@ function renderOperatiuni() {
       <td style="text-align:center;"><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
       <td style="font-weight:500; text-align:center;"><span class="clickable-ben" onclick="filtreazaBeneficiar('${benEsc}')" title="Click: filtrează după acest beneficiar">${escHtml(d.beneficiar)}</span></td>
       <td class="td-center">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
-      <td class="td-center">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
+      <td class="td-center" style="padding-left:30px;">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
       <td style="color:#888; font-size:12px; max-width:260px; padding-left:40px; text-align:center;">${obsFinal}</td>
       <td style="font-size:11px; color:#aaa; text-align:center;">${d.utilizator}</td>
       <td style="white-space:nowrap; text-align:center;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
