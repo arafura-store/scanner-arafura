@@ -1460,6 +1460,7 @@ async function verificaDeconturi() {
     }
 
     let html = '';
+    const poateConfirma = currentUser && currentUser.nume === 'EUGEN';
     for (const [user, val] of Object.entries(perUser)) {
       html += `<div class="alerta-decont-box">
         <div style="display:flex; align-items:center; gap:12px;">
@@ -1467,13 +1468,13 @@ async function verificaDeconturi() {
           <div class="alerta-text">
             <div class="alerta-nume">Decont ${user}</div>
             <div class="alerta-suma">${val.total.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
-            <div style="font-size:11px; color:var(--sub); margin-top:2px;">${val.items.length} cheltuieli — așteaptă verificare</div>
+            <div style="font-size:11px; color:var(--sub); margin-top:2px;">${val.items.length} cheltuieli — așteaptă verificare${poateConfirma ? '' : ' (doar EUGEN poate confirma/returna)'}</div>
           </div>
         </div>
-        <div style="display:flex; gap:8px;">
+        ${poateConfirma ? `<div style="display:flex; gap:8px;">
           <button class="btn-deconteaza" onclick="confirmaDecont('${user}', ${val.total.toFixed(2)})" style="flex:1;">Confirmă</button>
           <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaDecont('${user}')">Returnează</button>
-        </div>
+        </div>` : ''}
         <table style="margin-top:12px; box-shadow:none;">
           <thead><tr><th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th></tr></thead>
           <tbody>`;
