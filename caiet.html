@@ -1216,15 +1216,21 @@ async function incarcaOperatiuni() {
   const dataEnd = document.getElementById('t-data-end').value;
   const container = document.getElementById('tabel-operatiuni');
 
-  let url = `${API}/caiet?select=*&order=data.desc,completat_la.desc&limit=5000`;
-  if (dataStart) url += `&data=gte.${dataStart}`;
-  if (dataEnd) url += `&data=lte.${dataEnd}`;
-
   try {
-    const resp = await fetch(url, { headers: HEADERS });
-    const data = await resp.json();
-    if (!Array.isArray(data)) return;
-    allOperatiuni = data;
+    const all = [];
+    let offset = 0;
+    while (true) {
+      let url = `${API}/caiet?select=*&order=data.desc,completat_la.desc&limit=1000&offset=${offset}`;
+      if (dataStart) url += `&data=gte.${dataStart}`;
+      if (dataEnd) url += `&data=lte.${dataEnd}`;
+      const resp = await fetch(url, { headers: HEADERS });
+      const data = await resp.json();
+      if (!Array.isArray(data) || data.length === 0) break;
+      all.push(...data);
+      offset += 1000;
+      if (data.length < 1000) break;
+    }
+    allOperatiuni = all;
     populeazaDropdownuri();
     renderOperatiuni();
   } catch (e) {
