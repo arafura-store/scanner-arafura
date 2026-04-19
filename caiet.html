@@ -128,6 +128,39 @@
     .table-filters select, .table-filters input {
       padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
     }
+    .search-panel {
+      background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .search-panel h3 { font-size: 15px; margin-bottom: 12px; color: #2c3e50; }
+    .search-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+    .search-row:last-child { margin-bottom: 0; }
+    .search-row input[type=text], .search-row input[type=date], .search-row select {
+      padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px;
+      font-family: inherit;
+    }
+    .search-row input[type=text] { flex: 1; min-width: 220px; font-size: 14px; }
+    .quick-dates { display: flex; gap: 6px; flex-wrap: wrap; }
+    .qd-btn {
+      padding: 7px 14px; border: 1px solid var(--border); background: #f4f6f9;
+      border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; color: #555;
+      transition: all .15s;
+    }
+    .qd-btn:hover { background: var(--blue); color: white; border-color: var(--blue); }
+    .qd-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+    .search-summary {
+      background: linear-gradient(135deg, #e8f0fe 0%, #f0f9ff 100%);
+      border-left: 4px solid var(--blue);
+      padding: 12px 16px; border-radius: 8px; margin-bottom: 12px;
+      font-size: 13px; display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    }
+    .search-summary .ss-item { display: flex; flex-direction: column; gap: 2px; }
+    .search-summary .ss-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .3px; }
+    .search-summary .ss-value { font-size: 15px; font-weight: 800; color: #2c3e50; }
+    .search-summary .ss-value.green { color: #16a34a; }
+    .search-summary .ss-value.red { color: #c0392b; }
+    .clickable-ben { cursor: pointer; text-decoration: underline dotted; text-decoration-color: #cbd5e1; }
+    .clickable-ben:hover { color: var(--blue); }
     table {
       width: 100%; border-collapse: separate; border-spacing: 0;
       background: var(--card);
@@ -429,14 +462,41 @@
   </div>
 
   <div class="table-section">
-    <div class="table-header">
-      <h3>Operațiuni recente</h3>
-      <div class="table-filters">
+    <div class="search-panel">
+      <h3>🔍 Căutare în caiet</h3>
+
+      <div class="search-row">
+        <input type="text" id="t-search" placeholder="Caută: beneficiar / observații / nr. dispoziție / tip..." oninput="onSearchInput()">
+        <button class="qd-btn" onclick="clearSearch()" style="background:#fee2e2; color:#c0392b; border-color:#fecaca;">Șterge filtre</button>
+      </div>
+
+      <div class="search-row">
+        <div class="quick-dates">
+          <button class="qd-btn" data-qd="azi" onclick="setQuickDate('azi')">Azi</button>
+          <button class="qd-btn" data-qd="7" onclick="setQuickDate('7')">7 zile</button>
+          <button class="qd-btn" data-qd="luna" onclick="setQuickDate('luna')">Luna</button>
+          <button class="qd-btn" data-qd="3" onclick="setQuickDate('3')">3 luni</button>
+          <button class="qd-btn" data-qd="6" onclick="setQuickDate('6')">6 luni</button>
+          <button class="qd-btn" data-qd="12" onclick="setQuickDate('12')">1 an</button>
+          <button class="qd-btn" data-qd="tot" onclick="setQuickDate('tot')">Tot</button>
+        </div>
+      </div>
+
+      <div class="search-row">
         <input type="date" id="t-data-start" onchange="incarcaOperatiuni()">
-        <span style="line-height:36px;">→</span>
+        <span>→</span>
         <input type="date" id="t-data-end" onchange="incarcaOperatiuni()">
+        <select id="t-tip" onchange="renderOperatiuni()"><option value="">Tip: toate</option></select>
+        <select id="t-utilizator" onchange="renderOperatiuni()"><option value="">Utilizator: toți</option></select>
+        <select id="t-directie" onchange="renderOperatiuni()">
+          <option value="">Direcție: toate</option>
+          <option value="in">Doar intrări</option>
+          <option value="out">Doar ieșiri</option>
+        </select>
       </div>
     </div>
+
+    <div id="search-summary" style="display:none;"></div>
     <div id="tabel-operatiuni"></div>
   </div>
 </div>
@@ -827,6 +887,52 @@ async function adaugaOperatiune() {
   }
 }
 
+let allOperatiuni = [];
+let searchTimer = null;
+
+function onSearchInput() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderOperatiuni, 200);
+}
+
+function setQuickDate(kind) {
+  const today = new Date();
+  const end = today.toISOString().slice(0, 10);
+  let start;
+  if (kind === 'azi') start = end;
+  else if (kind === 'luna') {
+    start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
+  } else if (kind === 'tot') {
+    start = '';
+  } else {
+    const days = kind === '7' ? 7 : (parseInt(kind) * 30);
+    const d = new Date(today); d.setDate(d.getDate() - days);
+    start = d.toISOString().slice(0, 10);
+  }
+  document.getElementById('t-data-start').value = start;
+  document.getElementById('t-data-end').value = kind === 'tot' ? '' : end;
+  // Marchează butonul activ
+  document.querySelectorAll('.qd-btn[data-qd]').forEach(b => b.classList.remove('active'));
+  const active = document.querySelector(`.qd-btn[data-qd="${kind}"]`);
+  if (active) active.classList.add('active');
+  incarcaOperatiuni();
+}
+
+function clearSearch() {
+  document.getElementById('t-search').value = '';
+  document.getElementById('t-tip').value = '';
+  document.getElementById('t-utilizator').value = '';
+  document.getElementById('t-directie').value = '';
+  document.querySelectorAll('.qd-btn[data-qd]').forEach(b => b.classList.remove('active'));
+  setQuickDate('luna');
+}
+
+function filtreazaBeneficiar(ben) {
+  document.getElementById('t-search').value = ben;
+  renderOperatiuni();
+  window.scrollTo({ top: document.querySelector('.search-panel').offsetTop - 20, behavior: 'smooth' });
+}
+
 async function incarcaOperatiuni() {
   const dataStart = document.getElementById('t-data-start').value;
   const dataEnd = document.getElementById('t-data-end').value;
@@ -840,49 +946,123 @@ async function incarcaOperatiuni() {
     const resp = await fetch(url, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data)) return;
-
-    if (data.length === 0) {
-      container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--sub);">Nicio operațiune în perioada selectată</div>';
-      return;
-    }
-
-    let html = `<table>
-      <thead><tr>
-        <th>Completat</th><th>Data chitanță</th><th>Tip</th><th>Beneficiar</th>
-        <th class="num">Intrare</th><th class="num">Ieșire</th>
-        <th>Obs</th><th>Cine</th><th></th>
-      </tr></thead><tbody>`;
-
-    for (const d of data) {
-      const dtChitanta = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-      const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
-      const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
-      const firmaChip = d.firma ? `<strong style="color:#0891b2; background:#cffafe; padding:2px 6px; border-radius:4px; font-size:11px;">${escHtml(d.firma)}</strong> ` : '';
-      const nrChip = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong> ` : '';
-      const obsFinal = (firmaChip + nrChip + escHtml(d.observatii || '')).trim() || '';
-      const isAdmin = currentUser && currentUser.nume === 'EUGEN';
-      const isPending = d.tip && d.tip.includes('PENDING');
-      const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
-      const rowStyle = isPending ? 'opacity:0.45; background:#fffef0;' : (isConfirmat ? 'opacity:0.7; background:#f0fdf4;' : '');
-      html += `<tr id="row-${d.id}" style="${rowStyle}">
-        <td style="white-space:nowrap; font-size:12px; color:#555;">${dtCompletat}</td>
-        <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
-        <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
-        <td style="font-weight:500;">${escHtml(d.beneficiar)}</td>
-        <td class="num">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
-        <td class="num">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
-        <td style="color:#888; font-size:12px; max-width:200px;">${obsFinal}</td>
-        <td style="font-size:11px; color:#aaa;">${d.utilizator}</td>
-        <td style="white-space:nowrap;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
-      </tr>`;
-    }
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    allOperatiuni = data;
+    populeazaDropdownuri();
+    renderOperatiuni();
   } catch (e) {
     container.innerHTML = '<div style="color:var(--red); padding:20px;">Eroare la încărcare</div>';
   }
+}
+
+function populeazaDropdownuri() {
+  const tipSet = new Set();
+  const userSet = new Set();
+  for (const d of allOperatiuni) {
+    if (d.tip) tipSet.add(d.tip.trim());
+    if (d.utilizator) userSet.add(d.utilizator.trim());
+  }
+
+  const selTip = document.getElementById('t-tip');
+  const selUser = document.getElementById('t-utilizator');
+  const curTip = selTip.value;
+  const curUser = selUser.value;
+
+  selTip.innerHTML = '<option value="">Tip: toate</option>' +
+    [...tipSet].sort().map(t => `<option value="${escHtml(t)}">${escHtml(t)}</option>`).join('');
+  selUser.innerHTML = '<option value="">Utilizator: toți</option>' +
+    [...userSet].sort().map(u => `<option value="${escHtml(u)}">${escHtml(u)}</option>`).join('');
+
+  if ([...tipSet].includes(curTip)) selTip.value = curTip;
+  if ([...userSet].includes(curUser)) selUser.value = curUser;
+}
+
+function renderOperatiuni() {
+  const container = document.getElementById('tabel-operatiuni');
+  const summary = document.getElementById('search-summary');
+  const q = document.getElementById('t-search').value.trim().toLowerCase();
+  const fTip = document.getElementById('t-tip').value;
+  const fUser = document.getElementById('t-utilizator').value;
+  const fDir = document.getElementById('t-directie').value;
+
+  let data = allOperatiuni;
+
+  if (q) {
+    data = data.filter(d => {
+      const hay = [d.beneficiar, d.observatii, d.nr_dispozitie, d.tip, d.firma]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+  if (fTip) data = data.filter(d => (d.tip || '').trim() === fTip);
+  if (fUser) data = data.filter(d => (d.utilizator || '').trim() === fUser);
+  if (fDir === 'in') data = data.filter(d => parseFloat(d.intrare || 0) > 0);
+  if (fDir === 'out') data = data.filter(d => parseFloat(d.iesire || 0) > 0);
+
+  // Sumar
+  let totalIn = 0, totalOut = 0;
+  for (const d of data) {
+    totalIn += parseFloat(d.intrare || 0);
+    totalOut += parseFloat(d.iesire || 0);
+  }
+  const net = totalIn - totalOut;
+  const fmt = n => n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  if (data.length > 0) {
+    const ultima = data[0];
+    const prima = data[data.length - 1];
+    summary.innerHTML = `
+      <div class="ss-item"><div class="ss-label">Operațiuni</div><div class="ss-value">${data.length}</div></div>
+      <div class="ss-item"><div class="ss-label">Intrări</div><div class="ss-value green">${fmt(totalIn)}</div></div>
+      <div class="ss-item"><div class="ss-label">Ieșiri</div><div class="ss-value red">${fmt(totalOut)}</div></div>
+      <div class="ss-item"><div class="ss-label">Net</div><div class="ss-value" style="color:${net>=0?'#16a34a':'#c0392b'};">${net>=0?'+':''}${fmt(net)}</div></div>
+      <div class="ss-item"><div class="ss-label">Ultima</div><div class="ss-value" style="font-size:13px;">${new Date(ultima.data).toLocaleDateString('ro-RO')}</div></div>
+      <div class="ss-item"><div class="ss-label">Prima</div><div class="ss-value" style="font-size:13px;">${new Date(prima.data).toLocaleDateString('ro-RO')}</div></div>
+    `;
+    summary.style.display = '';
+  } else {
+    summary.style.display = 'none';
+  }
+
+  if (data.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:40px; color:var(--sub);">${q || fTip || fUser || fDir ? 'Nicio operațiune nu corespunde filtrelor' : 'Nicio operațiune în perioada selectată'}</div>`;
+    return;
+  }
+
+  let html = `<table>
+    <thead><tr>
+      <th>Completat</th><th>Data chitanță</th><th>Tip</th><th>Beneficiar</th>
+      <th class="num">Intrare</th><th class="num">Ieșire</th>
+      <th>Obs</th><th>Cine</th><th></th>
+    </tr></thead><tbody>`;
+
+  for (const d of data) {
+    const dtChitanta = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const dtCompletat = new Date(d.completat_la || d.created_at).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const intrareStr = d.intrare > 0 ? parseFloat(d.intrare).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
+    const iesireStr = d.iesire > 0 ? parseFloat(d.iesire).toLocaleString('ro-RO', { minimumFractionDigits: 2 }) : '';
+    const firmaChip = d.firma ? `<strong style="color:#0891b2; background:#cffafe; padding:2px 6px; border-radius:4px; font-size:11px;">${escHtml(d.firma)}</strong> ` : '';
+    const nrChip = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong> ` : '';
+    const obsFinal = (firmaChip + nrChip + escHtml(d.observatii || '')).trim() || '';
+    const isAdmin = currentUser && currentUser.nume === 'EUGEN';
+    const isPending = d.tip && d.tip.includes('PENDING');
+    const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
+    const rowStyle = isPending ? 'opacity:0.45; background:#fffef0;' : (isConfirmat ? 'opacity:0.7; background:#f0fdf4;' : '');
+    const benEsc = escHtml(d.beneficiar || '').replace(/'/g, "\\'");
+    html += `<tr id="row-${d.id}" style="${rowStyle}">
+      <td style="white-space:nowrap; font-size:12px; color:#555;">${dtCompletat}</td>
+      <td style="font-weight:600; white-space:nowrap;">${dtChitanta}</td>
+      <td><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span></td>
+      <td style="font-weight:500;"><span class="clickable-ben" onclick="filtreazaBeneficiar('${benEsc}')" title="Click: filtrează după acest beneficiar">${escHtml(d.beneficiar)}</span></td>
+      <td class="num">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
+      <td class="num">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
+      <td style="color:#888; font-size:12px; max-width:200px;">${obsFinal}</td>
+      <td style="font-size:11px; color:#aaa;">${d.utilizator}</td>
+      <td style="white-space:nowrap;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
+    </tr>`;
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
 }
 
 async function verificaDeconturi() {
