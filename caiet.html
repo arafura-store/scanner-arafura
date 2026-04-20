@@ -1163,6 +1163,21 @@ async function adaugaOperatiuneAmanet() {
   const pendingTeren = terenCheck && terenCheck.checked && (tip === 'DP AMANET' || tip === 'DI AMANET');
   const tipFinal = pendingTeren ? `${tip} (PENDING TEREN)` : tip;
 
+  // Verifică duplicare dacă e PENDING TEREN
+  if (pendingTeren) {
+    try {
+      const benefUrlEnc = encodeURIComponent(beneficiar);
+      const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN)')}&beneficiar=eq.${benefUrlEnc}&select=id,utilizator,completat_la`, { headers: HEADERS });
+      const existing = await resp.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        const e = existing[0];
+        const cand = e.completat_la ? new Date(e.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?';
+        showToast(`⚠ Există deja ${tip} PENDING pentru ${beneficiar} (deschis ${cand} de ${e.utilizator||'?'}). Așteaptă confirmarea sau anulează-l întâi.`, 'err');
+        return;
+      }
+    } catch {}
+  }
+
   // La operațiuni BANCA: firma → beneficiar, banca (din dropdown) → observații
   const beneficiarFinal = isBanca ? firma : beneficiar;
   const observatiiFinal = isBanca
@@ -1777,10 +1792,10 @@ async function verificaDispozitiiTeren() {
       // Office confirmă DOAR dacă magazinul a inițiat și nu sunt eu însumi inițiator
       const poateConfirma = !euInitiator && !initiatorOffice;
       const actiuni = poateConfirma
-        ? `<button class="btn-deconteaza" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
-           <button style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>`
+        ? `<button type="button" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--green); color:white; border:none; border-radius:8px; cursor:pointer;">Confirmă (banii au ajuns)</button>
+           <button type="button" onclick="anuleazaDispozitieTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;">Anulează</button>`
         : `<div style="flex:1; padding:10px 14px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la magazin</div>
-           <button style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>`;
+           <button type="button" onclick="anuleazaDispozitieTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;">Anulează</button>`;
       html += `<div class="alerta-decont-box" style="border-left:4px solid #fb923c;">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">📋</div>

@@ -842,6 +842,19 @@ async function salveazaTeren() {
   if (suma <= 0) { showToast('Sumă invalidă', 'err'); return; }
 
   const isIntrare = tip === 'DP AMANET';
+
+  // Verifică duplicare
+  try {
+    const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN)')}&beneficiar=eq.${encodeURIComponent(amanet)}&select=id,utilizator,completat_la`, { headers: HEADERS });
+    const existing = await resp.json();
+    if (Array.isArray(existing) && existing.length > 0) {
+      const e = existing[0];
+      const cand = e.completat_la ? new Date(e.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?';
+      showToast(`⚠ Există deja ${tip} pentru ${amanet} (deschis ${cand} de ${e.utilizator||'?'}).`, 'err');
+      return;
+    }
+  } catch {}
+
   try {
     const resp = await fetch(`${API}/caiet`, {
       method: 'POST',
