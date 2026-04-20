@@ -1274,8 +1274,10 @@ function clearSearch() {
   document.getElementById('t-tip').value = '';
   document.getElementById('t-utilizator').value = '';
   document.getElementById('t-directie').value = '';
+  document.getElementById('t-data-start').value = '';
+  document.getElementById('t-data-end').value = '';
   document.querySelectorAll('.qd-btn[data-qd]').forEach(b => b.classList.remove('active'));
-  setQuickDate('luna');
+  incarcaOperatiuni();
 }
 
 function filtreazaBeneficiar(ben) {
