@@ -1762,6 +1762,7 @@ async function verificaDispozitiiTeren() {
       container.style.display = 'none';
       return;
     }
+    const OFFICE = ['EUGEN','LIVIA','ELA'];
     let html = '';
     for (const d of data) {
       const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
@@ -1769,6 +1770,14 @@ async function verificaDispozitiiTeren() {
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const dt = d.data ? new Date(d.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'}) : '';
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      const initiatorOffice = OFFICE.includes((d.utilizator||'').toUpperCase());
+      // La birou: office confirmă DOAR dacă magazinul a inițiat
+      const officePoateConfirma = !initiatorOffice;
+      const actiuni = officePoateConfirma
+        ? `<button class="btn-deconteaza" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
+           <button style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>`
+        : `<div style="flex:1; padding:10px 14px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la magazin</div>
+           <button style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>`;
       html += `<div class="alerta-decont-box" style="border-left:4px solid #fb923c;">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">📋</div>
@@ -1778,10 +1787,7 @@ async function verificaDispozitiiTeren() {
             <div style="font-size:11px; color:var(--sub); margin-top:2px;">Deschis: <b>${deschisLa}</b> de ${d.utilizator||'?'}${d.observatii ? ' · ' + escHtml(d.observatii) : ''}</div>
           </div>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn-deconteaza" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
-          <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>
-        </div>
+        <div style="display:flex; gap:8px;">${actiuni}</div>
       </div>`;
     }
     container.innerHTML = html;

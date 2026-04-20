@@ -780,21 +780,27 @@ async function incarcaDispozitiiTeren() {
       container.innerHTML = '<div style="text-align:center; padding:16px; color:var(--sub); font-size:13px;">Nicio dispoziție deschisă</div>';
       return;
     }
+    const OFFICE = ['EUGEN','LIVIA','ELA'];
     let html = '';
     for (const d of data) {
       const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
       const isIntrare = tipClean === 'DP AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      const initiatorOffice = OFFICE.includes((d.utilizator||'').toUpperCase());
+      // Pe tabletă (borderou.html): fata confirmă DOAR dacă office a inițiat
+      const magazinPoateConfirma = initiatorOffice;
+      const actiuni = magazinPoateConfirma
+        ? `<button onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
+           <button onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`
+        : `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la birou</div>
+           <button onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
       html += `<div style="padding:12px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:8px;">
           <div><b>${escHtml(tipClean)}</b> · ${escHtml(d.beneficiar||'')} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
           <div style="font-weight:800; font-size:16px; color:${isIntrare?'var(--green)':'var(--red)'};">${isIntrare?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
         </div>
-        <div style="display:flex; gap:8px; margin-top:10px;">
-          <button onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
-          <button onclick="anuleazaTeren(${d.id})" style="flex:1; padding:10px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
-        </div>
+        <div style="display:flex; gap:8px; margin-top:10px;">${actiuni}</div>
       </div>`;
     }
     container.innerHTML = html;
