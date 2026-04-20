@@ -71,6 +71,10 @@
       text-align: right; font-variant-numeric: tabular-nums; background: white;
     }
     .grid-borderou input:focus { border-color: var(--blue); outline: none; }
+    /* Scoate săgețile sus/jos de la input-urile number */
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
     .grid-borderou .auto-cell { background: var(--blue-light); font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
 
     .btn-submit {
@@ -186,7 +190,7 @@
 const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
 const API = window.SUPABASE_URL + '/rest/v1';
 
-const MAGAZINE = ['TOMIS 3','SERVICII','BABADAG','MEDGIDIA','NAVODARI','MARVIMEX','POARTA 6','KOGALNICEANU','SHOWROOM'];
+const MAGAZINE = ['TOMIS 3','SERVICII'];
 const MAGAZINE_2_CASE = ['TOMIS 3']; // magazinele cu 2 case de marcat
 
 // Populate dropdown
@@ -301,7 +305,7 @@ function onMagazinChange() {
       <div class="cell" style="background:#eef2f7; color:#94a3b8; font-size:12px;">—</div>
       <div class="cell"><input type="number" step="0.01" id="f-card-pos" placeholder="0.00" oninput="recalculeaza()"></div>
 
-      <div class="cell cell-label">ERP <span class="sublabel">din gestiune</span></div>
+      <div class="cell cell-label">Program vânzare <span class="sublabel">din gestiune (ERP)</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-erp" placeholder="0.00" oninput="recalculeaza()"></div>
       <div class="cell"><input type="number" step="0.01" id="f-card-erp" placeholder="0.00" oninput="recalculeaza()"></div>
 
@@ -312,7 +316,7 @@ function onMagazinChange() {
 
     <div class="form-row">
       <div class="form-group"><label>Voucher din Z</label><input type="number" step="0.01" id="f-voucher-z" placeholder="0.00"></div>
-      <div class="form-group"><label>Voucher din ERP</label><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00"></div>
+      <div class="form-group"><label>Voucher din program</label><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00"></div>
     </div>
   `;
 
@@ -357,9 +361,9 @@ function recalculeaza() {
   dz.innerHTML = `
     <div class="diff-box">
       <div style="font-weight:700; margin-bottom:6px;">⚠ Verificare automată diferențe</div>
-      <div class="diff-line"><span>Cash: Z vs ERP</span><span class="${warn(diffCashErp)}">${fmt(diffCashErp)}</span></div>
+      <div class="diff-line"><span>Cash: Z vs Program vânzare</span><span class="${warn(diffCashErp)}">${fmt(diffCashErp)}</span></div>
       <div class="diff-line"><span>Cash: Z vs Fizic numărat</span><span class="${warn(diffCashFizic)}">${fmt(diffCashFizic)}</span></div>
-      <div class="diff-line"><span>Card: Z vs ERP</span><span class="${warn(diffCardErp)}">${fmt(diffCardErp)}</span></div>
+      <div class="diff-line"><span>Card: Z vs Program vânzare</span><span class="${warn(diffCardErp)}">${fmt(diffCardErp)}</span></div>
       <div class="diff-line"><span>Card: Z vs POS settlement</span><span class="${warn(diffCardPos)}">${fmt(diffCardPos)}</span></div>
     </div>
   `;
