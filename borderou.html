@@ -282,12 +282,7 @@
         </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Amanet</label>
-          <select id="tr-amanet" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
-            <option value="">— Alege amanet —</option>
-            <option>BABADAG</option><option>CUMPANA</option><option>TOMIS 3</option><option>KOGALNICEANU</option>
-            <option>MEDGIDIA</option><option>NAVODARI</option><option>MARVIMEX</option><option>POARTA 6</option>
-            <option>LUMINA</option><option>POPORULUI</option>
-          </select>
+          <input type="text" id="tr-amanet" readonly style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px; background:#f8fafc; font-weight:700;">
         </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
@@ -807,8 +802,13 @@ async function incarcaDispozitiiTeren() {
 }
 
 function deschideTerenForm() {
+  const magazin = _asteptareBorderouri[0]?.magazin || document.getElementById('f-magazin').value || '';
+  if (!magazin) {
+    showToast('Selectează întâi magazinul (sus, la „Magazin”)', 'err');
+    return;
+  }
   document.getElementById('tr-tip').value = '';
-  document.getElementById('tr-amanet').value = '';
+  document.getElementById('tr-amanet').value = magazin;
   document.getElementById('tr-suma').value = '';
   document.getElementById('tr-obs').value = '';
   document.getElementById('modal-teren').style.display = 'flex';
