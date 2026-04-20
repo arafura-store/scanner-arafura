@@ -92,6 +92,37 @@
     .diff-box .diff-ok { color: var(--green); }
     .diff-box .diff-warn { color: var(--red); font-weight: 700; }
 
+    .diff-alert {
+      background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+      border: 3px solid var(--red); border-radius: var(--radius);
+      padding: 18px 22px; margin-bottom: 14px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .diff-alert .alert-title {
+      font-size: 20px; font-weight: 800; color: var(--red);
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+    }
+    .diff-alert .alert-title .icon-big { font-size: 36px; }
+    .diff-alert .alert-lines { display: flex; flex-direction: column; gap: 8px; }
+    .diff-alert .alert-line {
+      background: white; padding: 10px 14px; border-radius: 8px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 14px; border-left: 4px solid var(--red);
+    }
+    .diff-alert .alert-line .diff-label { font-weight: 700; color: var(--red); }
+    .diff-alert .alert-line .diff-value { font-size: 18px; font-weight: 800; color: var(--red); font-variant-numeric: tabular-nums; }
+    .diff-alert .alert-hint { font-size: 13px; color: #7f1d1d; margin-top: 10px; font-style: italic; }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(185,28,28,.3); }
+      50% { box-shadow: 0 0 0 8px rgba(185,28,28,0); }
+    }
+
+    .diff-ok-box {
+      background: #d1fae5; border: 2px solid var(--green); border-radius: var(--radius);
+      padding: 14px 18px; margin-bottom: 14px; text-align: center;
+      font-size: 15px; font-weight: 700; color: var(--green);
+    }
+
     table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border-radius: var(--radius); overflow: hidden; font-size: 13px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
     th { background: var(--navy); color: white; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
     td { padding: 10px; border-bottom: 1px solid #f1f5f9; }
@@ -347,26 +378,58 @@ function recalculeaza() {
   const cashFizic = v('f-cash-fizic');
   const cardPos = v('f-card-pos');
 
-  const fmt = (n) => (n >= 0 ? '+' : '') + n.toLocaleString('ro-RO', {minimumFractionDigits:2});
-  const warn = (n) => Math.abs(n) > 1 ? 'diff-warn' : 'diff-ok';
+  const fmt = (n) => (n >= 0 ? '+' : '') + n.toLocaleString('ro-RO', {minimumFractionDigits:2}) + ' RON';
+  const PRAG = 1; // diferență acceptabilă (rotunjiri)
 
-  const diffCashErp = cashTotalZ - cashErp;
-  const diffCashFizic = cashTotalZ - cashFizic;
-  const diffCardErp = cardTotalZ - cardErp;
-  const diffCardPos = cardTotalZ - cardPos;
+  const diffs = [
+    { label: 'Cash: Z (casă) vs Program vânzare', val: cashTotalZ - cashErp, filled: cashTotalZ > 0 && cashErp > 0 },
+    { label: 'Cash: Z (casă) vs Cash FIZIC numărat', val: cashTotalZ - cashFizic, filled: cashTotalZ > 0 && cashFizic > 0 },
+    { label: 'Card: Z (casă) vs Program vânzare', val: cardTotalZ - cardErp, filled: cardTotalZ > 0 && cardErp > 0 },
+    { label: 'Card: Z (casă) vs POS Settlement', val: cardTotalZ - cardPos, filled: cardTotalZ > 0 && cardPos > 0 }
+  ];
+
+  const probleme = diffs.filter(d => d.filled && Math.abs(d.val) > PRAG);
+  const verificate = diffs.filter(d => d.filled && Math.abs(d.val) <= PRAG);
 
   const dz = document.getElementById('diff-zone');
   if (cashTotalZ === 0 && cardTotalZ === 0) { dz.innerHTML = ''; return; }
 
-  dz.innerHTML = `
-    <div class="diff-box">
-      <div style="font-weight:700; margin-bottom:6px;">⚠ Verificare automată diferențe</div>
-      <div class="diff-line"><span>Cash: Z vs Program vânzare</span><span class="${warn(diffCashErp)}">${fmt(diffCashErp)}</span></div>
-      <div class="diff-line"><span>Cash: Z vs Fizic numărat</span><span class="${warn(diffCashFizic)}">${fmt(diffCashFizic)}</span></div>
-      <div class="diff-line"><span>Card: Z vs Program vânzare</span><span class="${warn(diffCardErp)}">${fmt(diffCardErp)}</span></div>
-      <div class="diff-line"><span>Card: Z vs POS settlement</span><span class="${warn(diffCardPos)}">${fmt(diffCardPos)}</span></div>
-    </div>
-  `;
+  if (probleme.length > 0) {
+    // ⚠ ALERTĂ MARE dacă există diferențe reale
+    dz.innerHTML = `
+      <div class="diff-alert">
+        <div class="alert-title">
+          <span class="icon-big">⚠</span>
+          <span>DIFERENȚE! Verifică înainte să trimiți!</span>
+        </div>
+        <div class="alert-lines">
+          ${probleme.map(p => `
+            <div class="alert-line">
+              <span class="diff-label">${p.label}</span>
+              <span class="diff-value">${fmt(p.val)}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="alert-hint">
+          Diferența arată cu cât Z-ul e mai MARE (+) sau mai MIC (-) decât valoarea de comparație. Verifică sumele introduse înainte să trimiți borderoul.
+        </div>
+      </div>
+      ${verificate.length > 0 ? `
+      <div class="diff-box">
+        <div style="font-weight:700; margin-bottom:6px; color:var(--green);">✓ Verificări OK:</div>
+        ${verificate.map(v => `<div class="diff-line"><span>${v.label}</span><span class="diff-ok">${fmt(v.val)}</span></div>`).join('')}
+      </div>` : ''}
+    `;
+  } else if (verificate.length > 0) {
+    // ✓ Totul OK
+    dz.innerHTML = `
+      <div class="diff-ok-box">
+        ✓ TOATE VERIFICĂRILE SUNT CORECTE (diferențe sub ${PRAG} RON, normale)
+      </div>
+    `;
+  } else {
+    dz.innerHTML = '';
+  }
 }
 
 async function trimiteBorderou() {
