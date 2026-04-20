@@ -1693,6 +1693,7 @@ async function verificaDeconturi() {
   }
 }
 
+const _vazutePredate = new Set();
 async function verificaBorderouri() {
   const container = document.getElementById('alerta-borderouri');
   if (!container) return;
@@ -1719,6 +1720,21 @@ async function verificaBorderouri() {
       if (Array.isArray(dataCh)) cheltuieli = dataCh;
     }
 
+    // Detectează predate noi → toast de notificare
+    const noiPredate = [];
+    for (const b of data) {
+      if (b.status === 'predat-sofer' && !_vazutePredate.has(b.id)) {
+        noiPredate.push(b);
+        _vazutePredate.add(b.id);
+      }
+    }
+    if (noiPredate.length > 0 && _vazutePredate.size > noiPredate.length) {
+      // doar după prima încărcare — nu bombardează la primul load
+      for (const b of noiPredate) {
+        showToast(`🚚 ${b.magazin} a predat borderoul la șofer — poți confirma`, 'ok');
+      }
+    }
+
     let html = '';
     for (const b of data) {
       const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
@@ -1730,10 +1746,12 @@ async function verificaBorderouri() {
       let totalCh = 0;
       for (const c of chAle) totalCh += parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
       const net = sumaBrut - totalCh;
-      const statusBadge = b.status === 'predat-sofer'
-        ? '<span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700;">PREDAT ȘOFER</span>'
-        : '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700;">LA MAGAZIN</span>';
-      html += `<div class="alerta-decont-box">
+      const estePredat = b.status === 'predat-sofer';
+      const statusBadge = estePredat
+        ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800;">🚚 PREDAT ȘOFER</span>'
+        : '<span style="background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700;">LA MAGAZIN (așteaptă predare)</span>';
+      const cardBorder = estePredat ? 'border-left:5px solid var(--green); background:#f0fdf4;' : '';
+      html += `<div class="alerta-decont-box" style="${cardBorder}">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">🏪</div>
           <div class="alerta-text">
@@ -1765,10 +1783,12 @@ async function verificaBorderouri() {
         }
         html += '</div>';
       }
-      html += `<div style="display:flex; gap:8px; margin-top:10px;">
-          <button class="btn-deconteaza" onclick="confirmaBorderou(${b.id})" style="flex:1;">Confirmă</button>
-          <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaBorderou(${b.id})">Returnează</button>
-        </div>
+      const actiuniBord = estePredat
+        ? `<button type="button" class="btn-deconteaza" onclick="confirmaBorderou(${b.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
+           <button type="button" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaBorderou(${b.id})">Returnează</button>`
+        : `<div style="flex:1; padding:10px 14px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Banii sunt încă la magazin — așteaptă predarea la șofer</div>
+           <button type="button" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaBorderou(${b.id})">Returnează</button>`;
+      html += `<div style="display:flex; gap:8px; margin-top:10px;">${actiuniBord}</div>
       </div>`;
     }
     container.innerHTML = html;
