@@ -135,12 +135,25 @@
 </div>
 <div class="toast" id="toast"></div>
 
-<div id="screen-login" class="login-screen">
+<!-- DEVICE AUTH (doar pe device-uri neautorizate) -->
+<div id="screen-device-auth" class="login-screen" style="display:none;">
+  <div class="icon">🔒</div>
+  <h2>Device neautorizat</h2>
+  <p style="color:var(--sub); max-width:400px; text-align:center;">
+    Acest computer nu are acces la decont.<br>Introdu codul de autorizare.
+  </p>
+  <input type="password" id="device-code" placeholder="cod autorizare"
+    style="width:280px; padding:16px; font-size:18px; text-align:center; letter-spacing:2px;"
+    onkeyup="checkDeviceCode(event)">
+  <div id="device-error" style="color:var(--red); font-size:13px; height:16px;"></div>
+</div>
+
+<div id="screen-login" class="login-screen" style="display:none;">
   <div class="icon">🧾</div>
   <h2>Decont cheltuieli</h2>
   <p style="color:var(--sub);">Introdu PIN-ul tău</p>
   <input type="password" inputmode="numeric" maxlength="4" placeholder="****"
-    id="login-pin" oninput="onLoginPin()" autocomplete="off" autofocus>
+    id="login-pin" oninput="onLoginPin()" autocomplete="off">
 </div>
 
 <div id="screen-main" style="display:none;">
@@ -418,17 +431,44 @@ function logout() {
   setTimeout(() => document.getElementById('login-pin').focus(), 50);
 }
 
-// ── Auto-login dupa refresh + focus pe PIN daca nu e logat ────────
+// ── Device auth (cod partajat cu caiet.html) ──────────────────────
+const DEVICE_AUTH_KEY = 'caiet_device_autorizat';
+const DEVICE_AUTH_CODE = 'august1947';
+
+function checkDeviceCode(event) {
+  if (event.key !== 'Enter') return;
+  const code = document.getElementById('device-code').value;
+  const errEl = document.getElementById('device-error');
+  if (code === DEVICE_AUTH_CODE) {
+    localStorage.setItem(DEVICE_AUTH_KEY, 'true');
+    document.getElementById('screen-device-auth').style.display = 'none';
+    document.getElementById('device-code').value = '';
+    errEl.textContent = '';
+    const saved = loadSession();
+    if (saved) completeLogin(saved);
+    else {
+      document.getElementById('screen-login').style.display = '';
+      document.getElementById('login-pin').focus();
+    }
+  } else {
+    errEl.textContent = 'Cod incorect';
+    document.getElementById('device-code').value = '';
+  }
+}
+
 (function init() {
+  const deviceAuth = localStorage.getItem(DEVICE_AUTH_KEY) === 'true';
+  if (!deviceAuth) {
+    document.getElementById('screen-device-auth').style.display = '';
+    setTimeout(() => document.getElementById('device-code').focus(), 100);
+    return;
+  }
   const saved = loadSession();
   if (saved) {
     completeLogin(saved);
   } else {
-    // focus pe PIN input
-    setTimeout(() => {
-      const el = document.getElementById('login-pin');
-      if (el) el.focus();
-    }, 100);
+    document.getElementById('screen-login').style.display = '';
+    setTimeout(() => document.getElementById('login-pin').focus(), 100);
   }
 })();
 
