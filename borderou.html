@@ -346,8 +346,8 @@ function onMagazinChange() {
     </div>
 
     <div class="form-row">
-      <div class="form-group"><label>Voucher din Z</label><input type="number" step="0.01" id="f-voucher-z" placeholder="0.00"></div>
-      <div class="form-group"><label>Voucher din program</label><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00"></div>
+      <div class="form-group"><label>Voucher din Z</label><input type="number" step="0.01" id="f-voucher-z" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="form-group"><label>Voucher din program</label><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00" oninput="recalculeaza()"></div>
     </div>
   `;
 
@@ -377,6 +377,8 @@ function recalculeaza() {
   const cardErp = v('f-card-erp');
   const cashFizic = v('f-cash-fizic');
   const cardPos = v('f-card-pos');
+  const voucherZ = v('f-voucher-z');
+  const voucherErp = v('f-voucher-erp');
 
   const fmt = (n) => (n >= 0 ? '+' : '') + n.toLocaleString('ro-RO', {minimumFractionDigits:2}) + ' RON';
   const PRAG = 1; // diferență acceptabilă (rotunjiri)
@@ -385,14 +387,15 @@ function recalculeaza() {
     { label: 'Cash: Z (casă) vs Program vânzare', val: cashTotalZ - cashErp, filled: cashTotalZ > 0 && cashErp > 0 },
     { label: 'Cash: Z (casă) vs Cash FIZIC numărat', val: cashTotalZ - cashFizic, filled: cashTotalZ > 0 && cashFizic > 0 },
     { label: 'Card: Z (casă) vs Program vânzare', val: cardTotalZ - cardErp, filled: cardTotalZ > 0 && cardErp > 0 },
-    { label: 'Card: Z (casă) vs POS Settlement', val: cardTotalZ - cardPos, filled: cardTotalZ > 0 && cardPos > 0 }
+    { label: 'Card: Z (casă) vs POS Settlement', val: cardTotalZ - cardPos, filled: cardTotalZ > 0 && cardPos > 0 },
+    { label: 'Voucher: Z vs Program vânzare', val: voucherZ - voucherErp, filled: voucherZ > 0 && voucherErp > 0 }
   ];
 
   const probleme = diffs.filter(d => d.filled && Math.abs(d.val) > PRAG);
   const verificate = diffs.filter(d => d.filled && Math.abs(d.val) <= PRAG);
 
   const dz = document.getElementById('diff-zone');
-  if (cashTotalZ === 0 && cardTotalZ === 0) { dz.innerHTML = ''; return; }
+  if (cashTotalZ === 0 && cardTotalZ === 0 && voucherZ === 0 && voucherErp === 0) { dz.innerHTML = ''; return; }
 
   if (probleme.length > 0) {
     // ⚠ ALERTĂ MARE dacă există diferențe reale
