@@ -1663,7 +1663,7 @@ async function confirmaDecont(utilizator, suma, submittedAt) {
     const respAll = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false&select=*`, { headers: HEADERS });
     const allItems = await respAll.json();
     const batchItems = Array.isArray(allItems)
-      ? (submittedAt ? allItems.filter(i => (i.submitted_at || '') === submittedAt) : allItems)
+      ? (submittedAt ? allItems.filter(i => (i.submitted_at || i.created_at || '') === submittedAt) : allItems)
       : [];
     if (batchItems.length === 0) {
       showToast('Nu s-au găsit operațiuni în batch');
@@ -1719,7 +1719,7 @@ async function returneazaDecont(utilizator, submittedAt) {
     const respAll = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false&select=*`, { headers: HEADERS });
     const allItems = await respAll.json();
     const batchItems = Array.isArray(allItems)
-      ? (submittedAt ? allItems.filter(i => (i.submitted_at || '') === submittedAt) : allItems)
+      ? (submittedAt ? allItems.filter(i => (i.submitted_at || i.created_at || '') === submittedAt) : allItems)
       : [];
     if (batchItems.length === 0) {
       showToast('Nu s-au găsit operațiuni în batch');
