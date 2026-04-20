@@ -1284,6 +1284,34 @@ function filtreazaBeneficiar(ben) {
   window.scrollTo({ top: document.querySelector('.search-panel').offsetTop - 20, behavior: 'smooth' });
 }
 
+async function calculeazaSoldLaData(dataLimita) {
+  // Sumă intrare-iesire pentru toate operațiunile cu data <= dataLimita (fără PENDING/CONFIRMAT)
+  try {
+    let total = 0;
+    let offset = 0;
+    while (true) {
+      const resp = await fetch(`${API}/caiet?select=intrare,iesire,tip&data=lte.${dataLimita}&limit=1000&offset=${offset}`, { headers: HEADERS });
+      const rows = await resp.json();
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      for (const d of rows) {
+        if (d.tip && (d.tip.includes('PENDING') || d.tip.includes('CONFIRMAT'))) continue;
+        total += parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
+      }
+      offset += 1000;
+      if (rows.length < 1000) break;
+    }
+    const el = document.getElementById('ss-sold-data');
+    if (el) {
+      const v = el.querySelector('.ss-value');
+      if (v) {
+        v.textContent = total.toLocaleString('ro-RO', {minimumFractionDigits:2}) + ' RON';
+        v.style.color = total < 0 ? 'var(--red)' : 'var(--green)';
+        v.style.fontWeight = '800';
+      }
+    }
+  } catch(e) {}
+}
+
 async function incarcaOperatiuni() {
   const dataStart = document.getElementById('t-data-start').value;
   const dataEnd = document.getElementById('t-data-end').value;
@@ -1367,6 +1395,11 @@ function renderOperatiuni() {
   if (data.length > 0) {
     const ultima = data[0];
     const prima = data[data.length - 1];
+    const dataEndVal = document.getElementById('t-data-end').value;
+    // Dacă avem dataEnd → calculăm sold la acea dată (card suplimentar)
+    const soldCardPlaceholder = dataEndVal
+      ? '<div class="ss-divider"></div><div class="ss-item" id="ss-sold-data"><span class="ss-label">Sold la ' + new Date(dataEndVal).toLocaleDateString('ro-RO') + '</span><span class="ss-value" style="color:#888;">calculez...</span></div>'
+      : '';
     summary.innerHTML = `
       <div class="ss-item"><span class="ss-label">Operațiuni</span><span class="ss-value">${data.length}</span></div>
       <div class="ss-divider"></div>
@@ -1376,8 +1409,11 @@ function renderOperatiuni() {
       <div class="ss-divider"></div>
       <div class="ss-item"><span class="ss-label">Ultima</span><span class="ss-value" style="font-size:12px; font-weight:600;">${new Date(ultima.data).toLocaleDateString('ro-RO')}</span></div>
       <div class="ss-item"><span class="ss-label">Prima</span><span class="ss-value" style="font-size:12px; font-weight:600;">${new Date(prima.data).toLocaleDateString('ro-RO')}</span></div>
+      ${soldCardPlaceholder}
     `;
     summary.style.display = '';
+    // Lansăm calculul async dacă avem dataEnd
+    if (dataEndVal) calculeazaSoldLaData(dataEndVal);
   } else {
     summary.style.display = 'none';
   }
