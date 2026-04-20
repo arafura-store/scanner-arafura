@@ -780,32 +780,28 @@ async function incarcaDispozitiiTeren() {
       container.innerHTML = '<div style="text-align:center; padding:16px; color:var(--sub); font-size:13px;">Nicio dispoziție deschisă</div>';
       return;
     }
-    const OFFICE = ['EUGEN','LIVIA','ELA'];
-    const currentNume = (currentUser?.nume || '').toUpperCase();
     let html = '';
     for (const d of data) {
       const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
-      const isIntrare = tipClean === 'DP AMANET';
+      // Semn din perspectiva AMANETULUI (invers față de birou):
+      //  - DP AMANET = amanet plătește → pierde bani → "−"
+      //  - DI AMANET = amanet încasează → primește bani → "+"
+      const isIntrareAmanet = tipClean === 'DI AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
-      const initiatorNume = (d.utilizator||'').toUpperCase();
-      const initiatorOffice = OFFICE.includes(initiatorNume);
-      const euInitiator = currentNume === initiatorNume;
-      // Nu afișa butonul dacă eu sunt inițiatorul;
-      // și pe tabletă confirmarea se face doar dacă office a inițiat
-      const poateConfirma = !euInitiator && initiatorOffice;
-      const statusAsteptare = initiatorOffice
-        ? '⏳ Așteaptă confirmarea ta (banii au ajuns la magazin?)'
-        : '⏳ Așteaptă confirmare la birou';
+      // Confirmarea se face unde AJUNG banii:
+      //  - DI AMANET (bani din birou → amanet) → MAGAZIN confirmă
+      //  - DP AMANET (bani din amanet → birou) → BIROU confirmă
+      const poateConfirma = tipClean === 'DI AMANET';
       const actiuni = poateConfirma
-        ? `<button onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
-           <button onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`
-        : `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">${escHtml(euInitiator ? '⏳ Așteaptă confirmare la birou' : statusAsteptare)}</div>
-           <button onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+        ? `<button type="button" onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
+           <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`
+        : `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la birou</div>
+           <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
       html += `<div style="padding:12px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:8px;">
           <div><b>${escHtml(tipClean)}</b> · ${escHtml(d.beneficiar||'')} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
-          <div style="font-weight:800; font-size:16px; color:${isIntrare?'var(--green)':'var(--red)'};">${isIntrare?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
+          <div style="font-weight:800; font-size:16px; color:${isIntrareAmanet?'var(--green)':'var(--red)'};">${isIntrareAmanet?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px;">${actiuni}</div>
       </div>`;

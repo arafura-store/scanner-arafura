@@ -1787,20 +1787,18 @@ async function verificaDispozitiiTeren() {
       container.style.display = 'none';
       return;
     }
-    const OFFICE = ['EUGEN','LIVIA','ELA'];
-    const currentNume = (currentUser?.nume || '').toUpperCase();
     let html = '';
     for (const d of data) {
       const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
-      const isIntrare = tipClean === 'DP AMANET';
+      // Semn din perspectiva casei/birou: DP = intrare (+), DI = ieșire (−)
+      const isIntrareBirou = tipClean === 'DP AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const dt = d.data ? new Date(d.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'}) : '';
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
-      const initiatorNume = (d.utilizator||'').toUpperCase();
-      const initiatorOffice = OFFICE.includes(initiatorNume);
-      const euInitiator = currentNume === initiatorNume;
-      // Office confirmă DOAR dacă magazinul a inițiat și nu sunt eu însumi inițiator
-      const poateConfirma = !euInitiator && !initiatorOffice;
+      // Confirmarea se face unde AJUNG banii:
+      //  - DP AMANET (bani din amanet → birou) → BIROU confirmă
+      //  - DI AMANET (bani din birou → amanet) → MAGAZIN confirmă
+      const poateConfirma = tipClean === 'DP AMANET';
       const actiuni = poateConfirma
         ? `<button type="button" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--green); color:white; border:none; border-radius:8px; cursor:pointer;">Confirmă (banii au ajuns)</button>
            <button type="button" onclick="anuleazaDispozitieTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;">Anulează</button>`
@@ -1811,7 +1809,7 @@ async function verificaDispozitiiTeren() {
           <div class="alerta-icon">📋</div>
           <div class="alerta-text">
             <div class="alerta-nume">${escHtml(tipClean)} · ${escHtml(d.beneficiar||'')} · ${dt}</div>
-            <div class="alerta-suma" style="color:${isIntrare?'var(--green)':'var(--red)'};">${isIntrare?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
+            <div class="alerta-suma" style="color:${isIntrareBirou?'var(--green)':'var(--red)'};">${isIntrareBirou?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
             <div style="font-size:11px; color:var(--sub); margin-top:2px;">Deschis: <b>${deschisLa}</b> de ${d.utilizator||'?'}${d.observatii ? ' · ' + escHtml(d.observatii) : ''}</div>
           </div>
         </div>
