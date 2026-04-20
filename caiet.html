@@ -1545,30 +1545,35 @@ async function verificaDeconturi() {
       return;
     }
 
-    // Grupeaza pe utilizator
-    const perUser = {};
+    // Grupeaza pe (utilizator, submitted_at) - fiecare batch e un card separat
+    const perBatch = {};
     for (const d of data) {
-      if (!perUser[d.utilizator]) perUser[d.utilizator] = { items: [], total: 0 };
+      const batchKey = `${d.utilizator}__${d.submitted_at || d.created_at || 'NULL'}`;
+      if (!perBatch[batchKey]) perBatch[batchKey] = { utilizator: d.utilizator, submitted_at: d.submitted_at || d.created_at, items: [], total: 0 };
       const s = parseFloat(d.suma || 0);
-      perUser[d.utilizator].items.push(d);
-      perUser[d.utilizator].total += s;
+      perBatch[batchKey].items.push(d);
+      perBatch[batchKey].total += s;
     }
+    // Sortează: cel mai vechi batch primul
+    const batches = Object.values(perBatch).sort((a, b) => (a.submitted_at || '').localeCompare(b.submitted_at || ''));
 
     let html = '';
     const poateConfirma = currentUser && currentUser.nume === 'EUGEN';
-    for (const [user, val] of Object.entries(perUser)) {
+    for (const val of batches) {
+      const user = val.utilizator;
+      const batchDate = val.submitted_at ? new Date(val.submitted_at).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?';
       html += `<div class="alerta-decont-box">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">📋</div>
           <div class="alerta-text">
             <div class="alerta-nume">Decont ${user}</div>
             <div class="alerta-suma">${val.total.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
-            <div style="font-size:11px; color:var(--sub); margin-top:2px;">${val.items.length} cheltuieli — așteaptă verificare${poateConfirma ? '' : ' (doar EUGEN poate confirma/returna)'}</div>
+            <div style="font-size:11px; color:var(--sub); margin-top:2px;">Trimis: <b>${batchDate}</b> · ${val.items.length} cheltuieli${poateConfirma ? '' : ' (doar EUGEN poate confirma/returna)'}</div>
           </div>
         </div>
         ${poateConfirma ? `<div style="display:flex; gap:8px;">
-          <button class="btn-deconteaza" onclick="confirmaDecont('${user}', ${val.total.toFixed(2)})" style="flex:1;">Confirmă</button>
-          <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaDecont('${user}')">Returnează</button>
+          <button class="btn-deconteaza" onclick="confirmaDecont('${user}', ${val.total.toFixed(2)}, '${val.submitted_at || ''}')" style="flex:1;">Confirmă</button>
+          <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaDecont('${user}', '${val.submitted_at || ''}')">Returnează</button>
         </div>` : ''}
         <table style="margin-top:12px; box-shadow:none;">
           <thead><tr><th>Data</th><th>Beneficiar</th><th class="num">Suma</th><th>Obs</th></tr></thead>
@@ -1650,20 +1655,33 @@ async function modificaFond(id, operatiune) {
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
-async function confirmaDecont(utilizator, suma) {
+async function confirmaDecont(utilizator, suma, submittedAt) {
   if (!confirm(`Confirmi decontul de ${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nCheltuielile sale (cu categorie COMBUSTIBIL/MATERIALE/etc.) vor deveni operațiuni normale în caiet și vor intra în sold.`)) return;
 
   try {
-    // 1. Marcheaza cheltuielile din deconturi ca confirmate
-    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false`, {
+    // 1. Marcheaza DOAR cheltuielile din acest batch ca confirmate
+    const batchFilter = submittedAt ? `&submitted_at=eq.${encodeURIComponent(submittedAt)}` : '';
+    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false${batchFilter}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ confirmat: true, status: 'confirmat', confirmat_de: currentUser.nume })
     });
 
-    // 2. Găsește rândurile PENDING din caiet (format: "CATEGORIE (PENDING NICU)")
-    const respPending = await fetch(`${API}/caiet?select=id,tip,observatii&tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, { headers: HEADERS });
-    const pending = await respPending.json();
+    // 2. Găsește doar rândurile din caiet care aparțin acestui batch
+    // Extragem data-intervalul din items
+    const respBatch = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}${batchFilter}&select=data,beneficiar,suma`, { headers: HEADERS });
+    const batchItems = await respBatch.json();
+    // Fetch tot ce are (PENDING utilizator) apoi filtrăm pe client după match cu batchItems
+    const respPending = await fetch(`${API}/caiet?select=id,tip,observatii,data,beneficiar,intrare,iesire&tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, { headers: HEADERS });
+    const allPending = await respPending.json();
+    // Match pe (data, beneficiar, suma)
+    const batchKeys = new Set((batchItems||[]).map(i => {
+      const s = parseFloat(i.suma);
+      const intr = s < 0 ? Math.abs(s) : 0;
+      const iesi = s >= 0 ? s : 0;
+      return `${i.data}|${i.beneficiar}|${intr}|${iesi}`;
+    }));
+    const pending = (allPending || []).filter(p => batchKeys.has(`${p.data}|${p.beneficiar}|${p.intrare||0}|${p.iesire||0}`));
 
     if (Array.isArray(pending)) {
       // 3. Șterge markerul "(PENDING NICU)" → rămâne doar categoria curată
@@ -1686,22 +1704,36 @@ async function confirmaDecont(utilizator, suma) {
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
-async function returneazaDecont(utilizator) {
+async function returneazaDecont(utilizator, submittedAt) {
   const motiv = prompt(`De ce returnezi decontul lui ${utilizator}?`);
   if (motiv === null) return;
 
   try {
-    // 1. Marcheaza ca returnat
-    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false`, {
+    const batchFilter = submittedAt ? `&submitted_at=eq.${encodeURIComponent(submittedAt)}` : '';
+    // Găsește items din acest batch (pentru match cu caiet)
+    const respBatch = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false${batchFilter}&select=data,beneficiar,suma`, { headers: HEADERS });
+    const batchItems = await respBatch.json();
+
+    // 1. Marcheaza DOAR item-urile din batch ca returnat
+    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false${batchFilter}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ returnat: true, status: 'returnat', motiv_retur: motiv || 'Verifică și retrimite' })
     });
 
-    // 2. Sterge PENDING din caiet (format nou: "CATEGORIE (PENDING NICU)")
-    await fetch(`${API}/caiet?tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, {
-      method: 'DELETE', headers: HEADERS
-    });
+    // 2. Șterge din caiet DOAR rândurile care match cu batch-ul
+    const respPending = await fetch(`${API}/caiet?select=id,data,beneficiar,intrare,iesire&tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, { headers: HEADERS });
+    const allPending = await respPending.json();
+    const batchKeys = new Set((batchItems||[]).map(i => {
+      const s = parseFloat(i.suma);
+      const intr = s < 0 ? Math.abs(s) : 0;
+      const iesi = s >= 0 ? s : 0;
+      return `${i.data}|${i.beneficiar}|${intr}|${iesi}`;
+    }));
+    const toDelete = (allPending || []).filter(p => batchKeys.has(`${p.data}|${p.beneficiar}|${p.intrare||0}|${p.iesire||0}`));
+    for (const d of toDelete) {
+      await fetch(`${API}/caiet?id=eq.${d.id}`, { method: 'DELETE', headers: HEADERS });
+    }
 
     showToast(`Decont returnat către ${utilizator}`);
     await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi()]);

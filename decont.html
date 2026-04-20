@@ -754,12 +754,14 @@ async function trimiteDecont() {
   if (drafturi.length === 0) { showToast('Nicio cheltuială draft de trimis'); return; }
   if (!confirm(`Trimiți ${drafturi.length} operațiuni pentru verificare?\n\nNu vei mai putea modifica aceste operațiuni până la confirmare. Poți adăuga în continuare noi operațiuni.`)) return;
   try {
-    // Marcheaza DOAR draft-urile ca "trimis"
+    // Toate item-urile din acest batch primesc același timestamp submitted_at
+    const submittedAt = new Date().toISOString();
+    // Marcheaza DOAR draft-urile ca "trimis" cu submitted_at identic
     for (const d of drafturi) {
       await fetch(`${API}/deconturi?id=eq.${d.id}`, {
         method: 'PATCH',
         headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ status: 'trimis' })
+        body: JSON.stringify({ status: 'trimis', submitted_at: submittedAt })
       });
     }
 
