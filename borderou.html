@@ -337,7 +337,10 @@ function onMagazinChange() {
       <div class="cell"><input type="number" step="0.01" id="f-card-pos" placeholder="0.00" oninput="recalculeaza()"></div>
 
       <div class="cell cell-label">Program vânzare <span class="sublabel">din gestiune (ERP)</span></div>
-      <div class="cell"><input type="number" step="0.01" id="f-cash-erp" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell" style="flex-direction:column; align-items:stretch; gap:4px;">
+        <input type="number" step="0.01" id="f-cash-erp" placeholder="0.00" oninput="recalculeaza()">
+        <div id="hint-depunere" style="display:none; background:#fef3c7; color:#92400e; padding:6px 8px; border-radius:6px; font-size:11px; font-weight:700; text-align:center; border:1px solid #fcd34d;">⚠ NU UITA! DEPUNE BANCA în program!</div>
+      </div>
       <div class="cell"><input type="number" step="0.01" id="f-card-erp" placeholder="0.00" oninput="recalculeaza()"></div>
 
       <div class="cell cell-label">Cash fizic <span class="sublabel">bani numărați</span></div>
@@ -374,6 +377,8 @@ function recalculeaza() {
   }
 
   const cashErp = v('f-cash-erp');
+  const hintDep = document.getElementById('hint-depunere');
+  if (hintDep) hintDep.style.display = cashErp > 0 ? '' : 'none';
   const cardErp = v('f-card-erp');
   const cashFizic = v('f-cash-fizic');
   const cardPos = v('f-card-pos');
