@@ -1659,23 +1659,29 @@ async function confirmaDecont(utilizator, suma, submittedAt) {
   if (!confirm(`Confirmi decontul de ${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON pentru ${utilizator}?\n\nCheltuielile sale (cu categorie COMBUSTIBIL/MATERIALE/etc.) vor deveni operațiuni normale în caiet și vor intra în sold.`)) return;
 
   try {
-    // 1. Marcheaza DOAR cheltuielile din acest batch ca confirmate
-    const batchFilter = submittedAt ? `&submitted_at=eq.${encodeURIComponent(submittedAt)}` : '';
-    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false${batchFilter}`, {
+    // 1. Fetch items din acest batch (filtru client-side pe submitted_at)
+    const respAll = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false&select=*`, { headers: HEADERS });
+    const allItems = await respAll.json();
+    const batchItems = Array.isArray(allItems)
+      ? (submittedAt ? allItems.filter(i => (i.submitted_at || '') === submittedAt) : allItems)
+      : [];
+    if (batchItems.length === 0) {
+      showToast('Nu s-au găsit operațiuni în batch');
+      return;
+    }
+
+    // 2. Marchează cheltuielile din batch ca confirmate (prin IDs)
+    const ids = batchItems.map(i => i.id).join(',');
+    await fetch(`${API}/deconturi?id=in.(${ids})`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ confirmat: true, status: 'confirmat', confirmat_de: currentUser.nume })
     });
 
-    // 2. Găsește doar rândurile din caiet care aparțin acestui batch
-    // Extragem data-intervalul din items
-    const respBatch = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}${batchFilter}&select=data,beneficiar,suma`, { headers: HEADERS });
-    const batchItems = await respBatch.json();
-    // Fetch tot ce are (PENDING utilizator) apoi filtrăm pe client după match cu batchItems
+    // 3. Găsește și actualizează rândurile PENDING din caiet care match cu batch
     const respPending = await fetch(`${API}/caiet?select=id,tip,observatii,data,beneficiar,intrare,iesire&tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, { headers: HEADERS });
     const allPending = await respPending.json();
-    // Match pe (data, beneficiar, suma)
-    const batchKeys = new Set((batchItems||[]).map(i => {
+    const batchKeys = new Set(batchItems.map(i => {
       const s = parseFloat(i.suma);
       const intr = s < 0 ? Math.abs(s) : 0;
       const iesi = s >= 0 ? s : 0;
@@ -1709,22 +1715,29 @@ async function returneazaDecont(utilizator, submittedAt) {
   if (motiv === null) return;
 
   try {
-    const batchFilter = submittedAt ? `&submitted_at=eq.${encodeURIComponent(submittedAt)}` : '';
-    // Găsește items din acest batch (pentru match cu caiet)
-    const respBatch = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false${batchFilter}&select=data,beneficiar,suma`, { headers: HEADERS });
-    const batchItems = await respBatch.json();
+    // 1. Fetch items din batch (filtru client-side pe submitted_at)
+    const respAll = await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false&select=*`, { headers: HEADERS });
+    const allItems = await respAll.json();
+    const batchItems = Array.isArray(allItems)
+      ? (submittedAt ? allItems.filter(i => (i.submitted_at || '') === submittedAt) : allItems)
+      : [];
+    if (batchItems.length === 0) {
+      showToast('Nu s-au găsit operațiuni în batch');
+      return;
+    }
 
-    // 1. Marcheaza DOAR item-urile din batch ca returnat
-    await fetch(`${API}/deconturi?utilizator=eq.${encodeURIComponent(utilizator)}&status=eq.trimis&confirmat=eq.false${batchFilter}`, {
+    // 2. Marcheaza ca returnat (by IDs)
+    const ids = batchItems.map(i => i.id).join(',');
+    await fetch(`${API}/deconturi?id=in.(${ids})`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ returnat: true, status: 'returnat', motiv_retur: motiv || 'Verifică și retrimite' })
     });
 
-    // 2. Șterge din caiet DOAR rândurile care match cu batch-ul
+    // 3. Șterge din caiet DOAR rândurile care match cu batch-ul
     const respPending = await fetch(`${API}/caiet?select=id,data,beneficiar,intrare,iesire&tip=ilike.*%28PENDING%20${encodeURIComponent(utilizator)}%29*`, { headers: HEADERS });
     const allPending = await respPending.json();
-    const batchKeys = new Set((batchItems||[]).map(i => {
+    const batchKeys = new Set(batchItems.map(i => {
       const s = parseFloat(i.suma);
       const intr = s < 0 ? Math.abs(s) : 0;
       const iesi = s >= 0 ? s : 0;
