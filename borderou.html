@@ -258,6 +258,51 @@
         </div>
       </div>
     </div>
+
+    <!-- Dispoziții pe teren (DP/DI AMANET în așteptare) -->
+    <div class="card" id="card-teren" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0;">📋 Dispoziții pe teren (AMANET)</h3>
+        <button onclick="deschideTerenForm()" style="padding:8px 14px; background:#fb923c; color:white; border:none; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer;">+ Deschide DP/DI</button>
+      </div>
+      <div id="lista-teren"></div>
+    </div>
+
+    <!-- Modal creare DP/DI teren -->
+    <div id="modal-teren" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:300; align-items:center; justify-content:center; padding:16px;">
+      <div style="background:white; border-radius:14px; max-width:460px; width:100%; padding:22px;">
+        <h3 style="margin-bottom:14px; color:var(--navy);">📋 Deschide dispoziție pe teren</h3>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip</label>
+          <select id="tr-tip" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+            <option value="">— Alege —</option>
+            <option value="DP AMANET">DP AMANET (intră bani la amanet → INTRARE sold)</option>
+            <option value="DI AMANET">DI AMANET (ies bani din amanet → IESIRE sold)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Amanet</label>
+          <select id="tr-amanet" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+            <option value="">— Alege amanet —</option>
+            <option>BABADAG</option><option>CUMPANA</option><option>TOMIS 3</option><option>KOGALNICEANU</option>
+            <option>MEDGIDIA</option><option>NAVODARI</option><option>MARVIMEX</option><option>POARTA 6</option>
+            <option>LUMINA</option><option>POPORULUI</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
+          <input type="number" step="0.01" id="tr-suma" placeholder="0.00" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Observații (opțional)</label>
+          <input type="text" id="tr-obs" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button onclick="inchideTerenForm()" style="flex:1; padding:12px; background:#e2e8f0; color:var(--text); border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
+          <button onclick="salveazaTeren()" style="flex:2; padding:12px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Salvează dispoziție</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -329,7 +374,7 @@ async function completeLogin(user) {
   const todayStr = new Date().toISOString().slice(0, 10);
   document.getElementById('f-data').value = todayStr;
   document.getElementById('f-data').setAttribute('max', todayStr);
-  await Promise.all([incarcaIstoric(), incarcaAngajati()]);
+  await Promise.all([incarcaIstoric(), incarcaAngajati(), incarcaDispozitiiTeren()]);
 }
 
 function logout() {
@@ -728,6 +773,111 @@ async function salveazaCheltuiala() {
     inchideCheltuiala();
     await incarcaIstoric();
   } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function incarcaDispozitiiTeren() {
+  const card = document.getElementById('card-teren');
+  const container = document.getElementById('lista-teren');
+  if (!card || !container) return;
+  try {
+    const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN)*&order=completat_la.desc`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      card.style.display = 'none';
+      return;
+    }
+    let html = '';
+    for (const d of data) {
+      const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
+      const isIntrare = tipClean === 'DP AMANET';
+      const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
+      const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      html += `<div style="padding:12px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:8px;">
+          <div><b>${escHtml(tipClean)}</b> · ${escHtml(d.beneficiar||'')} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
+          <div style="font-weight:800; font-size:16px; color:${isIntrare?'var(--green)':'var(--red)'};">${isIntrare?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
+          <button onclick="anuleazaTeren(${d.id})" style="flex:1; padding:10px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
+        </div>
+      </div>`;
+    }
+    container.innerHTML = html;
+    card.style.display = '';
+  } catch(e) {}
+}
+
+function deschideTerenForm() {
+  document.getElementById('tr-tip').value = '';
+  document.getElementById('tr-amanet').value = '';
+  document.getElementById('tr-suma').value = '';
+  document.getElementById('tr-obs').value = '';
+  document.getElementById('modal-teren').style.display = 'flex';
+}
+
+function inchideTerenForm() {
+  document.getElementById('modal-teren').style.display = 'none';
+}
+
+async function salveazaTeren() {
+  const tip = document.getElementById('tr-tip').value;
+  const amanet = document.getElementById('tr-amanet').value;
+  const suma = parseFloat(document.getElementById('tr-suma').value) || 0;
+  const obs = document.getElementById('tr-obs').value.trim();
+
+  if (!tip) { showToast('Alege tipul', 'err'); return; }
+  if (!amanet) { showToast('Alege amanetul', 'err'); return; }
+  if (suma <= 0) { showToast('Sumă invalidă', 'err'); return; }
+
+  const isIntrare = tip === 'DP AMANET';
+  try {
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data: new Date().toISOString().slice(0,10),
+        tip: `${tip} (PENDING TEREN)`,
+        beneficiar: amanet,
+        firma: 'PERFECTA INVEST',
+        intrare: isIntrare ? suma : 0,
+        iesire: isIntrare ? 0 : suma,
+        observatii: obs || null,
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
+      })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✓ Dispoziție deschisă', 'ok');
+    inchideTerenForm();
+    await incarcaDispozitiiTeren();
+  } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function confirmaTeren(id) {
+  if (!confirm('Confirmi că banii au circulat fizic? Entry devine operațiune reală și afectează soldul.')) return;
+  try {
+    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip`, { headers: HEADERS });
+    const arr = await respGet.json();
+    if (!Array.isArray(arr) || arr.length === 0) return;
+    const newTip = (arr[0].tip || '').replace(' (PENDING TEREN)', '');
+    await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ tip: newTip })
+    });
+    showToast('✓ Confirmat', 'ok');
+    await incarcaDispozitiiTeren();
+  } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function anuleazaTeren(id) {
+  if (!confirm('Anulezi dispoziția?')) return;
+  try {
+    await fetch(`${API}/caiet?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
+    showToast('Anulat', 'ok');
+    await incarcaDispozitiiTeren();
+  } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
 }
 
 async function predaSofer() {

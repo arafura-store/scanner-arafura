@@ -527,6 +527,13 @@
         </div>
       </div>
       <div id="fa-preview" style="display:none; padding:10px 14px; border-radius:10px; margin-bottom:10px; font-size:14px; font-weight:600;"></div>
+      <div id="fa-teren-wrap" style="display:none; margin-bottom:10px; padding:10px 12px; background:#fff7ed; border:1px dashed #fb923c; border-radius:10px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#9a3412;">
+          <input type="checkbox" id="fa-teren" style="width:18px; height:18px; cursor:pointer;">
+          <span>📋 Dispoziție pe teren (blurată până confirmă magazinul)</span>
+        </label>
+        <div style="font-size:11px; color:#9a3412; margin-top:4px; margin-left:26px; opacity:.85;">Entry apare PENDING TEREN în caiet; nu afectează soldul până când fata la magazin confirmă că banii au ajuns.</div>
+      </div>
       <button class="btn-submit" onclick="adaugaOperatiuneAmanet()" style="background:#7c3aed;">Adaugă operațiune AMANET/BANCĂ</button>
     </div>
 
@@ -580,6 +587,7 @@
       <div id="fond-display" style="display:none;"></div>
       <div id="alerta-decont" style="display:none;"></div>
       <div id="alerta-borderouri" style="display:none;"></div>
+      <div id="alerta-teren" style="display:none;"></div>
     </div>
   </div> <!-- /main-layout -->
 
@@ -710,7 +718,7 @@ async function completeLogin(user) {
     if (lunaBtn) lunaBtn.classList.add('active');
   }, 100);
 
-  await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii(), verificaDeconturi(), verificaBorderouri()]);
+  await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii(), verificaDeconturi(), verificaBorderouri(), verificaDispozitiiTeren()]);
 }
 
 function logout() {
@@ -1119,6 +1127,16 @@ function onTipAmanetChange() {
     rowFirma.style.display = 'none';
     firmaSelect.value = 'PERFECTA INVEST';
   }
+
+  // Checkbox 'pe teren' doar pentru DP/DI AMANET
+  const terenWrap = document.getElementById('fa-teren-wrap');
+  const terenCheck = document.getElementById('fa-teren');
+  if (tip === 'DP AMANET' || tip === 'DI AMANET') {
+    if (terenWrap) terenWrap.style.display = '';
+  } else {
+    if (terenWrap) terenWrap.style.display = 'none';
+    if (terenCheck) terenCheck.checked = false;
+  }
 }
 
 async function adaugaOperatiuneAmanet() {
@@ -1141,6 +1159,9 @@ async function adaugaOperatiuneAmanet() {
   const intrare = isIntrare ? suma : 0;
   const iesire = isIntrare ? 0 : suma;
   const isBanca = tip.includes('BANCA');
+  const terenCheck = document.getElementById('fa-teren');
+  const pendingTeren = terenCheck && terenCheck.checked && (tip === 'DP AMANET' || tip === 'DI AMANET');
+  const tipFinal = pendingTeren ? `${tip} (PENDING TEREN)` : tip;
 
   // La operațiuni BANCA: firma → beneficiar, banca (din dropdown) → observații
   const beneficiarFinal = isBanca ? firma : beneficiar;
@@ -1154,7 +1175,7 @@ async function adaugaOperatiuneAmanet() {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        data, tip,
+        data, tip: tipFinal,
         beneficiar: beneficiarFinal,
         firma: firmaFinal,
         intrare, iesire,
@@ -1731,6 +1752,72 @@ async function verificaBorderouri() {
   }
 }
 
+async function verificaDispozitiiTeren() {
+  const container = document.getElementById('alerta-teren');
+  if (!container) return;
+  try {
+    const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN)*&order=completat_la.desc`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      container.style.display = 'none';
+      return;
+    }
+    let html = '';
+    for (const d of data) {
+      const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
+      const isIntrare = tipClean === 'DP AMANET';
+      const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
+      const dt = d.data ? new Date(d.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'}) : '';
+      const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      html += `<div class="alerta-decont-box" style="border-left:4px solid #fb923c;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="alerta-icon">📋</div>
+          <div class="alerta-text">
+            <div class="alerta-nume">${escHtml(tipClean)} · ${escHtml(d.beneficiar||'')} · ${dt}</div>
+            <div class="alerta-suma" style="color:${isIntrare?'var(--green)':'var(--red)'};">${isIntrare?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
+            <div style="font-size:11px; color:var(--sub); margin-top:2px;">Deschis: <b>${deschisLa}</b> de ${d.utilizator||'?'}${d.observatii ? ' · ' + escHtml(d.observatii) : ''}</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn-deconteaza" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
+          <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>
+        </div>
+      </div>`;
+    }
+    container.innerHTML = html;
+    container.style.display = '';
+  } catch(e) {
+    container.style.display = 'none';
+  }
+}
+
+async function confirmaDispozitieTeren(id) {
+  try {
+    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip`, { headers: HEADERS });
+    const arr = await respGet.json();
+    if (!Array.isArray(arr) || arr.length === 0) { showToast('Entry negăsit'); return; }
+    const newTip = (arr[0].tip || '').replace(' (PENDING TEREN)', '');
+    const resp = await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ tip: newTip })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✓ Dispoziție confirmată', 'ok');
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDispozitiiTeren()]);
+  } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function anuleazaDispozitieTeren(id) {
+  if (!confirm('Ștergi dispoziția de pe teren? Operațiunea nu a afectat soldul.')) return;
+  try {
+    const resp = await fetch(`${API}/caiet?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('Dispoziție anulată', 'ok');
+    await verificaDispozitiiTeren();
+  } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
 async function confirmaBorderou(id) {
   if (!confirm(`Confirmi borderoul #${id}?\n\nÎncasarea + cheltuielile PENDING legate de acest borderou devin operațiuni reale și afectează soldul.`)) return;
   try {
@@ -1835,7 +1922,7 @@ async function modificaFond(id, operatiune) {
     });
 
     showToast(`✓ Fond ${userFond}: ${sumaVeche.toFixed(2)} → ${sumaNoua.toFixed(2)} RON`);
-    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi(), verificaBorderouri()]);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi(), verificaBorderouri(), verificaDispozitiiTeren()]);
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
@@ -1890,7 +1977,7 @@ async function confirmaDecont(utilizator, suma, submittedAt) {
     }
 
     showToast(`Decont confirmat! ${pending.length} operațiuni au intrat în caiet pentru ${utilizator}.`);
-    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi(), verificaBorderouri()]);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi(), verificaBorderouri(), verificaDispozitiiTeren()]);
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
@@ -1933,7 +2020,7 @@ async function returneazaDecont(utilizator, submittedAt) {
     }
 
     showToast(`Decont returnat către ${utilizator}`);
-    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi(), verificaBorderouri()]);
+    await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDeconturi(), verificaBorderouri(), verificaDispozitiiTeren()]);
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
