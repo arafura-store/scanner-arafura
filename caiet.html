@@ -67,6 +67,20 @@
     }
     .header-sold .value { font-size: 22px; font-weight: 800; color: white; line-height: 1.15; font-variant-numeric: tabular-nums; }
     .header-sold .value.neg { color: #fca5a5; }
+    .header-sold.proiectat {
+      background: rgba(255,255,255,.04);
+      border: 1px dashed rgba(255,255,255,.3);
+      position: relative;
+    }
+    .header-sold.proiectat .label { color: rgba(255,255,255,.5); }
+    .header-sold.proiectat .value { color: rgba(255,255,255,.75); font-weight: 700; filter: blur(.3px); }
+    .header-sold.proiectat .value.neg { color: rgba(252,165,165,.75); }
+    .header-sold.proiectat .delta {
+      font-size: 10px; font-weight: 600; color: rgba(255,255,255,.55);
+      margin-top: 1px; letter-spacing: .3px;
+    }
+    .header-sold.proiectat .delta.pos { color: #86efac; }
+    .header-sold.proiectat .delta.neg { color: #fca5a5; }
     .header button {
       padding: 8px 16px; font-size: 13px; font-weight: 600;
       border: none; border-radius: 8px; cursor: pointer;
@@ -345,6 +359,11 @@
   <div class="header-sold" id="header-sold" style="display:none;">
     <span class="label">Sold curent</span>
     <span class="value" id="sold-curent">—</span>
+  </div>
+  <div class="header-sold proiectat" id="header-sold-proiectat" style="display:none;" title="Sold previzionat dacă toate borderourile și deconturile în așteptare sunt confirmate">
+    <span class="label">Sold previzionat</span>
+    <span class="value" id="sold-proiectat">—</span>
+    <span class="delta" id="sold-delta"></span>
   </div>
   <button onclick="logout()" id="btn-logout" style="display:none">Ieși</button>
 </div>
@@ -764,15 +783,33 @@ async function incarcaSold() {
     }
 
     let sold = 0;
+    let soldCuPending = 0;
     for (const d of allEntries) {
-      // PENDING si CONFIRMAT nu afecteaza soldul (sunt doar info)
+      const net = parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
+      soldCuPending += net;
+      // PENDING si CONFIRMAT nu afecteaza soldul curent (sunt doar info)
       if (d.tip && (d.tip.includes('PENDING') || d.tip.includes('CONFIRMAT'))) continue;
-      sold += parseFloat(d.intrare || 0) - parseFloat(d.iesire || 0);
+      sold += net;
     }
 
+    const fmt = n => n.toLocaleString('ro-RO', { minimumFractionDigits: 2 }) + ' RON';
     const el = document.getElementById('sold-curent');
-    el.textContent = sold.toLocaleString('ro-RO', { minimumFractionDigits: 2 }) + ' RON';
+    el.textContent = fmt(sold);
     el.className = sold < 0 ? 'value neg' : 'value';
+
+    const elProi = document.getElementById('sold-proiectat');
+    const elDelta = document.getElementById('sold-delta');
+    const cardProi = document.getElementById('header-sold-proiectat');
+    const delta = soldCuPending - sold;
+    if (Math.abs(delta) < 0.01) {
+      cardProi.style.display = 'none';
+    } else {
+      elProi.textContent = fmt(soldCuPending);
+      elProi.className = soldCuPending < 0 ? 'value neg' : 'value';
+      elDelta.textContent = (delta >= 0 ? '+' : '') + fmt(delta) + ' în așteptare';
+      elDelta.className = 'delta ' + (delta >= 0 ? 'pos' : 'neg');
+      cardProi.style.display = '';
+    }
   } catch (e) {}
 }
 
