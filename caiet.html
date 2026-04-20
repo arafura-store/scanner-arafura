@@ -1310,7 +1310,7 @@ async function calculeazaSoldLaData(dataLimita) {
     let total = 0;
     let offset = 0;
     while (true) {
-      const resp = await fetch(`${API}/caiet?select=intrare,iesire,tip&data=lte.${dataLimita}&limit=1000&offset=${offset}`, { headers: HEADERS });
+      const resp = await fetch(`${API}/caiet?select=intrare,iesire,tip&data=lte.${dataLimita}&order=data.asc,created_at.asc&limit=1000&offset=${offset}`, { headers: HEADERS });
       const rows = await resp.json();
       if (!Array.isArray(rows) || rows.length === 0) break;
       for (const d of rows) {
