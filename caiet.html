@@ -489,7 +489,7 @@
           <input type="text" id="fa-nr" placeholder="ex: DP 1234 / OP 5678" autocomplete="off">
         </div>
         <div class="form-group">
-          <label>Beneficiar</label>
+          <label id="fa-beneficiar-label">Beneficiar</label>
           <select id="fa-beneficiar">
             <option value="">— Alege tipul întâi —</option>
           </select>
@@ -1044,6 +1044,7 @@ function onTipAmanetChange() {
     preview.style.display = 'none';
     sumaLabel.textContent = 'Sumă (RON)';
     benef.innerHTML = '<option value="">— Alege tipul întâi —</option>';
+    document.getElementById('fa-beneficiar-label').textContent = 'Beneficiar';
     rowFirma.style.display = 'none';
     return;
   }
@@ -1070,6 +1071,7 @@ function onTipAmanetChange() {
     opts += `<option value="${name}">${name}</option>`;
   }
   benef.innerHTML = opts;
+  document.getElementById('fa-beneficiar-label').textContent = isBanca ? 'Banca' : 'Amanet';
 
   // Firma selector: doar pentru BANCA; pentru AMANET e fix PERFECTA INVEST
   if (isBanca) {
