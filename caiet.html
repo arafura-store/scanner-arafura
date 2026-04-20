@@ -896,8 +896,8 @@ async function deschideAdaugaBeneficiar(numeSugerat) {
   }
 }
 
-const TIPURI_IESIRE = ['COMBUSTIBIL','MATERIALE','SALARIU','UTILITATI','CHIRII','TRANSPORT','REPARATII','ASIGURARI','TAXE','SERVICII','PROTOCOL','ALTE PLATI'];
-const TIPURI_INTRARE = ['CHIRIE INCASATA','VANZARI','IMPRUMUT INCASAT','DIVIDENDE','SPONSORIZARI','ALTE INCASARI'];
+const TIPURI_IESIRE = ['COMBUSTIBIL','MATERIALE','SALARIU','UTILITATI','CHIRII','TRANSPORT','REPARATII','ASIGURARI','TAXE','SERVICII','PROTOCOL','IMPRUMUT','REGLARE CASA-','ALTE PLATI'];
+const TIPURI_INTRARE = ['CHIRIE INCASATA','VANZARI','IMPRUMUT INCASAT','DIVIDENDE','SPONSORIZARI','REGLARE CASA+','ALTE INCASARI'];
 
 function updateTipSelect(directie) {
   const sel = document.getElementById('f-tip-select');
@@ -961,12 +961,12 @@ function tipDirection(tip) {
   // Tipuri valide pentru "Operațiune normală"
   const tipuriIntrare = [
     'INCASARE',
-    'CHIRIE INCASATA', 'VANZARI', 'IMPRUMUT INCASAT', 'DIVIDENDE', 'SPONSORIZARI', 'ALTE INCASARI'
+    'CHIRIE INCASATA', 'VANZARI', 'IMPRUMUT INCASAT', 'DIVIDENDE', 'SPONSORIZARI', 'REGLARE CASA+', 'ALTE INCASARI'
   ];
   const tipuriIesire = [
     'PLATA',
     'COMBUSTIBIL', 'MATERIALE', 'SALARIU', 'UTILITATI', 'CHIRII', 'TRANSPORT',
-    'REPARATII', 'ASIGURARI', 'TAXE', 'SERVICII', 'PROTOCOL', 'ALTE PLATI'
+    'REPARATII', 'ASIGURARI', 'TAXE', 'SERVICII', 'PROTOCOL', 'IMPRUMUT', 'REGLARE CASA-', 'ALTE PLATI'
   ];
   if (tipuriIntrare.includes(tip)) return 'in';
   if (tipuriIesire.includes(tip)) return 'out';
