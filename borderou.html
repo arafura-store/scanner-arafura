@@ -209,10 +209,51 @@
       <button class="btn-submit" id="btn-submit" onclick="trimiteBorderou()" disabled>Trimite borderou la birou</button>
     </div>
 
-    <!-- Istoric borderouri -->
-    <div class="card">
-      <h3>📜 Istoric borderouri recente</h3>
-      <div id="istoric"></div>
+    <!-- Borderouri în așteptare (neridicate de șofer) -->
+    <div class="card" id="card-asteptare" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
+        <h3 style="margin:0;">💰 Borderouri în așteptare</h3>
+        <div id="total-neridicat" style="font-size:20px; font-weight:800; color:var(--green);"></div>
+      </div>
+      <div id="istoric-asteptare"></div>
+      <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+        <button id="btn-cheltuiala" onclick="deschideCheltuiala()" style="flex:1; min-width:180px; padding:14px; font-size:15px; font-weight:700; background:var(--orange); color:white; border:none; border-radius:10px; cursor:pointer;">+ Cheltuială din pool</button>
+        <button id="btn-preda" onclick="predaSofer()" style="flex:1; min-width:180px; padding:14px; font-size:15px; font-weight:700; background:var(--blue); color:white; border:none; border-radius:10px; cursor:pointer;">🚚 Predă toate la șofer</button>
+      </div>
+    </div>
+
+    <!-- Modal cheltuiala -->
+    <div id="modal-cheltuiala" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:300; align-items:center; justify-content:center; padding:16px;">
+      <div style="background:white; border-radius:14px; max-width:460px; width:100%; padding:22px;">
+        <h3 style="margin-bottom:14px; color:var(--navy);">+ Cheltuială din bani neridicați</h3>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip</label>
+          <select id="ch-tip" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+            <option value="">— Alege —</option>
+            <option value="DI AMANET">DI AMANET (plată către amanet)</option>
+            <option value="DP AMANET">DP AMANET (încasare de la amanet)</option>
+            <option value="UTILITATI">UTILITĂȚI</option>
+            <option value="AVANS SALARIU">AVANS SALARIU</option>
+            <option value="ALTE PLATI">ALTE PLĂȚI</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Beneficiar</label>
+          <input type="text" id="ch-beneficiar" placeholder="ex: POPORULUI, ENEL, ION POPESCU..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
+          <input type="number" step="0.01" id="ch-suma" placeholder="0.00" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Observații (opțional)</label>
+          <input type="text" id="ch-obs" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button onclick="inchideCheltuiala()" style="flex:1; padding:12px; background:#e2e8f0; color:var(--text); border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
+          <button onclick="salveazaCheltuiala()" style="flex:2; padding:12px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Salvează cheltuiala</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -511,34 +552,158 @@ async function trimiteBorderou() {
 }
 
 
+let _asteptareBorderouri = [];
+let _asteptareCheltuieli = [];
+
 async function incarcaIstoric() {
+  const card = document.getElementById('card-asteptare');
+  const container = document.getElementById('istoric-asteptare');
   try {
-    const resp = await fetch(`${API}/borderouri?select=*&order=trimis_la.desc&limit=15`, { headers: HEADERS });
+    const resp = await fetch(`${API}/borderouri?status=eq.trimis&order=data.asc,trimis_la.asc`, { headers: HEADERS });
     const data = await resp.json();
-    const c = document.getElementById('istoric');
     if (!Array.isArray(data) || data.length === 0) {
-      c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--sub); font-size:13px;">Niciun borderou trimis încă</div>';
+      _asteptareBorderouri = [];
+      _asteptareCheltuieli = [];
+      card.style.display = 'none';
       return;
     }
-    let html = '<table><thead><tr><th>Data</th><th>Magazin</th><th class="num">Cash Z</th><th class="num">Card Z</th><th>Status</th><th>Trimis</th></tr></thead><tbody>';
+    _asteptareBorderouri = data;
+
+    // Încarcă cheltuielile pending legate de aceste borderouri
+    const ids = data.map(b => b.id);
+    const observatiiFilters = ids.map(id => `observatii.eq.cheltuiala%20borderou%20%23${id}`).join(',');
+    let cheltuieli = [];
+    if (ids.length > 0) {
+      const respCh = await fetch(`${API}/caiet?or=(${observatiiFilters})&tip=like.*(PENDING%20MAGAZIN)*&order=created_at.desc`, { headers: HEADERS });
+      const dataCh = await respCh.json();
+      if (Array.isArray(dataCh)) cheltuieli = dataCh;
+    }
+    _asteptareCheltuieli = cheltuieli;
+
+    let totalCash = 0;
+    let totalCheltuieli = 0;
+    let html = '';
     for (const b of data) {
       const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
       const trimis = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
-      const cashZ = (parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0)).toFixed(2);
-      const cardZ = (parseFloat(b.card_z_c1||0) + parseFloat(b.card_z_c2||0)).toFixed(2);
-      const badge = b.status === 'confirmat' ? 'badge-confirmat' : (b.status === 'returnat' ? 'badge-returnat' : 'badge-trimis');
-      html += `<tr>
-        <td>${dt}</td>
-        <td style="font-weight:600;">${b.magazin}</td>
-        <td class="num">${cashZ}</td>
-        <td class="num">${cardZ}</td>
-        <td><span class="badge ${badge}">${b.status.toUpperCase()}</span></td>
-        <td style="font-size:11px; color:var(--sub);">${trimis} (${b.utilizator||'?'})</td>
-      </tr>`;
+      const cashZ = parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0);
+      const cashFizic = parseFloat(b.cash_fizic||0);
+      const suma = cashFizic > 0 ? cashFizic : cashZ;
+      totalCash += suma;
+      const chAle = cheltuieli.filter(c => (c.observatii||'') === `cheltuiala borderou #${b.id}`);
+      html += `<div style="padding:12px; background:#f8fafc; border-radius:10px; margin-bottom:8px; border-left:3px solid var(--blue);">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px;">
+          <div><b>${b.magazin}</b> · ${dt} <span style="font-size:11px; color:var(--sub);">(${trimis} de ${b.utilizator||'?'})</span></div>
+          <div style="font-weight:800; color:var(--green);">${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
+        </div>`;
+      if (chAle.length > 0) {
+        html += '<div style="margin-top:6px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px;">';
+        for (const c of chAle) {
+          const val = parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+          totalCheltuieli += val;
+          html += `<div style="display:flex; justify-content:space-between; padding:3px 0;">
+            <span>↓ ${escHtml(c.tip||'').replace(' (PENDING MAGAZIN)','')} — ${escHtml(c.beneficiar||'')}${c.observatii && !c.observatii.startsWith('cheltuiala') ? ' ('+escHtml(c.observatii)+')' : ''}</span>
+            <span style="color:var(--red); font-weight:700;">-${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+          </div>`;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
     }
-    html += '</tbody></table>';
-    c.innerHTML = html;
-  } catch {}
+    const net = totalCash - totalCheltuieli;
+    document.getElementById('total-neridicat').textContent = `${net.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON`;
+    document.getElementById('total-neridicat').style.color = net < 0 ? 'var(--red)' : 'var(--green)';
+    container.innerHTML = html;
+    card.style.display = '';
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function deschideCheltuiala() {
+  if (_asteptareBorderouri.length === 0) { showToast('Nu există borderouri în așteptare', 'err'); return; }
+  document.getElementById('ch-tip').value = '';
+  document.getElementById('ch-beneficiar').value = '';
+  document.getElementById('ch-suma').value = '';
+  document.getElementById('ch-obs').value = '';
+  document.getElementById('modal-cheltuiala').style.display = 'flex';
+}
+
+function inchideCheltuiala() {
+  document.getElementById('modal-cheltuiala').style.display = 'none';
+}
+
+async function salveazaCheltuiala() {
+  const tip = document.getElementById('ch-tip').value;
+  const beneficiar = document.getElementById('ch-beneficiar').value.trim().toUpperCase();
+  const suma = parseFloat(document.getElementById('ch-suma').value) || 0;
+  const obs = document.getElementById('ch-obs').value.trim();
+
+  if (!tip) { showToast('Alege tipul', 'err'); return; }
+  if (!beneficiar) { showToast('Completează beneficiar', 'err'); return; }
+  if (suma <= 0) { showToast('Suma invalidă', 'err'); return; }
+
+  // Calculează disponibil
+  let totalCash = 0;
+  for (const b of _asteptareBorderouri) {
+    const cashFizic = parseFloat(b.cash_fizic||0);
+    const cashZ = parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0);
+    totalCash += cashFizic > 0 ? cashFizic : cashZ;
+  }
+  let totalCheltuieli = 0;
+  for (const c of _asteptareCheltuieli) {
+    totalCheltuieli += parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+  }
+  const disponibil = totalCash - totalCheltuieli;
+  if (suma > disponibil) {
+    if (!confirm(`Suma ${suma.toFixed(2)} depășește disponibilul (${disponibil.toFixed(2)} RON). Continui oricum?`)) return;
+  }
+
+  // Link la cel mai vechi borderou trimis
+  const bTarget = _asteptareBorderouri[0];
+  const isIntrare = tip === 'DP AMANET';
+
+  try {
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data: new Date().toISOString().slice(0,10),
+        tip: `${tip} (PENDING MAGAZIN)`,
+        beneficiar,
+        intrare: isIntrare ? suma : 0,
+        iesire: isIntrare ? 0 : suma,
+        observatii: `cheltuiala borderou #${bTarget.id}${obs ? ' — ' + obs : ''}`,
+        utilizator: currentUser.nume,
+        completat_la: new Date().toISOString()
+      })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✓ Cheltuială salvată', 'ok');
+    inchideCheltuiala();
+    await incarcaIstoric();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function predaSofer() {
+  if (_asteptareBorderouri.length === 0) { showToast('Nimic de predat', 'err'); return; }
+  if (!confirm(`Predai șoferului TOATE cele ${_asteptareBorderouri.length} borderouri din așteptare?\nDupă apăsare dispar din listă.`)) return;
+  try {
+    const ids = _asteptareBorderouri.map(b => b.id).join(',');
+    const resp = await fetch(`${API}/borderouri?id=in.(${ids})`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'predat-sofer' })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✓ Predate la șofer', 'ok');
+    await incarcaIstoric();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
 }
 
 // Device auth

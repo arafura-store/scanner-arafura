@@ -1618,30 +1618,59 @@ async function verificaBorderouri() {
     return;
   }
   try {
-    const resp = await fetch(`${API}/borderouri?status=eq.trimis&order=trimis_la.asc`, { headers: HEADERS });
+    const resp = await fetch(`${API}/borderouri?or=(status.eq.trimis,status.eq.predat-sofer)&order=status.desc,data.asc,trimis_la.asc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
       container.style.display = 'none';
       return;
     }
+
+    // Încarcă cheltuielile pending legate
+    const ids = data.map(b => b.id);
+    const observatiiFilters = ids.map(id => `observatii.like.cheltuiala%20borderou%20%23${id}*`).join(',');
+    let cheltuieli = [];
+    if (ids.length > 0) {
+      const respCh = await fetch(`${API}/caiet?or=(${observatiiFilters})&tip=like.*(PENDING%20MAGAZIN)*`, { headers: HEADERS });
+      const dataCh = await respCh.json();
+      if (Array.isArray(dataCh)) cheltuieli = dataCh;
+    }
+
     let html = '';
     for (const b of data) {
       const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
       const trimis = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?';
       const cashZ = (parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0));
-      const cardZ = (parseFloat(b.card_z_c1||0) + parseFloat(b.card_z_c2||0));
       const cashFizic = parseFloat(b.cash_fizic||0);
-      const sumaCaiet = cashFizic > 0 ? cashFizic : cashZ;
+      const sumaBrut = cashFizic > 0 ? cashFizic : cashZ;
+      const chAle = cheltuieli.filter(c => (c.observatii||'').startsWith(`cheltuiala borderou #${b.id}`));
+      let totalCh = 0;
+      for (const c of chAle) totalCh += parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+      const net = sumaBrut - totalCh;
+      const statusBadge = b.status === 'predat-sofer'
+        ? '<span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700;">PREDAT ȘOFER</span>'
+        : '<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700;">LA MAGAZIN</span>';
       html += `<div class="alerta-decont-box">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">🏪</div>
           <div class="alerta-text">
-            <div class="alerta-nume">Borderou ${escHtml(b.magazin)} · ${dt}</div>
-            <div class="alerta-suma">${sumaCaiet.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
-            <div style="font-size:11px; color:var(--sub); margin-top:2px;">Trimis: <b>${trimis}</b> de ${b.utilizator||'?'} · Cash Z: ${cashZ.toFixed(2)} · Card Z: ${cardZ.toFixed(2)}${b.observatii ? ' · ' + escHtml(b.observatii) : ''}</div>
+            <div class="alerta-nume">Borderou ${escHtml(b.magazin)} · ${dt} ${statusBadge}</div>
+            <div class="alerta-suma">${net.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON <span style="font-size:11px; color:var(--sub); font-weight:500;">(brut ${sumaBrut.toFixed(2)} − cheltuieli ${totalCh.toFixed(2)})</span></div>
+            <div style="font-size:11px; color:var(--sub); margin-top:2px;">Trimis: <b>${trimis}</b> de ${b.utilizator||'?'}${b.observatii ? ' · ' + escHtml(b.observatii) : ''}</div>
           </div>
-        </div>
-        <div style="display:flex; gap:8px;">
+        </div>`;
+      if (chAle.length > 0) {
+        html += '<div style="margin-top:8px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px; background:#fffbeb; padding:8px 10px; border-radius:6px;">';
+        for (const c of chAle) {
+          const val = parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+          const obsExtra = (c.observatii||'').split(' — ')[1];
+          html += `<div style="display:flex; justify-content:space-between; padding:2px 0;">
+            <span>↓ ${escHtml(c.tip||'').replace(' (PENDING MAGAZIN)','')} — ${escHtml(c.beneficiar||'')}${obsExtra ? ' ('+escHtml(obsExtra)+')' : ''}</span>
+            <span style="color:var(--red); font-weight:700;">-${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+          </div>`;
+        }
+        html += '</div>';
+      }
+      html += `<div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn-deconteaza" onclick="confirmaBorderou(${b.id})" style="flex:1;">Confirmă</button>
           <button style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="returneazaBorderou(${b.id})">Returnează</button>
         </div>
@@ -1655,21 +1684,31 @@ async function verificaBorderouri() {
 }
 
 async function confirmaBorderou(id) {
-  if (!confirm(`Confirmi borderoul #${id}?\n\nÎncasarea PENDING din caiet devine operațiune reală și afectează soldul.`)) return;
+  if (!confirm(`Confirmi borderoul #${id}?\n\nÎncasarea + cheltuielile PENDING legate de acest borderou devin operațiuni reale și afectează soldul.`)) return;
   try {
-    const respCaiet = await fetch(`${API}/caiet?observatii=eq.borderou%20%23${id}&tip=eq.INCASARE%20(PENDING%20MAGAZIN)`, {
-      method: 'PATCH',
-      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ tip: 'INCASARE' })
-    });
-    if (!respCaiet.ok) { showToast('Eroare caiet: ' + await respCaiet.text(), 'err'); return; }
+    // 1. Încărcă toate entries PENDING pentru acest borderou (INCASARE + cheltuieli)
+    const respGet = await fetch(`${API}/caiet?or=(observatii.eq.borderou%20%23${id},observatii.like.cheltuiala%20borderou%20%23${id}*)&tip=like.*(PENDING%20MAGAZIN)*&select=id,tip`, { headers: HEADERS });
+    const entries = await respGet.json();
+    if (!Array.isArray(entries)) { showToast('Eroare citire entries', 'err'); return; }
+
+    // 2. Update fiecare entry: scoate ' (PENDING MAGAZIN)' din tip
+    for (const e of entries) {
+      const newTip = (e.tip || '').replace(' (PENDING MAGAZIN)', '');
+      await fetch(`${API}/caiet?id=eq.${e.id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ tip: newTip })
+      });
+    }
+
+    // 3. Update borderou status
     const respBord = await fetch(`${API}/borderouri?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ status: 'confirmat', confirmat_la: new Date().toISOString(), confirmat_de: currentUser.nume })
     });
     if (!respBord.ok) { showToast('Eroare borderou: ' + await respBord.text(), 'err'); return; }
-    showToast('✓ Borderou confirmat', 'ok');
+    showToast(`✓ Borderou confirmat (${entries.length} operațiuni)`, 'ok');
     await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaBorderouri()]);
   } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
 }
@@ -1678,8 +1717,8 @@ async function returneazaBorderou(id) {
   const motiv = prompt('De ce returnezi borderoul?');
   if (!motiv || !motiv.trim()) return;
   try {
-    // Șterge entry PENDING din caiet (încă nu afecta soldul)
-    await fetch(`${API}/caiet?observatii=eq.borderou%20%23${id}&tip=eq.INCASARE%20(PENDING%20MAGAZIN)`, {
+    // Șterge TOATE entries PENDING pentru acest borderou (INCASARE + cheltuieli)
+    await fetch(`${API}/caiet?or=(observatii.eq.borderou%20%23${id},observatii.like.cheltuiala%20borderou%20%23${id}*)&tip=like.*(PENDING%20MAGAZIN)*`, {
       method: 'DELETE',
       headers: HEADERS
     });
