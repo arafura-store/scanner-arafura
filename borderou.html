@@ -228,7 +228,7 @@
         <h3 style="margin-bottom:14px; color:var(--navy);">+ Cheltuială din bani neridicați</h3>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip</label>
-          <select id="ch-tip" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+          <select id="ch-tip" onchange="onChTipChange()" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
             <option value="">— Alege —</option>
             <option value="DI AMANET">DI AMANET (plată către amanet)</option>
             <option value="DP AMANET">DP AMANET (încasare de la amanet)</option>
@@ -239,7 +239,9 @@
         </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Beneficiar</label>
-          <input type="text" id="ch-beneficiar" placeholder="ex: POPORULUI, ENEL, ION POPESCU..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+          <div id="ch-beneficiar-wrap">
+            <input type="text" id="ch-beneficiar" placeholder="Alege mai întâi tipul..." disabled style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px; background:#f1f5f9;">
+          </div>
         </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
@@ -326,7 +328,7 @@ async function completeLogin(user) {
   const todayStr = new Date().toISOString().slice(0, 10);
   document.getElementById('f-data').value = todayStr;
   document.getElementById('f-data').setAttribute('max', todayStr);
-  await incarcaIstoric();
+  await Promise.all([incarcaIstoric(), incarcaAngajati()]);
 }
 
 function logout() {
@@ -554,6 +556,32 @@ async function trimiteBorderou() {
 
 let _asteptareBorderouri = [];
 let _asteptareCheltuieli = [];
+let _angajati = [];
+
+async function incarcaAngajati() {
+  try {
+    const resp = await fetch(`${API}/angajati?select=nume&activ=eq.true&nume=neq.BARABULEA%20MADALINA&order=nume.asc`, { headers: HEADERS });
+    const data = await resp.json();
+    if (Array.isArray(data)) _angajati = data;
+  } catch {}
+}
+
+function onChTipChange() {
+  const tip = document.getElementById('ch-tip').value;
+  const wrap = document.getElementById('ch-beneficiar-wrap');
+  const magazin = _asteptareBorderouri[0]?.magazin || document.getElementById('f-magazin').value || '';
+  if (tip === 'DP AMANET' || tip === 'DI AMANET') {
+    wrap.innerHTML = `<input type="text" id="ch-beneficiar" value="${escHtml(magazin)}" readonly style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px; background:#f8fafc; font-weight:700;">`;
+  } else if (tip === 'AVANS SALARIU') {
+    let opts = '<option value="">— Alege angajat —</option>';
+    for (const a of _angajati) opts += `<option value="${escHtml(a.nume)}">${escHtml(a.nume)}</option>`;
+    wrap.innerHTML = `<select id="ch-beneficiar" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">${opts}</select>`;
+  } else if (tip) {
+    wrap.innerHTML = `<input type="text" id="ch-beneficiar" placeholder="ex: ENEL, ENGIE, alt beneficiar..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">`;
+  } else {
+    wrap.innerHTML = `<input type="text" id="ch-beneficiar" placeholder="Alege mai întâi tipul..." disabled style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px; background:#f1f5f9;">`;
+  }
+}
 
 async function incarcaIstoric() {
   const card = document.getElementById('card-asteptare');
@@ -640,9 +668,9 @@ function escHtml(s) {
 function deschideCheltuiala() {
   if (_asteptareBorderouri.length === 0) { showToast('Nu există borderouri în așteptare', 'err'); return; }
   document.getElementById('ch-tip').value = '';
-  document.getElementById('ch-beneficiar').value = '';
   document.getElementById('ch-suma').value = '';
   document.getElementById('ch-obs').value = '';
+  onChTipChange(); // reset beneficiar zone to disabled input
   document.getElementById('modal-cheltuiala').style.display = 'flex';
 }
 
