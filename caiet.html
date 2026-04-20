@@ -1148,6 +1148,22 @@ async function adaugaIncasare() {
   if (!magazin) { showToast('Alege magazinul'); return; }
   if (suma <= 0) { showToast('Completează suma'); return; }
 
+  // Verifică duplicate: există deja ÎNCASARE pentru acest magazin pe data asta?
+  try {
+    const respDup = await fetch(`${API}/caiet?tip=eq.INCASARE&beneficiar=eq.${encodeURIComponent(magazin)}&data=eq.${data}&select=intrare,completat_la,utilizator`, { headers: HEADERS });
+    const existente = await respDup.json();
+    if (Array.isArray(existente) && existente.length > 0) {
+      const detalii = existente.map(e => {
+        const s = parseFloat(e.intrare || 0).toLocaleString('ro-RO', {minimumFractionDigits:2});
+        const cine = e.utilizator || '?';
+        const cand = e.completat_la ? new Date(e.completat_la).toLocaleString('ro-RO', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '?';
+        return `• ${s} RON (${cine}, ${cand})`;
+      }).join('\n');
+      const msg = `⚠ Există deja ${existente.length} ÎNCASARE pentru ${magazin} pe ${new Date(data).toLocaleDateString('ro-RO')}:\n\n${detalii}\n\nEști SIGUR că mai adaugi una (nu e duplicat)?`;
+      if (!confirm(msg)) { showToast('Anulat — nu s-a adăugat duplicat'); return; }
+    }
+  } catch (e) { /* dacă check-ul eșuează, continuă oricum */ }
+
   try {
     const resp = await fetch(`${API}/caiet`, {
       method: 'POST',
