@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Borderou Zilnic — ARAFURA</title>
+  <script src="config.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #1e293b; --navy-dark: #0f172a;
+      --blue: #1e40af; --blue-light: #dbeafe;
+      --green: #047857; --green-light: #d1fae5;
+      --red: #b91c1c; --red-light: #fee2e2;
+      --orange: #c2410c; --orange-light: #ffedd5;
+      --bg: #f8fafc; --card: #fff; --text: #0f172a;
+      --sub: #64748b; --border: #e2e8f0; --radius: 12px;
+    }
+    body { font-family: 'Segoe UI', -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+    .header {
+      background: linear-gradient(135deg, var(--navy), var(--navy-dark));
+      color: white; padding: 12px 24px; display: flex; justify-content: space-between;
+      align-items: center; box-shadow: 0 2px 12px rgba(15,23,42,.25);
+      position: sticky; top: 0; z-index: 100; gap: 16px;
+    }
+    .header h1 { font-size: 19px; font-weight: 700; }
+    .header-user { font-size: 12px; opacity: .85; background: rgba(255,255,255,.08); padding: 4px 12px; border-radius: 14px; }
+    .header button {
+      padding: 8px 16px; font-size: 13px; font-weight: 600;
+      border: 1px solid rgba(255,255,255,.15); border-radius: 8px;
+      background: rgba(255,255,255,.1); color: white; cursor: pointer;
+    }
+
+    .login-screen { display: flex; flex-direction: column; align-items: center; padding: 60px 24px; gap: 20px; }
+    .login-screen .icon { font-size: 64px; }
+    .login-screen h2 { font-size: 24px; font-weight: 700; }
+    .login-screen input {
+      width: 280px; padding: 16px; font-size: 26px; text-align: center; letter-spacing: 8px;
+      border: 2px solid var(--border); border-radius: var(--radius);
+    }
+    .login-screen input:focus { border-color: var(--blue); outline: none; }
+
+    .container { max-width: 700px; margin: 20px auto; padding: 0 16px; }
+
+    .card {
+      background: var(--card); border-radius: var(--radius); padding: 20px;
+      box-shadow: 0 1px 3px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.04);
+      margin-bottom: 14px;
+    }
+    .card h3 { font-size: 15px; margin-bottom: 14px; color: var(--navy); font-weight: 700; }
+
+    .form-row { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--sub); }
+    .form-group input, .form-group select {
+      padding: 12px; font-size: 15px; border: 1px solid var(--border); border-radius: 8px; background: white;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--blue); outline: none; }
+
+    /* GRID borderou */
+    .grid-borderou {
+      display: grid; grid-template-columns: 160px 1fr 1fr; gap: 8px;
+      margin-bottom: 14px;
+    }
+    .grid-borderou .cell { padding: 10px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .grid-borderou .cell-header { background: var(--navy); color: white; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+    .grid-borderou .cell-label { background: transparent; font-weight: 600; color: var(--sub); font-size: 13px; justify-content: flex-start; padding-left: 4px; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .grid-borderou .cell-label .sublabel { font-size: 10px; color: #94a3b8; font-weight: 500; }
+    .grid-borderou input {
+      width: 100%; padding: 10px; font-size: 15px; border: 1px solid var(--border); border-radius: 6px;
+      text-align: right; font-variant-numeric: tabular-nums; background: white;
+    }
+    .grid-borderou input:focus { border-color: var(--blue); outline: none; }
+    .grid-borderou .auto-cell { background: var(--blue-light); font-weight: 700; color: var(--blue); font-variant-numeric: tabular-nums; }
+
+    .btn-submit {
+      width: 100%; padding: 16px; font-size: 18px; font-weight: 700;
+      background: var(--green); color: white; border: none;
+      border-radius: var(--radius); cursor: pointer;
+    }
+    .btn-submit:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+    .diff-box {
+      background: #fff7ed; border-left: 3px solid var(--orange); padding: 10px 14px;
+      border-radius: 8px; font-size: 13px; margin-bottom: 12px;
+    }
+    .diff-box .diff-line { display: flex; justify-content: space-between; margin: 2px 0; }
+    .diff-box .diff-ok { color: var(--green); }
+    .diff-box .diff-warn { color: var(--red); font-weight: 700; }
+
+    table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border-radius: var(--radius); overflow: hidden; font-size: 13px; box-shadow: 0 1px 3px rgba(15,23,42,.06); }
+    th { background: var(--navy); color: white; padding: 10px; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td { padding: 10px; border-bottom: 1px solid #f1f5f9; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .badge-trimis { background: #dbeafe; color: #1e40af; }
+    .badge-confirmat { background: #d1fae5; color: #065f46; }
+    .badge-returnat { background: #fee2e2; color: #991b1b; }
+
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #1a1a2e; color: white; padding: 12px 22px; border-radius: 24px;
+      font-size: 15px; z-index: 200; transition: transform .3s;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.ok { background: var(--green); }
+    .toast.err { background: var(--red); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ARAFURA — Borderou Zilnic</h1>
+  <div style="display:flex; gap:10px; align-items:center;">
+    <span class="header-user" id="header-user"></span>
+    <button onclick="logout()" id="btn-logout" style="display:none;">Ieși</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- DEVICE AUTH -->
+<div id="screen-device-auth" class="login-screen" style="display:none;">
+  <div class="icon">🔒</div>
+  <h2>Device neautorizat</h2>
+  <p style="color:var(--sub); max-width:400px; text-align:center;">Introdu codul de autorizare.</p>
+  <input type="password" id="device-code" placeholder="cod autorizare"
+    style="width:280px; padding:16px; font-size:18px; text-align:center; letter-spacing:2px;"
+    onkeyup="checkDeviceCode(event)">
+  <div id="device-error" style="color:var(--red); font-size:13px; height:16px;"></div>
+</div>
+
+<!-- LOGIN -->
+<div id="screen-login" class="login-screen" style="display:none;">
+  <div class="icon">🏪</div>
+  <h2>Borderou Zilnic</h2>
+  <p style="color:var(--sub);">Introdu PIN-ul</p>
+  <input type="password" inputmode="numeric" maxlength="4" placeholder="****"
+    id="login-pin" oninput="onLoginPin()" autocomplete="off">
+</div>
+
+<!-- MAIN -->
+<div id="screen-main" style="display:none;">
+  <div class="container">
+
+    <!-- Form borderou nou -->
+    <div class="card">
+      <h3>📋 Borderou nou</h3>
+
+      <div class="form-row">
+        <div class="form-group" style="max-width:180px;">
+          <label>Data</label>
+          <input type="date" id="f-data">
+        </div>
+        <div class="form-group">
+          <label>Magazin</label>
+          <select id="f-magazin" onchange="onMagazinChange()">
+            <option value="">— Alege magazin —</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="grid-zone" style="display:none;"></div>
+      <div id="diff-zone"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Observații (opțional)</label>
+          <input type="text" id="f-obs" placeholder="orice neregularitate, explicație...">
+        </div>
+      </div>
+
+      <button class="btn-submit" id="btn-submit" onclick="trimiteBorderou()" disabled>Trimite borderou la birou</button>
+    </div>
+
+    <!-- Istoric borderouri -->
+    <div class="card">
+      <h3>📜 Istoric borderouri recente</h3>
+      <div id="istoric"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+
+const MAGAZINE = ['TOMIS 3','SERVICII','BABADAG','MEDGIDIA','NAVODARI','MARVIMEX','POARTA 6','KOGALNICEANU','SHOWROOM'];
+const MAGAZINE_2_CASE = ['TOMIS 3']; // magazinele cu 2 case de marcat
+
+// Populate dropdown
+window.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('f-magazin');
+  MAGAZINE.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    sel.appendChild(opt);
+  });
+});
+
+// ── Session (localStorage 30 zile) ────────────────────────────────
+const SESSION_KEY = 'borderou_session';
+function saveSession(user) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 30*24*60*60*1000 }));
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const { user, expires } = JSON.parse(raw);
+    if (!user || !expires || Date.now() > expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return user;
+  } catch { return null; }
+}
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+let currentUser = null;
+
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function onLoginPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin.length < 4) return;
+  try {
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect', 'err');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    saveSession(data[0]);
+    await completeLogin(data[0]);
+  } catch { showToast('Eroare conexiune', 'err'); }
+}
+
+async function completeLogin(user) {
+  currentUser = user;
+  document.getElementById('header-user').textContent = user.nume;
+  document.getElementById('btn-logout').style.display = '';
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-main').style.display = '';
+  document.getElementById('login-pin').value = '';
+  const todayStr = new Date().toISOString().slice(0, 10);
+  document.getElementById('f-data').value = todayStr;
+  document.getElementById('f-data').setAttribute('max', todayStr);
+  await incarcaIstoric();
+}
+
+function logout() {
+  clearSession();
+  currentUser = null;
+  document.getElementById('screen-main').style.display = 'none';
+  document.getElementById('screen-login').style.display = '';
+  document.getElementById('header-user').textContent = '';
+  document.getElementById('btn-logout').style.display = 'none';
+  setTimeout(() => document.getElementById('login-pin').focus(), 50);
+}
+
+function onMagazinChange() {
+  const mag = document.getElementById('f-magazin').value;
+  const gridZone = document.getElementById('grid-zone');
+  if (!mag) { gridZone.style.display = 'none'; document.getElementById('btn-submit').disabled = true; return; }
+
+  const e2 = MAGAZINE_2_CASE.includes(mag);
+  let html = `
+    <div class="grid-borderou">
+      <div class="cell cell-header">Sursă</div>
+      <div class="cell cell-header">💵 Cash</div>
+      <div class="cell cell-header">💳 Card</div>
+  `;
+  if (e2) {
+    html += `
+      <div class="cell cell-label">Z Casa 1 <span class="sublabel">din raport Z</span></div>
+      <div class="cell"><input type="number" step="0.01" id="f-cash-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-card-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+
+      <div class="cell cell-label">Z Casa 2 <span class="sublabel">din raport Z</span></div>
+      <div class="cell"><input type="number" step="0.01" id="f-cash-c2" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-card-c2" placeholder="0.00" oninput="recalculeaza()"></div>
+
+      <div class="cell cell-label">TOTAL Z <span class="sublabel">Casa1 + Casa2</span></div>
+      <div class="cell auto-cell" id="f-cash-total-z">0.00</div>
+      <div class="cell auto-cell" id="f-card-total-z">0.00</div>
+    `;
+  } else {
+    html += `
+      <div class="cell cell-label">Z (raport casa) <span class="sublabel">din raport Z</span></div>
+      <div class="cell"><input type="number" step="0.01" id="f-cash-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-card-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+    `;
+  }
+  html += `
+      <div class="cell cell-label">ERP <span class="sublabel">din gestiune</span></div>
+      <div class="cell"><input type="number" step="0.01" id="f-cash-erp" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-card-erp" placeholder="0.00" oninput="recalculeaza()"></div>
+
+      <div class="cell cell-label">Control <span class="sublabel">Cash: numărat · Card: POS settlement</span></div>
+      <div class="cell"><input type="number" step="0.01" id="f-cash-fizic" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-card-pos" placeholder="0.00" oninput="recalculeaza()"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label>Voucher din Z</label><input type="number" step="0.01" id="f-voucher-z" placeholder="0.00"></div>
+      <div class="form-group"><label>Voucher din ERP</label><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00"></div>
+    </div>
+  `;
+
+  gridZone.innerHTML = html;
+  gridZone.style.display = '';
+  document.getElementById('btn-submit').disabled = false;
+  recalculeaza();
+}
+
+function recalculeaza() {
+  const mag = document.getElementById('f-magazin').value;
+  const e2 = MAGAZINE_2_CASE.includes(mag);
+  const v = (id) => parseFloat(document.getElementById(id)?.value || 0) || 0;
+
+  let cashTotalZ = v('f-cash-c1');
+  let cardTotalZ = v('f-card-c1');
+  if (e2) {
+    cashTotalZ += v('f-cash-c2');
+    cardTotalZ += v('f-card-c2');
+    const elCashT = document.getElementById('f-cash-total-z');
+    const elCardT = document.getElementById('f-card-total-z');
+    if (elCashT) elCashT.textContent = cashTotalZ.toFixed(2);
+    if (elCardT) elCardT.textContent = cardTotalZ.toFixed(2);
+  }
+
+  const cashErp = v('f-cash-erp');
+  const cardErp = v('f-card-erp');
+  const cashFizic = v('f-cash-fizic');
+  const cardPos = v('f-card-pos');
+
+  const fmt = (n) => (n >= 0 ? '+' : '') + n.toLocaleString('ro-RO', {minimumFractionDigits:2});
+  const warn = (n) => Math.abs(n) > 1 ? 'diff-warn' : 'diff-ok';
+
+  const diffCashErp = cashTotalZ - cashErp;
+  const diffCashFizic = cashTotalZ - cashFizic;
+  const diffCardErp = cardTotalZ - cardErp;
+  const diffCardPos = cardTotalZ - cardPos;
+
+  const dz = document.getElementById('diff-zone');
+  if (cashTotalZ === 0 && cardTotalZ === 0) { dz.innerHTML = ''; return; }
+
+  dz.innerHTML = `
+    <div class="diff-box">
+      <div style="font-weight:700; margin-bottom:6px;">⚠ Verificare automată diferențe</div>
+      <div class="diff-line"><span>Cash: Z vs ERP</span><span class="${warn(diffCashErp)}">${fmt(diffCashErp)}</span></div>
+      <div class="diff-line"><span>Cash: Z vs Fizic numărat</span><span class="${warn(diffCashFizic)}">${fmt(diffCashFizic)}</span></div>
+      <div class="diff-line"><span>Card: Z vs ERP</span><span class="${warn(diffCardErp)}">${fmt(diffCardErp)}</span></div>
+      <div class="diff-line"><span>Card: Z vs POS settlement</span><span class="${warn(diffCardPos)}">${fmt(diffCardPos)}</span></div>
+    </div>
+  `;
+}
+
+async function trimiteBorderou() {
+  const data = document.getElementById('f-data').value;
+  const magazin = document.getElementById('f-magazin').value;
+  if (!data || !magazin) { showToast('Completează data și magazinul', 'err'); return; }
+
+  const e2 = MAGAZINE_2_CASE.includes(magazin);
+  const v = (id) => {
+    const el = document.getElementById(id);
+    if (!el || !el.value) return null;
+    return parseFloat(el.value);
+  };
+
+  const payload = {
+    data, magazin,
+    cash_z_c1: v('f-cash-c1') || 0,
+    card_z_c1: v('f-card-c1') || 0,
+    cash_z_c2: e2 ? (v('f-cash-c2') || 0) : null,
+    card_z_c2: e2 ? (v('f-card-c2') || 0) : null,
+    cash_erp: v('f-cash-erp') || 0,
+    card_erp: v('f-card-erp') || 0,
+    cash_fizic: v('f-cash-fizic') || 0,
+    card_pos: v('f-card-pos') || 0,
+    voucher_z: v('f-voucher-z'),
+    voucher_erp: v('f-voucher-erp'),
+    observatii: document.getElementById('f-obs').value.trim() || null,
+    utilizator: currentUser.nume,
+    trimis_la: new Date().toISOString()
+  };
+
+  if (!confirm(`Trimiți borderoul pentru ${magazin} pe ${new Date(data).toLocaleDateString('ro-RO')}?\n\nCash total Z: ${(payload.cash_z_c1 + (payload.cash_z_c2||0)).toFixed(2)}\nCard total Z: ${(payload.card_z_c1 + (payload.card_z_c2||0)).toFixed(2)}`)) return;
+
+  try {
+    const resp = await fetch(`${API}/borderouri`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✓ Borderou trimis la birou', 'ok');
+    // Reset form
+    document.getElementById('f-magazin').value = '';
+    document.getElementById('f-obs').value = '';
+    onMagazinChange();
+    await incarcaIstoric();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function incarcaIstoric() {
+  try {
+    const resp = await fetch(`${API}/borderouri?select=*&order=trimis_la.desc&limit=15`, { headers: HEADERS });
+    const data = await resp.json();
+    const c = document.getElementById('istoric');
+    if (!Array.isArray(data) || data.length === 0) {
+      c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--sub); font-size:13px;">Niciun borderou trimis încă</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>Data</th><th>Magazin</th><th class="num">Cash Z</th><th class="num">Card Z</th><th>Status</th><th>Trimis</th></tr></thead><tbody>';
+    for (const b of data) {
+      const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
+      const trimis = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      const cashZ = (parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0)).toFixed(2);
+      const cardZ = (parseFloat(b.card_z_c1||0) + parseFloat(b.card_z_c2||0)).toFixed(2);
+      const badge = b.status === 'confirmat' ? 'badge-confirmat' : (b.status === 'returnat' ? 'badge-returnat' : 'badge-trimis');
+      html += `<tr>
+        <td>${dt}</td>
+        <td style="font-weight:600;">${b.magazin}</td>
+        <td class="num">${cashZ}</td>
+        <td class="num">${cardZ}</td>
+        <td><span class="badge ${badge}">${b.status.toUpperCase()}</span></td>
+        <td style="font-size:11px; color:var(--sub);">${trimis} (${b.utilizator||'?'})</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    c.innerHTML = html;
+  } catch {}
+}
+
+// Device auth
+const DEVICE_AUTH_KEY = 'caiet_device_autorizat';
+const DEVICE_AUTH_CODE = 'august1947';
+
+function checkDeviceCode(event) {
+  if (event.key !== 'Enter') return;
+  const code = document.getElementById('device-code').value;
+  const errEl = document.getElementById('device-error');
+  if (code === DEVICE_AUTH_CODE) {
+    localStorage.setItem(DEVICE_AUTH_KEY, 'true');
+    document.getElementById('screen-device-auth').style.display = 'none';
+    document.getElementById('device-code').value = '';
+    errEl.textContent = '';
+    const saved = loadSession();
+    if (saved) completeLogin(saved);
+    else {
+      document.getElementById('screen-login').style.display = '';
+      document.getElementById('login-pin').focus();
+    }
+  } else {
+    errEl.textContent = 'Cod incorect';
+    document.getElementById('device-code').value = '';
+  }
+}
+
+(function init() {
+  const deviceAuth = localStorage.getItem(DEVICE_AUTH_KEY) === 'true';
+  if (!deviceAuth) {
+    document.getElementById('screen-device-auth').style.display = '';
+    setTimeout(() => document.getElementById('device-code').focus(), 100);
+    return;
+  }
+  const saved = loadSession();
+  if (saved) completeLogin(saved);
+  else {
+    document.getElementById('screen-login').style.display = '';
+    setTimeout(() => document.getElementById('login-pin').focus(), 100);
+  }
+})();
+</script>
+
+</body>
+</html>
