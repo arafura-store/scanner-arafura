@@ -666,17 +666,22 @@ async function completeLogin(user) {
   document.getElementById('screen-main').style.display = '';
   document.getElementById('login-pin').value = '';
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Data locală în format YYYY-MM-DD (fără probleme de timezone)
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
   document.getElementById('f-data').value = todayStr;
   // Blocare vizuală: nu poate selecta zile viitoare la formulare
   ['f-data','fa-data','fi-data'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.setAttribute('max', todayStr);
   });
-  const today = new Date();
-  const primaZi = new Date(today.getFullYear(), today.getMonth(), 1);
-  document.getElementById('t-data-start').value = primaZi.toISOString().slice(0, 10);
-  document.getElementById('t-data-end').value = todayStr;
+  // Lăsăm filtrul de căutare GOL — utilizatorul alege dacă filtrează
+  document.getElementById('t-data-start').value = '';
+  document.getElementById('t-data-end').value = '';
 
   await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii(), verificaDeconturi()]);
 }
