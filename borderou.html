@@ -297,13 +297,17 @@ function onMagazinChange() {
     `;
   }
   html += `
+      <div class="cell cell-label">POS Settlement <span class="sublabel">doar card (total)</span></div>
+      <div class="cell" style="background:#eef2f7; color:#94a3b8; font-size:12px;">—</div>
+      <div class="cell"><input type="number" step="0.01" id="f-card-pos" placeholder="0.00" oninput="recalculeaza()"></div>
+
       <div class="cell cell-label">ERP <span class="sublabel">din gestiune</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-erp" placeholder="0.00" oninput="recalculeaza()"></div>
       <div class="cell"><input type="number" step="0.01" id="f-card-erp" placeholder="0.00" oninput="recalculeaza()"></div>
 
-      <div class="cell cell-label">Control <span class="sublabel">Cash: numărat · Card: POS settlement</span></div>
+      <div class="cell cell-label">Cash fizic <span class="sublabel">bani numărați</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-fizic" placeholder="0.00" oninput="recalculeaza()"></div>
-      <div class="cell"><input type="number" step="0.01" id="f-card-pos" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell" style="background:#eef2f7; color:#94a3b8; font-size:12px;">—</div>
     </div>
 
     <div class="form-row">
