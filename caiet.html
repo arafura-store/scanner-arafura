@@ -1102,15 +1102,25 @@ async function adaugaOperatiuneAmanet() {
   const isIntrare = tip === 'DP AMANET' || tip === 'RETRAGERE BANCA';
   const intrare = isIntrare ? suma : 0;
   const iesire = isIntrare ? 0 : suma;
+  const isBanca = tip.includes('BANCA');
+
+  // La operațiuni BANCA: firma → beneficiar, banca (din dropdown) → observații
+  const beneficiarFinal = isBanca ? firma : beneficiar;
+  const observatiiFinal = isBanca
+    ? (obs ? `${beneficiar} — ${obs}` : beneficiar)
+    : obs;
+  const firmaFinal = isBanca ? null : firma;
 
   try {
     const resp = await fetch(`${API}/caiet`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
-        data, tip, beneficiar, firma,
+        data, tip,
+        beneficiar: beneficiarFinal,
+        firma: firmaFinal,
         intrare, iesire,
-        observatii: obs,
+        observatii: observatiiFinal,
         nr_dispozitie: nrDisp || null,
         utilizator: currentUser.nume,
         completat_la: new Date().toISOString()
