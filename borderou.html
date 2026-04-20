@@ -263,7 +263,7 @@
     <div class="card" id="card-teren">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
         <h3 style="margin:0;">📋 Dispoziții pe teren (AMANET)</h3>
-        <button onclick="deschideTerenForm()" style="padding:10px 16px; background:#fb923c; color:white; border:none; border-radius:8px; font-weight:700; font-size:14px; cursor:pointer;">+ Deschide DP/DI</button>
+        <button onclick="deschideTerenForm()" style="padding:14px 20px; background:#fb923c; color:white; border:none; border-radius:10px; font-weight:800; font-size:16px; cursor:pointer; letter-spacing:.3px;">+ DISPOZIȚII PLATĂ / ÎNCASARE</button>
       </div>
       <div id="lista-teren"><div style="text-align:center; padding:16px; color:var(--sub); font-size:13px;">Nicio dispoziție deschisă</div></div>
     </div>
@@ -798,10 +798,10 @@ async function incarcaDispozitiiTeren() {
            <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`
         : `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la birou</div>
            <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
-      html += `<div style="padding:12px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:8px;">
+      html += `<div style="padding:14px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:10px;">
           <div><b>${escHtml(tipClean)}</b> · ${escHtml(d.beneficiar||'')} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
-          <div style="font-weight:800; font-size:16px; color:${isIntrareAmanet?'var(--green)':'var(--red)'};">${isIntrareAmanet?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
+          <div style="font-weight:800; font-size:26px; color:${isIntrareAmanet?'var(--green)':'var(--red)'}; font-variant-numeric:tabular-nums;">${isIntrareAmanet?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px;">${actiuni}</div>
       </div>`;
