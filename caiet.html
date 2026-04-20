@@ -1763,6 +1763,7 @@ async function verificaDispozitiiTeren() {
       return;
     }
     const OFFICE = ['EUGEN','LIVIA','ELA'];
+    const currentNume = (currentUser?.nume || '').toUpperCase();
     let html = '';
     for (const d of data) {
       const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
@@ -1770,10 +1771,12 @@ async function verificaDispozitiiTeren() {
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const dt = d.data ? new Date(d.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'}) : '';
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
-      const initiatorOffice = OFFICE.includes((d.utilizator||'').toUpperCase());
-      // La birou: office confirmă DOAR dacă magazinul a inițiat
-      const officePoateConfirma = !initiatorOffice;
-      const actiuni = officePoateConfirma
+      const initiatorNume = (d.utilizator||'').toUpperCase();
+      const initiatorOffice = OFFICE.includes(initiatorNume);
+      const euInitiator = currentNume === initiatorNume;
+      // Office confirmă DOAR dacă magazinul a inițiat și nu sunt eu însumi inițiator
+      const poateConfirma = !euInitiator && !initiatorOffice;
+      const actiuni = poateConfirma
         ? `<button class="btn-deconteaza" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
            <button style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;" onclick="anuleazaDispozitieTeren(${d.id})">Anulează</button>`
         : `<div style="flex:1; padding:10px 14px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la magazin</div>
