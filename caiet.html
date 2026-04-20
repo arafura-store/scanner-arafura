@@ -1138,11 +1138,12 @@ function onTipAmanetChange() {
     firmaSelect.value = 'PERFECTA INVEST';
   }
 
-  // Checkbox 'pe teren' doar pentru DP/DI AMANET
+  // Checkbox 'pe teren' doar pentru DP/DI AMANET — default bifat
   const terenWrap = document.getElementById('fa-teren-wrap');
   const terenCheck = document.getElementById('fa-teren');
   if (tip === 'DP AMANET' || tip === 'DI AMANET') {
     if (terenWrap) terenWrap.style.display = '';
+    if (terenCheck) terenCheck.checked = true;
   } else {
     if (terenWrap) terenWrap.style.display = 'none';
     if (terenCheck) terenCheck.checked = false;
