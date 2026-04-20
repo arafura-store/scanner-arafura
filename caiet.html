@@ -1093,7 +1093,6 @@ async function adaugaOperatiuneAmanet() {
   if (!data) { showToast('Selectează data'); return; }
   if (dataInViitor(data)) { showToast('⚠ Data e în viitor! Nu poți înregistra operațiuni pentru zile viitoare.'); return; }
   if (!tip) { showToast('Alege tipul operațiunii'); return; }
-  if (!nrDisp) { showToast('Completează nr. dispoziție/document'); return; }
   if (!beneficiar) { showToast('Completează beneficiarul'); return; }
   if (!firma) { showToast('Alege firma'); return; }
   if (suma <= 0) { showToast('Completează suma'); return; }
@@ -1110,7 +1109,7 @@ async function adaugaOperatiuneAmanet() {
         data, tip, beneficiar, firma,
         intrare, iesire,
         observatii: obs,
-        nr_dispozitie: nrDisp,
+        nr_dispozitie: nrDisp || null,
         utilizator: currentUser.nume,
         completat_la: new Date().toISOString()
       })
