@@ -599,12 +599,24 @@ async function incarcaIstoric() {
       if (chAle.length > 0) {
         html += '<div style="margin-top:6px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px;">';
         for (const c of chAle) {
-          const val = parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+          const intr = parseFloat(c.intrare||0);
+          const ies = parseFloat(c.iesire||0);
+          const val = ies - intr; // pozitiv = iese din pool, negativ = intră în pool
           totalCheltuieli += val;
-          html += `<div style="display:flex; justify-content:space-between; padding:3px 0;">
-            <span>↓ ${escHtml(c.tip||'').replace(' (PENDING MAGAZIN)','')} — ${escHtml(c.beneficiar||'')}${c.observatii && !c.observatii.startsWith('cheltuiala') ? ' ('+escHtml(c.observatii)+')' : ''}</span>
-            <span style="color:var(--red); font-weight:700;">-${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
-          </div>`;
+          const tipClean = (c.tip||'').replace(' (PENDING MAGAZIN)','');
+          const obsExtra = (c.observatii||'').split(' — ')[1];
+          const labelExtra = obsExtra ? ' ('+escHtml(obsExtra)+')' : '';
+          if (val >= 0) {
+            html += `<div style="display:flex; justify-content:space-between; padding:3px 0;">
+              <span>↓ ${escHtml(tipClean)} — ${escHtml(c.beneficiar||'')}${labelExtra}</span>
+              <span style="color:var(--red); font-weight:700;">−${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+            </div>`;
+          } else {
+            html += `<div style="display:flex; justify-content:space-between; padding:3px 0;">
+              <span>↑ ${escHtml(tipClean)} — ${escHtml(c.beneficiar||'')}${labelExtra}</span>
+              <span style="color:var(--green); font-weight:700;">+${Math.abs(val).toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+            </div>`;
+          }
         }
         html += '</div>';
       }
@@ -660,13 +672,13 @@ async function salveazaCheltuiala() {
     totalCheltuieli += parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
   }
   const disponibil = totalCash - totalCheltuieli;
-  if (suma > disponibil) {
+  const isIntrare = tip === 'DP AMANET';
+  if (!isIntrare && suma > disponibil) {
     if (!confirm(`Suma ${suma.toFixed(2)} depășește disponibilul (${disponibil.toFixed(2)} RON). Continui oricum?`)) return;
   }
 
   // Link la cel mai vechi borderou trimis
   const bTarget = _asteptareBorderouri[0];
-  const isIntrare = tip === 'DP AMANET';
 
   try {
     const resp = await fetch(`${API}/caiet`, {

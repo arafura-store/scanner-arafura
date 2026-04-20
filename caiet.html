@@ -1661,12 +1661,23 @@ async function verificaBorderouri() {
       if (chAle.length > 0) {
         html += '<div style="margin-top:8px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px; background:#fffbeb; padding:8px 10px; border-radius:6px;">';
         for (const c of chAle) {
-          const val = parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+          const intr = parseFloat(c.intrare||0);
+          const ies = parseFloat(c.iesire||0);
+          const val = ies - intr;
+          const tipClean = (c.tip||'').replace(' (PENDING MAGAZIN)','');
           const obsExtra = (c.observatii||'').split(' — ')[1];
-          html += `<div style="display:flex; justify-content:space-between; padding:2px 0;">
-            <span>↓ ${escHtml(c.tip||'').replace(' (PENDING MAGAZIN)','')} — ${escHtml(c.beneficiar||'')}${obsExtra ? ' ('+escHtml(obsExtra)+')' : ''}</span>
-            <span style="color:var(--red); font-weight:700;">-${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
-          </div>`;
+          const labelExtra = obsExtra ? ' ('+escHtml(obsExtra)+')' : '';
+          if (val >= 0) {
+            html += `<div style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>↓ ${escHtml(tipClean)} — ${escHtml(c.beneficiar||'')}${labelExtra}</span>
+              <span style="color:var(--red); font-weight:700;">−${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+            </div>`;
+          } else {
+            html += `<div style="display:flex; justify-content:space-between; padding:2px 0;">
+              <span>↑ ${escHtml(tipClean)} — ${escHtml(c.beneficiar||'')}${labelExtra}</span>
+              <span style="color:var(--green); font-weight:700;">+${Math.abs(val).toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+            </div>`;
+          }
         }
         html += '</div>';
       }
