@@ -474,15 +474,62 @@ async function trimiteBorderou() {
   try {
     const resp = await fetch(`${API}/borderouri`, {
       method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
       body: JSON.stringify(payload)
     });
     if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    const created = await resp.json();
+    const borderouId = Array.isArray(created) ? created[0]?.id : created?.id;
+
+    // Creează entry PENDING în caiet pentru cash fizic (sau cash Z dacă fizic = 0)
+    const cashTotalZ = payload.cash_z_c1 + (payload.cash_z_c2 || 0);
+    const sumaCash = payload.cash_fizic > 0 ? payload.cash_fizic : cashTotalZ;
+    if (borderouId && sumaCash > 0) {
+      await fetch(`${API}/caiet`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          data: payload.data,
+          tip: 'INCASARE (PENDING MAGAZIN)',
+          beneficiar: payload.magazin,
+          intrare: sumaCash,
+          iesire: 0,
+          observatii: `borderou #${borderouId}`,
+          utilizator: payload.utilizator,
+          completat_la: new Date().toISOString()
+        })
+      });
+    }
+
     showToast('✓ Borderou trimis la birou', 'ok');
     // Reset form
     document.getElementById('f-magazin').value = '';
     document.getElementById('f-obs').value = '';
     onMagazinChange();
+    await incarcaIstoric();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function confirmaBorderou(id) {
+  if (!confirm(`Confirmi borderoul #${id}?\n\nIncasările PENDING din caiet devin operațiuni reale și afectează soldul.`)) return;
+  try {
+    // 1. Update entries în caiet: strip (PENDING MAGAZIN)
+    const respCaiet = await fetch(`${API}/caiet?observatii=eq.borderou #${id}&tip=eq.INCASARE (PENDING MAGAZIN)`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ tip: 'INCASARE' })
+    });
+    if (!respCaiet.ok) { showToast('Eroare caiet: ' + await respCaiet.text(), 'err'); return; }
+
+    // 2. Update borderou status
+    const respBord = await fetch(`${API}/borderouri?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ status: 'confirmat', confirmat_la: new Date().toISOString(), confirmat_de: currentUser.nume })
+    });
+    if (!respBord.ok) { showToast('Eroare borderou: ' + await respBord.text(), 'err'); return; }
+
+    showToast('✓ Borderou confirmat', 'ok');
     await incarcaIstoric();
   } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
 }
@@ -496,13 +543,17 @@ async function incarcaIstoric() {
       c.innerHTML = '<div style="text-align:center; padding:20px; color:var(--sub); font-size:13px;">Niciun borderou trimis încă</div>';
       return;
     }
-    let html = '<table><thead><tr><th>Data</th><th>Magazin</th><th class="num">Cash Z</th><th class="num">Card Z</th><th>Status</th><th>Trimis</th></tr></thead><tbody>';
+    const isEugen = (currentUser?.nume || '').toUpperCase() === 'EUGEN';
+    let html = '<table><thead><tr><th>Data</th><th>Magazin</th><th class="num">Cash Z</th><th class="num">Card Z</th><th>Status</th><th>Trimis</th>' + (isEugen ? '<th></th>' : '') + '</tr></thead><tbody>';
     for (const b of data) {
       const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
       const trimis = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
       const cashZ = (parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0)).toFixed(2);
       const cardZ = (parseFloat(b.card_z_c1||0) + parseFloat(b.card_z_c2||0)).toFixed(2);
       const badge = b.status === 'confirmat' ? 'badge-confirmat' : (b.status === 'returnat' ? 'badge-returnat' : 'badge-trimis');
+      const actionCell = isEugen
+        ? `<td>${b.status === 'trimis' ? `<button onclick="confirmaBorderou(${b.id})" style="padding:4px 10px; background:var(--green); color:white; border:none; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">Confirmă</button>` : ''}</td>`
+        : '';
       html += `<tr>
         <td>${dt}</td>
         <td style="font-weight:600;">${b.magazin}</td>
@@ -510,6 +561,7 @@ async function incarcaIstoric() {
         <td class="num">${cardZ}</td>
         <td><span class="badge ${badge}">${b.status.toUpperCase()}</span></td>
         <td style="font-size:11px; color:var(--sub);">${trimis} (${b.utilizator||'?'})</td>
+        ${actionCell}
       </tr>`;
     }
     html += '</tbody></table>';
