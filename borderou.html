@@ -959,6 +959,14 @@ function checkDeviceCode(event) {
     setTimeout(() => document.getElementById('login-pin').focus(), 100);
   }
 })();
+
+// Auto-refresh la 30 secunde
+setInterval(() => {
+  if (!currentUser) return;
+  if (document.hidden) return;
+  incarcaIstoric();
+  incarcaDispozitiiTeren();
+}, 30000);
 </script>
 
 </body>

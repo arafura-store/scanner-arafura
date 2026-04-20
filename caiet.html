@@ -774,6 +774,16 @@ function checkDeviceCode(event) {
   }
 })();
 
+// Auto-refresh la 30 secunde (numai când utilizatorul e logat și pagina e vizibilă)
+setInterval(() => {
+  if (!currentUser) return;
+  if (document.hidden) return;
+  incarcaSold();
+  verificaDeconturi();
+  verificaBorderouri();
+  verificaDispozitiiTeren();
+}, 30000);
+
 async function incarcaSold() {
   try {
     // Sold curent = doar ops cu DATA <= azi (ignoră ops planificate în viitor)
