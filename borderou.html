@@ -59,7 +59,7 @@
 
     /* GRID borderou */
     .grid-borderou {
-      display: grid; grid-template-columns: 160px 1fr 1fr; gap: 8px;
+      display: grid; grid-template-columns: 140px 1fr 1fr 1fr 1fr; gap: 6px;
       margin-bottom: 14px;
     }
     .grid-borderou .cell { padding: 10px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
@@ -417,37 +417,50 @@ function onMagazinChange() {
   if (!mag) { gridZone.style.display = 'none'; document.getElementById('btn-submit').disabled = true; return; }
 
   const e2 = MAGAZINE_2_CASE.includes(mag);
+  const dash = '<div class="cell" style="background:#eef2f7; color:#94a3b8; font-size:12px;">—</div>';
   let html = `
     <div class="grid-borderou">
       <div class="cell cell-header">Sursă</div>
       <div class="cell cell-header">💵 Cash</div>
       <div class="cell cell-header">💳 Card</div>
+      <div class="cell cell-header">🎟️ Voucher</div>
+      <div class="cell cell-header">Total</div>
   `;
   if (e2) {
     html += `
       <div class="cell cell-label">Z Casa 1 <span class="sublabel">din raport Z</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-c1" placeholder="0.00" oninput="recalculeaza()"></div>
       <div class="cell"><input type="number" step="0.01" id="f-card-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-voucher-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell auto-cell" id="f-total-c1">0.00</div>
 
       <div class="cell cell-label">Z Casa 2 <span class="sublabel">din raport Z</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-c2" placeholder="0.00" oninput="recalculeaza()"></div>
       <div class="cell"><input type="number" step="0.01" id="f-card-c2" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-voucher-c2" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell auto-cell" id="f-total-c2">0.00</div>
 
       <div class="cell cell-label">TOTAL Z <span class="sublabel">Casa1 + Casa2</span></div>
       <div class="cell auto-cell" id="f-cash-total-z">0.00</div>
       <div class="cell auto-cell" id="f-card-total-z">0.00</div>
+      <div class="cell auto-cell" id="f-voucher-total-z">0.00</div>
+      <div class="cell auto-cell" id="f-total-z">0.00</div>
     `;
   } else {
     html += `
       <div class="cell cell-label">Z (raport casa) <span class="sublabel">din raport Z</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-c1" placeholder="0.00" oninput="recalculeaza()"></div>
       <div class="cell"><input type="number" step="0.01" id="f-card-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-voucher-c1" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell auto-cell" id="f-total-c1">0.00</div>
     `;
   }
   html += `
       <div class="cell cell-label">POS Settlement <span class="sublabel">doar card (total)</span></div>
-      <div class="cell" style="background:#eef2f7; color:#94a3b8; font-size:12px;">—</div>
+      ${dash}
       <div class="cell"><input type="number" step="0.01" id="f-card-pos" placeholder="0.00" oninput="recalculeaza()"></div>
+      ${dash}
+      ${dash}
 
       <div class="cell cell-label">Program vânzare <span class="sublabel">din gestiune (ERP)</span></div>
       <div class="cell" style="flex-direction:column; align-items:stretch; gap:4px;">
@@ -455,15 +468,14 @@ function onMagazinChange() {
         <div id="hint-depunere" style="display:none; background:#fef3c7; color:#92400e; padding:6px 8px; border-radius:6px; font-size:11px; font-weight:700; text-align:center; border:1px solid #fcd34d;">⚠ NU UITA! DEPUNE BANCA în program!</div>
       </div>
       <div class="cell"><input type="number" step="0.01" id="f-card-erp" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell"><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00" oninput="recalculeaza()"></div>
+      <div class="cell auto-cell" id="f-total-erp">0.00</div>
 
       <div class="cell cell-label">Cash fizic <span class="sublabel">bani numărați</span></div>
       <div class="cell"><input type="number" step="0.01" id="f-cash-fizic" placeholder="0.00" oninput="recalculeaza()"></div>
-      <div class="cell" style="background:#eef2f7; color:#94a3b8; font-size:12px;">—</div>
-    </div>
-
-    <div class="form-row">
-      <div class="form-group"><label>Voucher din Z</label><input type="number" step="0.01" id="f-voucher-z" placeholder="0.00" oninput="recalculeaza()"></div>
-      <div class="form-group"><label>Voucher din program</label><input type="number" step="0.01" id="f-voucher-erp" placeholder="0.00" oninput="recalculeaza()"></div>
+      ${dash}
+      ${dash}
+      ${dash}
     </div>
   `;
 
@@ -477,26 +489,35 @@ function recalculeaza() {
   const mag = document.getElementById('f-magazin').value;
   const e2 = MAGAZINE_2_CASE.includes(mag);
   const v = (id) => parseFloat(document.getElementById(id)?.value || 0) || 0;
+  const setText = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n.toFixed(2); };
 
-  let cashTotalZ = v('f-cash-c1');
-  let cardTotalZ = v('f-card-c1');
+  // Casa 1
+  const cashC1 = v('f-cash-c1'), cardC1 = v('f-card-c1'), voucherC1 = v('f-voucher-c1');
+  setText('f-total-c1', cashC1 + cardC1 + voucherC1);
+
+  let cashTotalZ = cashC1, cardTotalZ = cardC1, voucherTotalZ = voucherC1;
   if (e2) {
-    cashTotalZ += v('f-cash-c2');
-    cardTotalZ += v('f-card-c2');
-    const elCashT = document.getElementById('f-cash-total-z');
-    const elCardT = document.getElementById('f-card-total-z');
-    if (elCashT) elCashT.textContent = cashTotalZ.toFixed(2);
-    if (elCardT) elCardT.textContent = cardTotalZ.toFixed(2);
+    const cashC2 = v('f-cash-c2'), cardC2 = v('f-card-c2'), voucherC2 = v('f-voucher-c2');
+    setText('f-total-c2', cashC2 + cardC2 + voucherC2);
+    cashTotalZ += cashC2;
+    cardTotalZ += cardC2;
+    voucherTotalZ += voucherC2;
+    setText('f-cash-total-z', cashTotalZ);
+    setText('f-card-total-z', cardTotalZ);
+    setText('f-voucher-total-z', voucherTotalZ);
+    setText('f-total-z', cashTotalZ + cardTotalZ + voucherTotalZ);
   }
 
   const cashErp = v('f-cash-erp');
   const hintDep = document.getElementById('hint-depunere');
   if (hintDep) hintDep.style.display = cashErp > 0 ? '' : 'none';
   const cardErp = v('f-card-erp');
+  const voucherErp = v('f-voucher-erp');
+  setText('f-total-erp', cashErp + cardErp + voucherErp);
+
   const cashFizic = v('f-cash-fizic');
   const cardPos = v('f-card-pos');
-  const voucherZ = v('f-voucher-z');
-  const voucherErp = v('f-voucher-erp');
+  const voucherZ = voucherTotalZ;
 
   const fmt = (n) => (n >= 0 ? '+' : '') + n.toLocaleString('ro-RO', {minimumFractionDigits:2}) + ' RON';
   const PRAG = 1; // diferență acceptabilă (rotunjiri)
@@ -575,7 +596,7 @@ async function trimiteBorderou() {
     card_erp: v('f-card-erp') || 0,
     cash_fizic: v('f-cash-fizic') || 0,
     card_pos: v('f-card-pos') || 0,
-    voucher_z: v('f-voucher-z'),
+    voucher_z: ((v('f-voucher-c1') || 0) + (e2 ? (v('f-voucher-c2') || 0) : 0)) || null,
     voucher_erp: v('f-voucher-erp'),
     observatii: document.getElementById('f-obs').value.trim() || null,
     utilizator: currentUser.nume,
