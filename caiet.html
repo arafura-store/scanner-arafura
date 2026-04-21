@@ -1579,7 +1579,7 @@ function renderOperatiuni() {
     // și fără prefixul tehnic de link borderou ("cheltuiala borderou #X" sau "borderou #X")
     const linkBorderouMatch = (d.observatii || '').match(/^(?:cheltuiala\s+)?borderou\s+#(\d+)\s*(?:—\s*)?/i);
     const linkBordChip = linkBorderouMatch
-      ? `<span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-right:4px;">📦 B#${linkBorderouMatch[1]}</span>`
+      ? `<span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-right:6px;">📦 B#${linkBorderouMatch[1]}</span>&nbsp;`
       : '';
     const obsClean = (d.observatii || '')
       .replace(/^(?:cheltuiala\s+)?borderou\s+#\d+\s*(?:—\s*)?/i, '')
