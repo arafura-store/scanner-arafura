@@ -1455,8 +1455,10 @@ async function incarcaOperatiuni() {
     let offset = 0;
     while (true) {
       let url = `${API}/caiet?select=*&order=created_at.desc.nullslast,id.desc&limit=1000&offset=${offset}`;
-      if (dataStart) url += `&data=gte.${dataStart}`;
-      if (dataEnd) url += `&data=lte.${dataEnd}`;
+      // Filtrez după data introducerii în caiet (completat_la), nu după data operațiunii
+      // Așa, un rând adăugat azi cu data operațiunii din luna trecută apare tot azi
+      if (dataStart) url += `&completat_la=gte.${dataStart}`;
+      if (dataEnd) url += `&completat_la=lte.${dataEnd}T23:59:59`;
       const resp = await fetch(url, { headers: HEADERS });
       const data = await resp.json();
       if (!Array.isArray(data) || data.length === 0) break;
