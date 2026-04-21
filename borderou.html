@@ -206,7 +206,7 @@
         </div>
       </div>
 
-      <button class="btn-submit" id="btn-submit" onclick="trimiteBorderou()" disabled>Trimite borderou la birou</button>
+      <button class="btn-submit" id="btn-submit" onclick="trimiteBorderou()" disabled>Închide borderou</button>
     </div>
 
     <!-- Borderouri în așteptare (neridicate de șofer) -->
@@ -218,7 +218,7 @@
       <div id="istoric-asteptare"></div>
       <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
         <button id="btn-cheltuiala" onclick="deschideCheltuiala()" style="flex:1; min-width:180px; padding:14px; font-size:15px; font-weight:700; background:var(--orange); color:white; border:none; border-radius:10px; cursor:pointer;">+ Cheltuială din sold borderouri</button>
-        <button id="btn-preda" onclick="predaSofer()" style="flex:1; min-width:180px; padding:14px; font-size:15px; font-weight:700; background:var(--blue); color:white; border:none; border-radius:10px; cursor:pointer;">🚚 Predă toate la șofer</button>
+        <button id="btn-preda" onclick="predaSofer()" style="flex:1; min-width:180px; padding:14px; font-size:15px; font-weight:700; background:var(--blue); color:white; border:none; border-radius:10px; cursor:pointer;">🚚 Predă banii la șofer</button>
       </div>
     </div>
 
@@ -626,7 +626,7 @@ async function incarcaIstoric() {
   const card = document.getElementById('card-asteptare');
   const container = document.getElementById('istoric-asteptare');
   try {
-    const resp = await fetch(`${API}/borderouri?status=eq.trimis&order=data.asc,trimis_la.asc`, { headers: HEADERS });
+    const resp = await fetch(`${API}/borderouri?or=(status.eq.trimis,status.eq.predat-sofer)&order=status.desc,data.asc,trimis_la.asc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
       _asteptareBorderouri = [];
@@ -658,9 +658,16 @@ async function incarcaIstoric() {
       const suma = cashFizic > 0 ? cashFizic : cashZ;
       totalCash += suma;
       const chAle = cheltuieli.filter(c => (c.observatii||'') === `cheltuiala borderou #${b.id}`);
-      html += `<div style="padding:12px; background:#f8fafc; border-radius:10px; margin-bottom:8px; border-left:3px solid var(--blue);">
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px;">
-          <div><b>${b.magazin}</b> · ${dt} <span style="font-size:11px; color:var(--sub);">(${trimis} de ${b.utilizator||'?'})</span></div>
+      const estePredat = b.status === 'predat-sofer';
+      const cardStyle = estePredat
+        ? 'padding:12px; background:#eff6ff; border-radius:10px; margin-bottom:8px; border-left:3px solid #6366f1; opacity:.85;'
+        : 'padding:12px; background:#f8fafc; border-radius:10px; margin-bottom:8px; border-left:3px solid var(--blue);';
+      const badgeStatus = estePredat
+        ? '<span style="background:#6366f1; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">🚚 PREDAT — așteaptă birou</span>'
+        : '';
+      html += `<div style="${cardStyle}">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:6px;">
+          <div><b>${b.magazin}</b> · ${dt} <span style="font-size:11px; color:var(--sub);">(${trimis} de ${b.utilizator||'?'})</span>${badgeStatus}</div>
           <div style="font-weight:800; color:var(--green);">${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
         </div>`;
       if (chAle.length > 0) {
@@ -694,6 +701,21 @@ async function incarcaIstoric() {
     document.getElementById('total-neridicat').style.color = net < 0 ? 'var(--red)' : 'var(--green)';
     container.innerHTML = html;
     card.style.display = '';
+
+    // Activează/dezactivează butoanele în funcție de existența borderourilor `trimis`
+    const exTrimis = data.some(b => b.status === 'trimis');
+    const btnCh = document.getElementById('btn-cheltuiala');
+    const btnPr = document.getElementById('btn-preda');
+    if (btnCh) {
+      btnCh.disabled = !exTrimis;
+      btnCh.style.opacity = exTrimis ? '1' : '.4';
+      btnCh.style.cursor = exTrimis ? 'pointer' : 'not-allowed';
+    }
+    if (btnPr) {
+      btnPr.disabled = !exTrimis;
+      btnPr.style.opacity = exTrimis ? '1' : '.4';
+      btnPr.style.cursor = exTrimis ? 'pointer' : 'not-allowed';
+    }
   } catch(e) {
     console.error(e);
   }
@@ -900,17 +922,18 @@ async function anuleazaTeren(id) {
 }
 
 async function predaSofer() {
-  if (_asteptareBorderouri.length === 0) { showToast('Nimic de predat', 'err'); return; }
-  if (!confirm(`Predai șoferului TOATE cele ${_asteptareBorderouri.length} borderouri din așteptare?\nDupă apăsare dispar din listă.`)) return;
+  const dePredat = _asteptareBorderouri.filter(b => b.status === 'trimis');
+  if (dePredat.length === 0) { showToast('Nimic de predat', 'err'); return; }
+  if (!confirm(`Predai șoferului ${dePredat.length} borderou(ri)?\nRămân vizibile aici cu badge "PREDAT" până confirmă biroul.`)) return;
   try {
-    const ids = _asteptareBorderouri.map(b => b.id).join(',');
+    const ids = dePredat.map(b => b.id).join(',');
     const resp = await fetch(`${API}/borderouri?id=in.(${ids})`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ status: 'predat-sofer' })
     });
     if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
-    showToast('✓ Predate la șofer', 'ok');
+    showToast('✓ Predate la șofer — așteaptă confirmarea biroului', 'ok');
     await incarcaIstoric();
   } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
 }
