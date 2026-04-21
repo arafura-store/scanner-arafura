@@ -791,37 +791,70 @@ async function salveazaCheltuiala() {
   } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
 }
 
+const _vazutePredateTerenTab = new Set();
 async function incarcaDispozitiiTeren() {
   const container = document.getElementById('lista-teren');
   if (!container) return;
   try {
-    const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN)*&order=completat_la.desc`, { headers: HEADERS });
+    const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN*&order=completat_la.desc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
       container.innerHTML = '<div style="text-align:center; padding:16px; color:var(--sub); font-size:13px;">Nicio dispoziție deschisă</div>';
       return;
     }
+    // Detectează DI nou predate de birou → toast magazin
+    const noiPredate = [];
+    for (const d of data) {
+      const isPredat = (d.tip||'').includes('PREDAT');
+      const tipBaza = (d.tip||'').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+      if (isPredat && tipBaza === 'DI AMANET' && !_vazutePredateTerenTab.has(d.id)) {
+        noiPredate.push(d);
+        _vazutePredateTerenTab.add(d.id);
+      }
+    }
+    if (noiPredate.length > 0 && _vazutePredateTerenTab.size > noiPredate.length) {
+      for (const d of noiPredate) {
+        showToast(`🚚 Biroul a predat banii (DI ${d.beneficiar}) la șofer`, 'ok');
+      }
+    }
+
     let html = '';
     for (const d of data) {
-      const tipClean = (d.tip || '').replace(' (PENDING TEREN)', '');
-      // Semn din perspectiva AMANETULUI (invers față de birou):
-      //  - DP AMANET = amanet plătește → pierde bani → "−"
-      //  - DI AMANET = amanet încasează → primește bani → "+"
-      const isIntrareAmanet = tipClean === 'DI AMANET';
+      const tipBaza = (d.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+      const estePredat = (d.tip||'').includes('PREDAT');
+      // Semn din perspectiva AMANETULUI:
+      //  DP = amanet pierde bani → −
+      //  DI = amanet primește bani → +
+      const isIntrareAmanet = tipBaza === 'DI AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
-      // Confirmarea se face unde AJUNG banii:
-      //  - DI AMANET (bani din birou → amanet) → MAGAZIN confirmă
-      //  - DP AMANET (bani din amanet → birou) → BIROU confirmă
-      const poateConfirma = tipClean === 'DI AMANET';
-      const actiuni = poateConfirma
-        ? `<button type="button" onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
-           <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`
-        : `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la birou</div>
-           <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
-      html += `<div style="padding:14px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;">
+      let actiuni;
+      if (tipBaza === 'DP AMANET') {
+        // bani amanet → birou. Magazin predă, birou confirmă.
+        if (!estePredat) {
+          actiuni = `<button type="button" onclick="predaTeren(${d.id})" style="flex:1; padding:10px; background:var(--blue); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">🚚 Predă banii la șofer</button>
+                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+        } else {
+          actiuni = `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la birou</div>
+                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+        }
+      } else {
+        // DI — bani birou → amanet. Birou predă, magazin confirmă.
+        if (!estePredat) {
+          actiuni = `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă predarea la șofer (birou)</div>
+                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+        } else {
+          actiuni = `<button type="button" onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
+                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+        }
+      }
+      const cardStyle = estePredat
+        ? 'padding:14px; background:#f0fdf4; border-left:3px solid var(--green); border-radius:10px; margin-bottom:8px;'
+        : 'padding:14px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;';
+      const badgePredat = estePredat ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">🚚 PREDAT</span>' : '';
+      html += `<div style="${cardStyle}">
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:10px;">
-          <div><b>${escHtml(tipClean)}</b> · ${escHtml(d.beneficiar||'')} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
+          <div><b>${escHtml(tipBaza)}</b> · ${escHtml(d.beneficiar||'')}${badgePredat} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
           <div style="font-weight:800; font-size:26px; color:${isIntrareAmanet?'var(--green)':'var(--red)'}; font-variant-numeric:tabular-nums;">${isIntrareAmanet?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px;">${actiuni}</div>
@@ -829,6 +862,25 @@ async function incarcaDispozitiiTeren() {
     }
     container.innerHTML = html;
   } catch(e) {}
+}
+
+async function predaTeren(id) {
+  if (!confirm('Marchezi că ai dat banii la șofer? Biroul va putea confirma când i-au ajuns.')) return;
+  try {
+    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip`, { headers: HEADERS });
+    const arr = await respGet.json();
+    if (!Array.isArray(arr) || arr.length === 0) return;
+    const oldTip = arr[0].tip || '';
+    if (oldTip.includes('PREDAT')) return;
+    const newTip = oldTip.replace(' (PENDING TEREN)', ' (PENDING TEREN PREDAT)');
+    await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ tip: newTip })
+    });
+    showToast('✓ Predat — așteaptă confirmare birou', 'ok');
+    await incarcaDispozitiiTeren();
+  } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
 }
 
 function deschideTerenForm() {
@@ -860,9 +912,9 @@ async function salveazaTeren() {
 
   const isIntrare = tip === 'DP AMANET';
 
-  // Verifică duplicare
+  // Verifică duplicare (orice stare pending teren — deschis sau predat)
   try {
-    const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN)')}&beneficiar=eq.${encodeURIComponent(amanet)}&select=id,utilizator,completat_la`, { headers: HEADERS });
+    const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN%')}&beneficiar=eq.${encodeURIComponent(amanet)}&select=id,utilizator,completat_la`, { headers: HEADERS });
     const existing = await resp.json();
     if (Array.isArray(existing) && existing.length > 0) {
       const e = existing[0];
@@ -901,7 +953,7 @@ async function confirmaTeren(id) {
     const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip`, { headers: HEADERS });
     const arr = await respGet.json();
     if (!Array.isArray(arr) || arr.length === 0) return;
-    const newTip = (arr[0].tip || '').replace(' (PENDING TEREN)', '');
+    const newTip = (arr[0].tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
     await fetch(`${API}/caiet?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
