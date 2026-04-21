@@ -1353,6 +1353,22 @@ async function adaugaOperatiune() {
 
 let allOperatiuni = [];
 let searchTimer = null;
+let _bordMap = {}; // {borderouId: {magazin, nrMagazin}}
+
+async function incarcaBordMap() {
+  try {
+    const resp = await fetch(`${API}/borderouri?select=id,magazin&order=id.asc`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+    const counter = {};
+    const newMap = {};
+    for (const b of data) {
+      counter[b.magazin] = (counter[b.magazin] || 0) + 1;
+      newMap[b.id] = { magazin: b.magazin, nrMagazin: counter[b.magazin] };
+    }
+    _bordMap = newMap;
+  } catch {}
+}
 
 function onSearchInput() {
   clearTimeout(searchTimer);
@@ -1449,6 +1465,7 @@ async function incarcaOperatiuni() {
       if (data.length < 1000) break;
     }
     allOperatiuni = all;
+    await incarcaBordMap();
     populeazaDropdownuri();
     renderOperatiuni();
   } catch (e) {
@@ -1578,9 +1595,15 @@ function renderOperatiuni() {
     // Afișăm observații fără markerul [conf. XYZ] (îl mutăm la coloana Completat de)
     // și fără prefixul tehnic de link borderou ("cheltuiala borderou #X" sau "borderou #X")
     const linkBorderouMatch = (d.observatii || '').match(/^(?:cheltuiala\s+)?borderou\s+#(\d+)\s*(?:—\s*)?/i);
-    const linkBordChip = linkBorderouMatch
-      ? `<span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-right:6px;">📦 B#${linkBorderouMatch[1]}</span>&nbsp;`
-      : '';
+    let linkBordChip = '';
+    if (linkBorderouMatch) {
+      const bid = parseInt(linkBorderouMatch[1]);
+      const bordInfo = _bordMap[bid];
+      const chipText = bordInfo
+        ? `📦 ${bordInfo.magazin} #${bordInfo.nrMagazin}`
+        : `📦 B#${bid}`;
+      linkBordChip = `<span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-right:6px;">${chipText}</span>&nbsp;`;
+    }
     const obsClean = (d.observatii || '')
       .replace(/^(?:cheltuiala\s+)?borderou\s+#\d+\s*(?:—\s*)?/i, '')
       .replace(/\s*\[conf\.\s+[A-ZĂÎÂȘȚ ]+\]/gi, '')
