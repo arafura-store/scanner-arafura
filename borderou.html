@@ -230,7 +230,12 @@
         <div style="font-size:12px; color:var(--sub); margin-bottom:12px;">Bani care intră în casa magazinului în plus față de vânzarea normală. Beneficiar fix: <b>ARAFURA</b>.</div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip operațiune</label>
-          <input type="text" id="ix-tip" placeholder="ex: INCASARE FACTURA, DIVIDENDE, IMPRUMUT..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+          <select id="ix-tip" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+            <option value="">— Alege —</option>
+            <option value="SERVICII">SERVICII</option>
+            <option value="CHIRIE">CHIRIE</option>
+            <option value="UTILITATI">UTILITĂȚI</option>
+          </select>
         </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
