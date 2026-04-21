@@ -1576,10 +1576,18 @@ function renderOperatiuni() {
     const confMatch = (d.observatii || '').match(/\[conf\.\s+([A-ZĂÎÂȘȚ ]+)\]/i);
     const confBy = confMatch ? confMatch[1].trim() : null;
     // Afișăm observații fără markerul [conf. XYZ] (îl mutăm la coloana Completat de)
-    const obsClean = (d.observatii || '').replace(/\s*\[conf\.\s+[A-ZĂÎÂȘȚ ]+\]/gi, '').trim();
+    // și fără prefixul tehnic de link borderou ("cheltuiala borderou #X" sau "borderou #X")
+    const linkBorderouMatch = (d.observatii || '').match(/^(?:cheltuiala\s+)?borderou\s+#(\d+)\s*(?:—\s*)?/i);
+    const linkBordChip = linkBorderouMatch
+      ? `<span style="background:#e0f2fe; color:#0369a1; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-right:4px;">📦 B#${linkBorderouMatch[1]}</span>`
+      : '';
+    const obsClean = (d.observatii || '')
+      .replace(/^(?:cheltuiala\s+)?borderou\s+#\d+\s*(?:—\s*)?/i, '')
+      .replace(/\s*\[conf\.\s+[A-ZĂÎÂȘȚ ]+\]/gi, '')
+      .trim();
     const firmaChipClean = d.firma ? `<strong style="color:#0891b2; background:#cffafe; padding:2px 6px; border-radius:4px; font-size:11px;">${escHtml(d.firma)}</strong> ` : '';
     const nrChipClean = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong> ` : '';
-    const obsDisplay = (firmaChipClean + nrChipClean + escHtml(obsClean)).trim() || '';
+    const obsDisplay = (firmaChipClean + nrChipClean + linkBordChip + escHtml(obsClean)).trim() || '';
     const completatDeHTML = confBy
       ? `<div style="font-size:11px; color:#aaa;">${d.utilizator}</div><div style="font-size:10px; color:var(--green); font-weight:600; margin-top:2px;">✓ Confirmat de ${confBy}</div>`
       : `<div style="font-size:11px; color:#aaa;">${d.utilizator}</div>`;
