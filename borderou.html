@@ -666,9 +666,9 @@ async function incarcaIstoric() {
     }
     _asteptareBorderouri = data;
 
-    // Încarcă cheltuielile pending legate de aceste borderouri
+    // Încarcă cheltuielile + incasarile pending legate de aceste borderouri
     const ids = data.map(b => b.id);
-    const observatiiFilters = ids.map(id => `observatii.eq.cheltuiala%20borderou%20%23${id}`).join(',');
+    const observatiiFilters = ids.map(id => `observatii.like.cheltuiala%20borderou%20%23${id}*`).join(',');
     let cheltuieli = [];
     if (ids.length > 0) {
       const respCh = await fetch(`${API}/caiet?or=(${observatiiFilters})&tip=like.*(PENDING%20MAGAZIN)*&order=created_at.desc`, { headers: HEADERS });
@@ -687,7 +687,7 @@ async function incarcaIstoric() {
       const cashFizic = parseFloat(b.cash_fizic||0);
       const suma = cashFizic > 0 ? cashFizic : cashZ;
       totalCash += suma;
-      const chAle = cheltuieli.filter(c => (c.observatii||'') === `cheltuiala borderou #${b.id}`);
+      const chAle = cheltuieli.filter(c => (c.observatii||'').startsWith(`cheltuiala borderou #${b.id}`));
       const estePredat = b.status === 'predat-sofer';
       const cardStyle = estePredat
         ? 'padding:12px; background:#eff6ff; border-radius:10px; margin-bottom:8px; border-left:3px solid #6366f1; opacity:.85;'
