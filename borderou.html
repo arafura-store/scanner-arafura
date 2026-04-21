@@ -226,15 +226,19 @@
     <!-- Modal incasare extra -->
     <div id="modal-incasare" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:300; align-items:center; justify-content:center; padding:16px;">
       <div style="background:white; border-radius:14px; max-width:460px; width:100%; padding:22px;">
-        <h3 style="margin-bottom:14px; color:var(--green);">+ Încasare extra în pool</h3>
-        <div style="font-size:12px; color:var(--sub); margin-bottom:12px;">Bani care intră în casa magazinului în plus față de vânzarea normală.</div>
+        <h3 style="margin-bottom:14px; color:var(--green);">+ Încasare din alte surse</h3>
+        <div style="font-size:12px; color:var(--sub); margin-bottom:12px;">Bani care intră în casa magazinului în plus față de vânzarea normală. Beneficiar fix: <b>ARAFURA</b>.</div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip operațiune</label>
+          <input type="text" id="ix-tip" placeholder="ex: INCASARE FACTURA, DIVIDENDE, IMPRUMUT..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
           <input type="number" step="0.01" id="ix-suma" placeholder="0.00" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
         </div>
         <div class="form-group" style="margin-bottom:14px;">
-          <label style="font-size:12px; font-weight:600; color:var(--sub);">Sursa / observații</label>
-          <input type="text" id="ix-obs" placeholder="ex: client X a plătit cash factura..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+          <label style="font-size:12px; font-weight:600; color:var(--sub);">Cine a plătit (observații)</label>
+          <input type="text" id="ix-obs" placeholder="ex: ION POPESCU, FIRMA X SRL..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
         </div>
         <div style="display:flex; gap:10px;">
           <button onclick="inchideIncasareExtra()" style="flex:1; padding:12px; background:#e2e8f0; color:var(--text); border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
@@ -996,6 +1000,7 @@ async function anuleazaTeren(id) {
 
 function deschideIncasareExtra() {
   if (_asteptareBorderouri.length === 0) { showToast('Nu există borderouri în așteptare', 'err'); return; }
+  document.getElementById('ix-tip').value = '';
   document.getElementById('ix-suma').value = '';
   document.getElementById('ix-obs').value = '';
   document.getElementById('modal-incasare').style.display = 'flex';
@@ -1006,12 +1011,14 @@ function inchideIncasareExtra() {
 }
 
 async function salveazaIncasareExtra() {
+  const tip = document.getElementById('ix-tip').value.trim().toUpperCase();
   const suma = parseFloat(document.getElementById('ix-suma').value) || 0;
   const obs = document.getElementById('ix-obs').value.trim();
+  if (!tip) { showToast('Completează tipul operațiunii', 'err'); return; }
   if (suma <= 0) { showToast('Sumă invalidă', 'err'); return; }
+  if (!obs) { showToast('Completează cine a plătit', 'err'); return; }
 
   const bTarget = _asteptareBorderouri.find(b => b.status === 'trimis') || _asteptareBorderouri[0];
-  const magazin = bTarget.magazin;
 
   try {
     const resp = await fetch(`${API}/caiet`, {
@@ -1019,17 +1026,17 @@ async function salveazaIncasareExtra() {
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({
         data: new Date().toISOString().slice(0,10),
-        tip: 'INCASARE EXTRA (PENDING MAGAZIN)',
-        beneficiar: magazin,
+        tip: `${tip} (PENDING MAGAZIN)`,
+        beneficiar: 'ARAFURA',
         intrare: suma,
         iesire: 0,
-        observatii: `cheltuiala borderou #${bTarget.id}${obs ? ' — ' + obs : ''}`,
+        observatii: `cheltuiala borderou #${bTarget.id} — ${obs}`,
         utilizator: currentUser.nume,
         completat_la: new Date().toISOString()
       })
     });
     if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
-    showToast('✓ Încasare extra adăugată', 'ok');
+    showToast('✓ Încasare adăugată', 'ok');
     inchideIncasareExtra();
     await incarcaIstoric();
   } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
