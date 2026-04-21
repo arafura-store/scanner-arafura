@@ -662,14 +662,15 @@ function onChTipChange() {
   const tip = document.getElementById('ch-tip').value;
   const wrap = document.getElementById('ch-beneficiar-wrap');
   const magazin = _asteptareBorderouri[0]?.magazin || document.getElementById('f-magazin').value || '';
+  const tipuriAngajat = ['AVANS SALARIU','LICHIDARE SALARIU','IMPRUMUT'];
   if (!tip) {
     wrap.innerHTML = `<input type="text" id="ch-beneficiar" placeholder="Alege mai întâi tipul..." disabled style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px; background:#f1f5f9;">`;
-  } else if (tip === 'AVANS SALARIU') {
+  } else if (tipuriAngajat.includes(tip)) {
     let opts = '<option value="">— Alege angajat —</option>';
     for (const a of _angajati) opts += `<option value="${escHtml(a.nume)}">${escHtml(a.nume)}</option>`;
     wrap.innerHTML = `<select id="ch-beneficiar" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">${opts}</select>`;
   } else {
-    // DP/DI AMANET, UTILITATI, ALTE PLATI → beneficiar fix = magazinul curent
+    // DI AMANET, UTILITATI, CHIRIE → beneficiar fix = magazinul curent
     wrap.innerHTML = `<input type="text" id="ch-beneficiar" value="${escHtml(magazin)}" readonly style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px; background:#f8fafc; font-weight:700;">`;
   }
 }
