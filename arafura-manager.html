@@ -685,54 +685,57 @@ async function loadProdusDetail(cod) {
 
 // ── PER MAGAZIN ──
 async function loadMagazine() {
-  // Top stoc per locatie din ultima balanta
   try {
     const r = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
     const d = await r.json();
     if (!d || !d[0]) return;
     const dataSnap = d[0].data_snapshot;
-    // Aggregare per locatie via PostgREST
-    const r2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&select=locatie,stoc.sum(),valoare_stoc.sum(),cod_art.count()&stoc=gt.0`, { headers: HEADERS });
-    const arr = await r2.json();
-    arr.sort((a,b) => (b.sum||0) - (a.sum||0));
+    // Fetch all stoc rows for snapshot (paginat — pot fi ~50k)
+    let all = [];
+    let off = 0;
+    while (true) {
+      const rr = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const rows = await rr.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      all = all.concat(rows);
+      off += 1000;
+      if (rows.length < 1000) break;
+    }
+    // Aggregate client-side
+    const grupat = {};
+    for (const row of all) {
+      const loc = row.locatie || 'NECUNOSCUT';
+      if (!grupat[loc]) grupat[loc] = { locatie: loc, produse: new Set(), stoc: 0, valoare: 0 };
+      grupat[loc].produse.add(row.cod_art);
+      grupat[loc].stoc += parseFloat(row.stoc || 0);
+      grupat[loc].valoare += parseFloat(row.valoare_stoc || 0);
+    }
+    const arr = Object.values(grupat).map(g => ({ ...g, produse: g.produse.size }));
+    arr.sort((a,b) => b.valoare - a.valoare);
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:10px;">Locație</th><th style="padding:10px; text-align:right;">Produse</th><th style="padding:10px; text-align:right;">Stoc total</th><th style="padding:10px; text-align:right;">Valoare blocată</th></tr></thead><tbody>';
     let totalStoc = 0, totalVal = 0, totalProd = 0;
     for (const l of arr) {
-      // PostgREST aggregate names depend on version — handle both
-      const stoc = parseFloat(l.sum_stoc ?? l.stoc?.sum ?? l.stoc ?? l.sum) || 0;
-      const val = parseFloat(l.sum_valoare_stoc ?? l.valoare_stoc?.sum ?? l.valoare_stoc ?? 0) || 0;
-      const cnt = parseInt(l.count_cod_art ?? l.cod_art?.count ?? l.count) || 0;
-      totalStoc += stoc; totalVal += val; totalProd += cnt;
-      html += `<tr style="border-top:1px solid var(--border);"><td style="padding:10px; font-weight:600;">${escHtml(l.locatie||'')}</td><td style="padding:10px; text-align:right;">${fmtNum(cnt)}</td><td style="padding:10px; text-align:right; font-weight:700;">${fmtNum(stoc)}</td><td style="padding:10px; text-align:right; color:var(--green); font-weight:700;">${fmtMoney(val)}</td></tr>`;
+      totalStoc += l.stoc; totalVal += l.valoare; totalProd += l.produse;
+      html += `<tr style="border-top:1px solid var(--border);"><td style="padding:10px; font-weight:600;">${escHtml(l.locatie)}</td><td style="padding:10px; text-align:right;">${fmtNum(l.produse)}</td><td style="padding:10px; text-align:right; font-weight:700;">${fmtNum(l.stoc)}</td><td style="padding:10px; text-align:right; color:var(--green); font-weight:700;">${fmtMoney(l.valoare)}</td></tr>`;
     }
     html += `<tr style="border-top:2px solid var(--navy); background:#f1f5f9;"><td style="padding:10px; font-weight:800;">TOTAL</td><td style="padding:10px; text-align:right; font-weight:800;">${fmtNum(totalProd)}</td><td style="padding:10px; text-align:right; font-weight:800;">${fmtNum(totalStoc)}</td><td style="padding:10px; text-align:right; font-weight:800; color:var(--green);">${fmtMoney(totalVal)} RON</td></tr>`;
     html += '</tbody></table>';
     document.getElementById('mag-stats').innerHTML = html;
-    // Populate dropdown
-    const sel = document.getElementById('mag-select');
-    const exist = new Set(['']);
-    for (const opt of sel.options) exist.add(opt.value);
-    for (const l of arr) {
-      if (l.locatie && !exist.has(l.locatie)) {
+    // Populate dropdowns
+    const populeaza = (sid) => {
+      const s = document.getElementById(sid);
+      if (!s) return;
+      // Clear all but first option
+      while (s.options.length > 1) s.remove(1);
+      for (const l of arr) {
         const o = document.createElement('option');
         o.value = l.locatie; o.textContent = l.locatie;
-        sel.appendChild(o);
-        exist.add(l.locatie);
+        s.appendChild(o);
       }
-    }
-    // Mai populeaza si filtrele Lipsuri/Stagnat
-    for (const sid of ['lip-locatie', 'stag-locatie']) {
-      const s = document.getElementById(sid);
-      if (s && s.options.length <= 1) {
-        for (const l of arr) {
-          if (l.locatie) {
-            const o = document.createElement('option');
-            o.value = l.locatie; o.textContent = l.locatie;
-            s.appendChild(o);
-          }
-        }
-      }
-    }
+    };
+    populeaza('mag-select');
+    populeaza('lip-locatie');
+    populeaza('stag-locatie');
   } catch(e) { console.error(e); }
 }
 
