@@ -1099,24 +1099,15 @@ async function loadStagnat() {
         if (Array.isArray(arr)) for (const v of arr) if (v.cod_art) vandutRecent.add(String(v.cod_art));
       } catch(e) { console.error('RPC batch error', e); }
     }
-    const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
+    const LOCATII_MAGAZINE = ['MARVIMEX','TOMIS 3','MEDGIDIA','NAVODARI','POARTA 6','BABADAG','BROTACEI','SHOWROOM','DEPOZIT PAPETARIE','DEPOZIT CARTE'];
+    const stagnat = stoc.filter(s =>
+      !vandutRecent.has(String(s.cod_art)) &&
+      LOCATII_MAGAZINE.includes(s.locatie)
+    );
     const totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
-    const inStocCnt = stoc.filter(s => s.cod_art === '406179').length;
-    const inVandute = vandutRecent.has('406179');
-    const sampleFromRPC = [...vandutRecent].slice(0,5).join(', ');
-    res.innerHTML = `<div style="background:#fef3c7; border:3px solid #ea580c; padding:16px; border-radius:10px; margin-bottom:16px; font-family:monospace; font-size:13px; color:#9a3412;">
-      🔧 DEBUG (${new Date().toLocaleTimeString()}):<br>
-      stoc.length=${stoc.length}<br>
-      codeUnique.length=${codeUnique.length}<br>
-      vandutRecent.size=${vandutRecent.size}<br>
-      stagnat.length=${stagnat.length}<br>
-      sinceDate=${sinceDate}<br>
-      406179: inStoc=${inStocCnt>0 ? 'DA ('+inStocCnt+' locatii)':'NU'} · inVanduteRecent=${inVandute ? 'DA':'NU'}<br>
-      primele coduri din vandutRecent: ${sampleFromRPC}<br>
-      vandutRecent contine '406179' string? ${vandutRecent.has('406179')} | număr? ${vandutRecent.has(406179)}
-    </div>`;
-    if (!stagnat.length) { info.textContent = ''; return; }
+    if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     info.innerHTML = `<b>${stagnat.length}</b> stagnate · <b>${fmtMoney(totalVal)}</b> RON valoare blocată`;
+    res.innerHTML = '';
     // Product info (fallback la facturi daca lipsesc din produse)
     const codeC = [...new Set(stagnat.map(c => c.cod_art))];
     const pmap = await getProdMap(codeC);
