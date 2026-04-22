@@ -707,20 +707,24 @@ async function loadProdusDetail(cod) {
 async function getProdMap(codes) {
   const pmap = {};
   if (!codes.length) return pmap;
-  // 1. Prima sursa: produse
-  for (let i = 0; i < codes.length; i += 200) {
-    const codStr = codes.slice(i,i+200).map(c => `"${c}"`).join(',');
-    const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor,cod_bare`, { headers: HEADERS });
-    const prods = await rp.json();
+  // Batch 50 ca sa evitam URL prea lung
+  const doFetch = async (url) => {
+    try {
+      const r = await fetch(url, { headers: HEADERS });
+      const d = await r.json();
+      return Array.isArray(d) ? d : [];
+    } catch { return []; }
+  };
+  for (let i = 0; i < codes.length; i += 50) {
+    const codStr = codes.slice(i,i+50).map(c => `"${c}"`).join(',');
+    const prods = await doFetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor,cod_bare`);
     for (const p of prods) pmap[p.cod_art] = p;
   }
-  // 2. Codes lipsa → fallback facturi
   const missing = codes.filter(c => !pmap[c] || !pmap[c].nume_art);
   if (missing.length > 0) {
-    for (let i = 0; i < missing.length; i += 200) {
-      const codStr = missing.slice(i,i+200).map(c => `"${c}"`).join(',');
-      const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,nume_art,nume_partener&order=data_factura.desc`, { headers: HEADERS });
-      const fact = await rf.json();
+    for (let i = 0; i < missing.length; i += 50) {
+      const codStr = missing.slice(i,i+50).map(c => `"${c}"`).join(',');
+      const fact = await doFetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,nume_art,nume_partener&order=data_factura.desc`);
       for (const f of fact) {
         if (!pmap[f.cod_art]) {
           pmap[f.cod_art] = { cod_art: f.cod_art, nume_art: f.nume_art, furnizor: f.nume_partener };
@@ -1009,15 +1013,9 @@ async function loadStagnat() {
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
     info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
-    // Product info
+    // Product info (fallback la facturi daca lipsesc din produse)
     const codeC = [...new Set(stagnat.map(c => c.cod_art))];
-    const pmap = {};
-    for (let i = 0; i < codeC.length; i += 200) {
-      const codStr = codeC.slice(i,i+200).map(c => `"${c}"`).join(',');
-      const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor`, { headers: HEADERS });
-      const prods = await rp.json();
-      for (const p of prods) pmap[p.cod_art] = p;
-    }
+    const pmap = await getProdMap(codeC);
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare blocată</th></tr></thead><tbody>';
     for (const s of stagnat.slice(0, 500)) {
       const p = pmap[s.cod_art] || {};
