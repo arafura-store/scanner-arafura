@@ -648,7 +648,7 @@ async function loadProdusDetail(cod) {
       for (const s of stocAct) {
         if (!s.stoc) continue;
         totalStoc += parseFloat(s.stoc);
-        perLoc += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px;">${escHtml(s.locatie)}</td><td style="padding:6px; text-align:right; font-weight:700;">${fmtNum(s.stoc)}</td><td style="padding:6px; text-align:right;">${Number(s.cost||0).toFixed(2)}</td><td style="padding:6px; text-align:right;">${fmtMoney(s.valoare_stoc)}</td></tr>`;
+        perLoc += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px;">${escHtml(s.locatie)}</td><td style="padding:6px; text-align:right; font-weight:700;">${fmtNum(s.stoc)}</td><td style="padding:6px; text-align:right;">${Number(s.cost||0).toFixed(2)}</td><td style="padding:6px; text-align:right;">${Number(s.valoare_stoc||0).toFixed(2)}</td></tr>`;
       }
       perLoc += '</tbody></table>';
       html += `<h3 style="font-size:14px; color:var(--navy); margin:14px 0 8px;">📦 Stoc per locație (snapshot ${new Date(ultimaData).toLocaleDateString('ro-RO')}, total: <b>${fmtNum(totalStoc)} buc</b>)</h3>${perLoc}`;
@@ -791,7 +791,7 @@ async function loadMagDetail() {
     html += '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Cost</th><th style="padding:8px; text-align:right;">Valoare</th></tr></thead><tbody>';
     for (const a of arr) {
       const p = pmap[a.cod_art] || {};
-      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue); font-weight:700;">${escHtml(a.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(a.stoc)}</td><td style="padding:8px; text-align:right;">${Number(a.cost||0).toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:var(--green);">${fmtMoney(a.valoare_stoc)}</td></tr>`;
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue); font-weight:700;">${escHtml(a.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(a.stoc)}</td><td style="padding:8px; text-align:right;">${Number(a.cost||0).toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:var(--green);">${Number(a.valoare_stoc||0).toFixed(2)}</td></tr>`;
     }
     html += '</tbody></table>';
     det.innerHTML = html;
