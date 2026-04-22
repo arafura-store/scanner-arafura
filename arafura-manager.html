@@ -425,7 +425,23 @@
 
       <!-- PRETURI -->
       <div class="page" id="page-preturi">
-        <div class="card"><h2>💰 Prețuri</h2><div class="placeholder">Lista preț actual vs propus · marjă mică (alertă) · produse fără preț · scumpiri furnizori</div></div>
+        <div class="card">
+          <h2>💰 Prețuri &amp; Marjă</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:10px;">Preț de vânzare (din <code>ARAFURA-ERP/preturi/</code>) vs preț ultim achiziție (din facturi) → marjă.</p>
+          <div id="pret-status" style="margin-bottom:14px;"></div>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+            <select id="pret-filtru" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="toate">Toate produsele cu preț</option>
+              <option value="marja-neg" selected>Marjă negativă (vând în pierdere!)</option>
+              <option value="marja-mica">Marjă &lt; 20%</option>
+              <option value="marja-mare">Marjă &gt; 80%</option>
+              <option value="fara-cost">Preț setat dar fără cost achiziție</option>
+            </select>
+            <button onclick="loadPreturi()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Analizează</button>
+            <span id="pret-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="pret-results"><div class="placeholder">Apasă Analizează</div></div>
+        </div>
       </div>
 
       <!-- MAGAZINE -->
@@ -1452,6 +1468,96 @@ async function loadTransferuri() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
+// ── PRETURI & MARJA ──
+async function loadPreturi() {
+  const filtru = document.getElementById('pret-filtru').value;
+  const info = document.getElementById('pret-info');
+  const res = document.getElementById('pret-results');
+  const status = document.getElementById('pret-status');
+  info.textContent = 'se încarcă…';
+  res.innerHTML = '<div class="placeholder">…</div>';
+  try {
+    // 1. Ultima data pret
+    const rd = await fetch(`${API}/preturi_vanzare?select=data_actualizare&order=data_actualizare.desc&limit=1`, { headers: HEADERS });
+    const dd = await rd.json();
+    if (!dd.length) {
+      status.innerHTML = '<div style="background:#fef3c7; border:1px solid #fcd34d; padding:10px; border-radius:8px; color:#92400e; font-size:13px;">⚠ Niciun preț de vânzare importat. Pune fișierul ERP de prețuri în <code>ARAFURA-ERP/preturi/</code> și rulează ETL.</div>';
+      info.textContent = '';
+      res.innerHTML = '';
+      return;
+    }
+    const dataPret = dd[0].data_actualizare;
+    status.innerHTML = `<div style="background:#dbeafe; border:1px solid #93c5fd; padding:8px 12px; border-radius:8px; font-size:12px;">💰 Preț vânzare actualizat la <b>${new Date(dataPret).toLocaleDateString('ro-RO')}</b></div>`;
+
+    // 2. Preturi + cost ultim achizitie
+    let preturi = [];
+    let off = 0;
+    while (true) {
+      const r = await fetch(`${API}/preturi_vanzare?data_actualizare=eq.${dataPret}&select=cod_art,pret&limit=1000&offset=${off}`, { headers: HEADERS });
+      const rows = await r.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      preturi = preturi.concat(rows);
+      off += 1000;
+      if (rows.length < 1000) break;
+      if (off > 50000) break;
+    }
+    info.textContent = `${preturi.length} produse cu preț · calculez marjă…`;
+
+    // 3. Pt fiecare cod, gaseste pret ultim achizitie
+    const costMap = {};
+    const codes = preturi.map(p => p.cod_art);
+    for (let i = 0; i < codes.length; i += 50) {
+      const batch = codes.slice(i, i+50);
+      const codStr = batch.map(c => `"${c}"`).join(',');
+      const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,pret_net,data_factura&order=data_factura.desc&limit=1000`, { headers: HEADERS });
+      const fact = await rf.json();
+      if (!Array.isArray(fact)) continue;
+      for (const f of fact) {
+        if (!costMap[f.cod_art]) costMap[f.cod_art] = { pret: parseFloat(f.pret_net), data: f.data_factura };
+      }
+    }
+
+    // 4. Compute marja & filter
+    const analize = [];
+    for (const p of preturi) {
+      const pretVz = parseFloat(p.pret) || 0;
+      const cost = costMap[p.cod_art]?.pret || 0;
+      const marja = pretVz > 0 && cost > 0 ? ((pretVz - cost) / cost * 100) : null;
+      const marjaRon = pretVz - cost;
+      let keep = false;
+      if (filtru === 'toate') keep = true;
+      else if (filtru === 'marja-neg') keep = cost > 0 && pretVz > 0 && marjaRon < 0;
+      else if (filtru === 'marja-mica') keep = marja !== null && marja < 20 && marja >= 0;
+      else if (filtru === 'marja-mare') keep = marja !== null && marja > 80;
+      else if (filtru === 'fara-cost') keep = pretVz > 0 && cost === 0;
+      if (keep) analize.push({ cod: p.cod_art, pretVz, cost, marja, marjaRon, dataCost: costMap[p.cod_art]?.data });
+    }
+    // Sort by marja ascending (cele mai problematice sus)
+    analize.sort((a,b) => (a.marja ?? 999) - (b.marja ?? 999));
+
+    if (!analize.length) {
+      info.textContent = '';
+      res.innerHTML = `<div class="placeholder">Niciun rezultat pentru filtrul selectat</div>`;
+      return;
+    }
+    info.textContent = `${analize.length} produse`;
+
+    // 5. Get nume
+    const codeC = [...new Set(analize.map(a => a.cod))];
+    const pmap = await getProdMap(codeC);
+
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:right;">Cost ultim</th><th style="padding:8px; text-align:right;">Preț vânzare</th><th style="padding:8px; text-align:right;">Marjă RON</th><th style="padding:8px; text-align:right;">Marjă %</th></tr></thead><tbody>';
+    for (const a of analize.slice(0, 500)) {
+      const p = pmap[a.cod] || {};
+      const marjaColor = a.marjaRon < 0 ? 'var(--red)' : (a.marja && a.marja < 20 ? 'var(--orange)' : 'var(--green)');
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(a.cod)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; text-align:right;">${a.cost.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700;">${a.pretVz.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${a.marjaRon.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${a.marja !== null ? a.marja.toFixed(1) + '%' : '—'}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    if (analize.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 500 din ${analize.length}</div>`;
+    res.innerHTML = html;
+  } catch(e) { res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; info.textContent = ''; }
+}
+
 // ── PER FAMILIE ──
 async function loadFamilii() {
   const el = document.getElementById('fam-list');
@@ -1601,6 +1707,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'duplicate')  loadDuplicate();
       if (page === 'refresh')    loadRefresh();
       if (page === 'familii')    loadFamilii();
+      if (page === 'preturi')    loadPreturi();
       // page transferuri: no preload — user clicks button
     }
   });
