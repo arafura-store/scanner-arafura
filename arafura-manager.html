@@ -884,12 +884,12 @@ async function loadLipsuri() {
     const codeVandute = Object.keys(vanzari);
     info.textContent = `${codeVandute.length} produse vândute — verific stoc actual…`;
 
-    // 2. Stoc actual pentru aceste coduri
+    // 2. Stoc actual pentru aceste coduri (batch mai mic — PostgREST max-rows 1000)
     const stocMap = {}; // cod_art → {locatie: stoc}
-    for (let i = 0; i < codeVandute.length; i += 200) {
-      const batch = codeVandute.slice(i, i+200);
+    for (let i = 0; i < codeVandute.length; i += 80) {
+      const batch = codeVandute.slice(i, i+80);
       const codStr = batch.map(c => `"${c}"`).join(',');
-      const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=20000`, { headers: HEADERS });
+      const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=1000`, { headers: { ...HEADERS, 'Range': '0-999' } });
       const rows = await rs2.json();
       for (const r of rows) {
         if (!stocMap[r.cod_art]) stocMap[r.cod_art] = {};
