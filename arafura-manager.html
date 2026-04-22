@@ -1739,6 +1739,7 @@ function renderTransferuri() {
       <th style="padding:8px; text-align:left;">Denumire</th>
       <th style="padding:8px; text-align:left;">Furnizor</th>
       <th style="padding:8px; text-align:left;">Sursă</th>
+      <th style="padding:8px; text-align:right;">Stoc sursă</th>
       <th style="padding:8px; text-align:left;">Destinație</th>
       <th style="padding:8px; text-align:right;">Cantitate</th>
       <th style="padding:8px; text-align:right;">Vânduri</th>
@@ -1752,6 +1753,7 @@ function renderTransferuri() {
       <td style="padding:6px;">${escHtml(p.nume || '')}</td>
       <td style="padding:6px; font-size:11px;">${escHtml(p.furnizor || '')}</td>
       <td style="padding:6px;"><span style="background:${sursaColor}; padding:2px 6px; border-radius:3px; font-size:11px; font-weight:600;">${escHtml(p.sursa)}</span></td>
+      <td style="padding:6px; text-align:right; font-weight:700; color:var(--navy);">${fmtNum(p.disp || 0)}</td>
       <td style="padding:6px; font-weight:600;">${escHtml(p.dest)}</td>
       <td style="padding:6px; text-align:right; font-weight:800; color:var(--green); background:#dcfce7;">${fmtNum(p.cant)}</td>
       <td style="padding:6px; text-align:right; color:var(--sub);">${fmtNum(Math.round(p.vanzari_perioada))}</td>
@@ -1771,12 +1773,12 @@ function exportTransferuriExcel() {
     'Denumire': p.nume || '',
     'Cantitate': Math.round(p.cant),
     'Sursă': p.sursa,
+    'Stoc sursă': p.disp || 0,
     'Destinație': p.dest,
     'Furnizor': p.furnizor || '',
   }));
   const ws = XLSX.utils.json_to_sheet(data);
-  // Latimi coloane
-  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:10},{wch:20},{wch:20},{wch:20}];
+  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:10},{wch:20},{wch:10},{wch:20},{wch:20}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Transferuri');
   // Numefisier cu data + filtre
