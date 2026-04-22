@@ -226,6 +226,7 @@
       <div class="label">Stocuri</div>
       <div class="menu-item" data-page="lipsuri"     ><span class="ico">📉</span><span class="label">Lipsuri / Stoc mic</span><span class="badge" id="badge-lipsuri">—</span></div>
       <div class="menu-item" data-page="stagnat"     ><span class="ico">📦</span><span class="label">Stagnat</span></div>
+      <div class="menu-item" data-page="negativ"     ><span class="ico">🔻</span><span class="label">Stoc negativ</span></div>
       <div class="menu-item" data-page="transferuri" ><span class="ico">🚚</span><span class="label">Transferuri</span></div>
     </div>
 
@@ -371,6 +372,16 @@
             <span id="stag-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
           </div>
           <div id="stag-results"><div class="placeholder">Selectează filtrele și apasă Încarcă</div></div>
+        </div>
+      </div>
+
+      <!-- STOC NEGATIV -->
+      <div class="page" id="page-negativ">
+        <div class="card">
+          <h2>🔻 Stoc negativ (erori inventar)</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Produse cu stoc &lt; 0 în ultimul snapshot ERP — de regularizat (recepție lipsă, vânzare greșită, etc.)</p>
+          <div id="neg-info" style="margin-bottom:10px; color:var(--sub); font-size:13px;"></div>
+          <div id="neg-results"><div class="placeholder">se încarcă…</div></div>
         </div>
       </div>
 
@@ -1468,6 +1479,49 @@ async function loadTransferuri() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
+// ── STOC NEGATIV ──
+async function loadNegativ() {
+  const info = document.getElementById('neg-info');
+  const res = document.getElementById('neg-results');
+  info.textContent = 'caut…';
+  res.innerHTML = '<div class="placeholder">…</div>';
+  try {
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+    if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
+    // Fetch toate stocurile negative
+    let neg = [];
+    let off = 0;
+    while (true) {
+      const r = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=lt.0&select=cod_art,locatie,stoc,cost,valoare_stoc&order=stoc.asc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const rows = await r.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      neg = neg.concat(rows);
+      off += 1000;
+      if (rows.length < 1000) break;
+      if (off > 50000) break;
+    }
+    if (!neg.length) {
+      info.textContent = '';
+      res.innerHTML = '<div class="placeholder">✅ Nicio locație cu stoc negativ — totul OK!</div>';
+      return;
+    }
+    const totalNeg = neg.reduce((s,x) => s + parseFloat(x.stoc||0), 0);
+    const valNeg = neg.reduce((s,x) => s + parseFloat(x.valoare_stoc||0), 0);
+    info.innerHTML = `<b>${neg.length}</b> rânduri cu stoc negativ · total <b style="color:var(--red);">${fmtNum(totalNeg)}</b> buc · valoare <b style="color:var(--red);">${fmtMoney(valNeg)}</b> RON`;
+    const pmap = await getProdMap([...new Set(neg.map(n => n.cod_art))]);
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare</th></tr></thead><tbody>';
+    for (const n of neg.slice(0, 500)) {
+      const p = pmap[n.cod_art] || {};
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer; background:#fef2f2;" onclick="loadProdusDetail('${escHtml(n.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(n.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(n.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:800; color:var(--red);">${fmtNum(n.stoc)}</td><td style="padding:8px; text-align:right; color:var(--red);">${Number(n.valoare_stoc||0).toFixed(2)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    if (neg.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 500 din ${neg.length}</div>`;
+    res.innerHTML = html;
+  } catch(e) { res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
 // ── PRETURI & MARJA ──
 async function loadPreturi() {
   const filtru = document.getElementById('pret-filtru').value;
@@ -1683,7 +1737,7 @@ async function loadDuplicate() {
 // ── NAVIGATION ──
 const titles = {
   dashboard:'🏠 Dashboard', cautare:'🔍 Căutare produs',
-  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', transferuri:'🚚 Transferuri',
+  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri',
   achizitii:'🛒 Comenzi sugerate', vanzari:'💸 Vânzări & Marjă', preturi:'💰 Prețuri',
   magazine:'🏪 Per Magazin', furnizori:'🏭 Per Furnizor', familii:'📚 Per Familie',
   duplicate:'⚠️ Coduri duplicate', refresh:'🔄 Refresh date'
@@ -1708,6 +1762,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'refresh')    loadRefresh();
       if (page === 'familii')    loadFamilii();
       if (page === 'preturi')    loadPreturi();
+      if (page === 'negativ')    loadNegativ();
       // page transferuri: no preload — user clicks button
     }
   });
