@@ -354,7 +354,7 @@
               <option>DEPOZIT CARTE</option>
             </select>
             <select id="lip-zile" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
-              <option value="30">Vânduri în ultimele 30 zile</option>
+              <option value="30">Vândut în ultimele 30 zile</option>
               <option value="60">60 zile</option>
               <option value="90">90 zile</option>
               <option value="180">180 zile (6 luni)</option>
@@ -1275,7 +1275,7 @@ async function loadLipsuri() {
     const pmap = await getProdMap(allCods);
     lipsa.sort((a,b) => (b.v.total||0) - (a.v.total||0));
 
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vânduri ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vândut ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
     for (const c of lipsa.slice(0, 500)) {
       const p = pmap[c.cod_art] || {};
       const v = c.v || {};
