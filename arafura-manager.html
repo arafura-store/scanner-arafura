@@ -290,8 +290,26 @@
           <div id="d-ultim-update"><div class="placeholder">se încarcă…</div></div>
         </div>
         <div class="card">
-          <h2>🔄 Status import-uri (ultimele 8)</h2>
-          <div id="d-etl-logs"><div class="placeholder">se încarcă…</div></div>
+          <h2>🔄 Status import-uri <span id="d-etl-count" style="font-weight:400; color:var(--sub); font-size:14px;"></span></h2>
+          <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <select id="d-etl-filter-type" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;" onchange="renderEtlLogs()">
+              <option value="">Toate tipurile</option>
+              <option value="balanta-lunara">Balanță lunară</option>
+              <option value="balanta-saptamanala">Balanță săptămânală</option>
+              <option value="balanta-neg">Balanță stoc negativ</option>
+              <option value="fisa">Fișe</option>
+              <option value="factura">Facturi</option>
+              <option value="preturi">Prețuri</option>
+              <option value="familii">Familii</option>
+            </select>
+            <select id="d-etl-filter-status" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;" onchange="renderEtlLogs()">
+              <option value="">Toate statusurile</option>
+              <option value="success">success</option>
+              <option value="partial">partial</option>
+              <option value="error">error</option>
+            </select>
+          </div>
+          <div id="d-etl-logs" style="max-height:520px; overflow-y:auto; border:1px solid var(--border); border-radius:6px;"><div class="placeholder">se încarcă…</div></div>
         </div>
         <div class="card"><h2>📈 Vânzări 30 zile (grafic)</h2><div class="placeholder">— necesită miscari + agregare zilnică (faza 2)</div></div>
         <div class="card"><h2>🏆 Top 10 produse vândute săptămâna asta</h2><div class="placeholder">— necesită miscari + tip_doc='Bon Fiscal'</div></div>
@@ -646,31 +664,54 @@ async function loadDashboard() {
   // 3. Furnizori
   getCount(`${API}/furnizori?select=cod_partener`).then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
 
-  // 4. ETL logs
+  // 4. ETL logs — toate, cu filtre
+  loadAllEtlLogs();
+}
+
+let _allEtlLogs = [];
+async function loadAllEtlLogs() {
   try {
-    const r = await fetch(`${API}/etl_logs?select=source_file,source_type,rows_imported,status,started_at&order=started_at.desc&limit=8`, { headers: HEADERS });
-    const logs = await r.json();
-    const el = document.getElementById('d-etl-logs');
-    if (!Array.isArray(logs) || logs.length === 0) {
-      el.innerHTML = '<div class="placeholder">Niciun import înregistrat încă</div>';
-      return;
+    const all = [];
+    let off = 0;
+    while (true) {
+      const r = await fetch(`${API}/etl_logs?select=source_file,source_type,rows_imported,rows_skipped,status,started_at,message&order=started_at.desc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const d = await r.json();
+      if (!Array.isArray(d) || d.length === 0) break;
+      all.push(...d);
+      if (d.length < 1000) break;
+      off += 1000;
     }
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;">';
-    html += '<thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">Fișier</th><th style="padding:8px;">Tip</th><th style="padding:8px; text-align:right;">Rânduri</th><th style="padding:8px;">Status</th><th style="padding:8px;">Când</th></tr></thead><tbody>';
-    for (const l of logs) {
-      const dt = l.started_at ? new Date(l.started_at).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
-      const stColor = l.status === 'success' ? 'var(--green)' : (l.status === 'partial' ? 'var(--orange)' : 'var(--red)');
-      html += `<tr style="border-top:1px solid var(--border);">
-        <td style="padding:8px;">${escHtml(l.source_file||'')}</td>
-        <td style="padding:8px;"><span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(l.source_type||'')}</span></td>
-        <td style="padding:8px; text-align:right; font-variant-numeric:tabular-nums;">${fmtNum(l.rows_imported||0)}</td>
-        <td style="padding:8px;"><span style="color:${stColor}; font-weight:700;">${escHtml(l.status||'')}</span></td>
-        <td style="padding:8px; color:var(--sub); font-size:12px;">${dt}</td>
-      </tr>`;
-    }
-    html += '</tbody></table>';
-    el.innerHTML = html;
-  } catch(e) {}
+    _allEtlLogs = all;
+    renderEtlLogs();
+  } catch(e) { console.error(e); }
+}
+function renderEtlLogs() {
+  const el = document.getElementById('d-etl-logs');
+  const ft = (document.getElementById('d-etl-filter-type')||{}).value || '';
+  const fs = (document.getElementById('d-etl-filter-status')||{}).value || '';
+  const filtered = _allEtlLogs.filter(l => (!ft || l.source_type === ft) && (!fs || l.status === fs));
+  document.getElementById('d-etl-count').textContent = `(${filtered.length}/${_allEtlLogs.length})`;
+  if (filtered.length === 0) {
+    el.innerHTML = '<div class="placeholder">Niciun import cu acest filtru</div>';
+    return;
+  }
+  let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;">';
+  html += '<thead style="position:sticky; top:0; z-index:1;"><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">Fișier</th><th style="padding:8px;">Tip</th><th style="padding:8px; text-align:right;">Import.</th><th style="padding:8px; text-align:right;">Skip.</th><th style="padding:8px;">Status</th><th style="padding:8px;">Când</th></tr></thead><tbody>';
+  for (const l of filtered) {
+    const dt = l.started_at ? new Date(l.started_at).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
+    const stColor = l.status === 'success' ? 'var(--green)' : (l.status === 'partial' ? 'var(--orange)' : 'var(--red)');
+    const skippedColor = (l.rows_skipped||0) > 0 ? 'color:#b91c1c; font-weight:700;' : 'color:var(--sub);';
+    html += `<tr style="border-top:1px solid var(--border);">
+      <td style="padding:8px;">${escHtml(l.source_file||'')}</td>
+      <td style="padding:8px;"><span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(l.source_type||'')}</span></td>
+      <td style="padding:8px; text-align:right; font-variant-numeric:tabular-nums;">${fmtNum(l.rows_imported||0)}</td>
+      <td style="padding:8px; text-align:right; font-variant-numeric:tabular-nums; ${skippedColor}">${fmtNum(l.rows_skipped||0)}</td>
+      <td style="padding:8px;"><span style="color:${stColor}; font-weight:700;">${escHtml(l.status||'')}</span></td>
+      <td style="padding:8px; color:var(--sub); font-size:12px;">${dt}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
 }
 
 // ── ULTIMA ACTUALIZARE PER TIP ──
