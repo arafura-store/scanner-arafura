@@ -695,8 +695,8 @@ function parseFilenamePerioada(fn) {
 async function loadUltimaActualizare() {
   const el = document.getElementById('d-ultim-update');
   try {
-    // Toate etl_logs cu status=success, grupate pe source_type
-    const r = await fetch(`${API}/etl_logs?select=source_type,source_file,started_at,rows_imported&status=eq.success&order=started_at.desc&limit=500`, { headers: HEADERS });
+    // Ia TOATE logs cu status in (success, partial) — partial = date importate dar cu warnings
+    const r = await fetch(`${API}/etl_logs?select=source_type,source_file,started_at,rows_imported,status&status=in.(success,partial)&order=started_at.desc&limit=2000`, { headers: HEADERS });
     const logs = await r.json();
     if (!Array.isArray(logs)) { el.innerHTML = '<div class="placeholder">—</div>'; return; }
 
@@ -713,8 +713,17 @@ async function loadUltimaActualizare() {
     for (const l of logs) {
       const key = TYPE_LABEL[l.source_type];
       if (!key || !(key in grupat)) continue;
-      if (!grupat[key] || new Date(l.started_at) > new Date(grupat[key].started_at)) {
+      // Alege logul cu DATA REFLECTATA cea mai recenta (din filename), fallback la started_at
+      const curDate = parseFilenamePerioada(l.source_file);
+      const best = grupat[key];
+      if (!best) { grupat[key] = l; continue; }
+      const bestDate = parseFilenamePerioada(best.source_file);
+      if (curDate && bestDate) {
+        if (new Date(curDate) > new Date(bestDate)) grupat[key] = l;
+      } else if (curDate && !bestDate) {
         grupat[key] = l;
+      } else if (!curDate && !bestDate) {
+        if (new Date(l.started_at) > new Date(best.started_at)) grupat[key] = l;
       }
     }
 
