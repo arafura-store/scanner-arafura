@@ -1336,7 +1336,12 @@ async function loadTransferuri() {
         if (best) { sursa = best[0]; stocSursa = best[1]; }
       }
       if (!sursa) continue; // nu are sursa disponibila
-      const cant = Math.max(1, Math.min(Math.ceil(l.vanduri), stocSursa));
+      // Pentru magazine (non-depozit): las minim 1 buc la sursa (stoc siguranta).
+      // Pentru depozit: transfer toata cantitatea necesara.
+      const esteDepozit = PRIORITATE.includes(sursa);
+      const maxTransfer = esteDepozit ? stocSursa : Math.max(0, stocSursa - 1);
+      if (maxTransfer <= 0) continue; // sursa nu are suficient pentru a dona
+      const cant = Math.max(1, Math.min(Math.ceil(l.vanduri), maxTransfer));
       propuneri.push({ cod: l.cod, sursa, dest: l.loc, cant, disp: stocSursa });
     }
 
