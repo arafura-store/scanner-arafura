@@ -1041,11 +1041,8 @@ async function loadStagnat() {
       return;
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
-    console.log(`Stagnat debug: stoc=${stoc.length}, vandute=${vandutRecent.size}, stagnat=${stagnat.length}, probe 406179:`, {
-      inStoc: stoc.some(s => s.cod_art === '406179'),
-      inVandute: vandutRecent.has('406179'),
-      inStagnat: stagnat.some(s => s.cod_art === '406179'),
-    });
+    const debugInfo = `🔧 DEBUG: stoc=${stoc.length} | vandute_recent=${vandutRecent.size} | stagnat=${stagnat.length} | 406179: inStoc=${stoc.some(s => s.cod_art === '406179')}, inVandute=${vandutRecent.has('406179')}, inStagnat=${stagnat.some(s => s.cod_art === '406179')}`;
+    info.textContent = debugInfo;
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
     info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
