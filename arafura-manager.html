@@ -1041,8 +1041,9 @@ async function loadStagnat() {
       return;
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
-    const debugInfo = `🔧 DEBUG: stoc=${stoc.length} | vandute_recent=${vandutRecent.size} | stagnat=${stagnat.length} | 406179: inStoc=${stoc.some(s => s.cod_art === '406179')}, inVandute=${vandutRecent.has('406179')}, inStagnat=${stagnat.some(s => s.cod_art === '406179')}`;
-    info.textContent = debugInfo;
+    const debugInfo = `stoc=${stoc.length} | vandute=${vandutRecent.size} | stagnat=${stagnat.length} | 406179: inStoc=${stoc.some(s => s.cod_art === '406179')}, inVandute=${vandutRecent.has('406179')}, inStagnat=${stagnat.some(s => s.cod_art === '406179')}`;
+    res.innerHTML = `<div style="background:#fef3c7; border:3px solid #ea580c; padding:16px; border-radius:10px; margin-bottom:16px; font-family:monospace; font-size:14px; color:#9a3412; font-weight:700;">🔧 DEBUG v3 (${new Date().toLocaleTimeString()}):<br>${debugInfo}</div>`;
+    info.textContent = '';
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
     info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
