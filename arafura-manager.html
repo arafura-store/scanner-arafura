@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ARAFURA Manager</title>
   <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -417,8 +418,8 @@
       <div class="page" id="page-transferuri">
         <div class="card">
           <h2>🚚 Transferuri propuse</h2>
-          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Pentru fiecare LIPSĂ găsim sursa optimă (prioritate: DEPOZIT > magazin stagnat). Rezultă 2 liste:</p>
-          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Pentru fiecare LIPSĂ găsim sursa optimă. Filtrează pe furnizor/familie/magazin și exportă lista în Excel pentru SAGA.</p>
+          <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
             <select id="tr-zile" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
               <option value="30" selected>Lipsuri din ultimele 30 zile</option>
               <option value="60">60 zile</option>
@@ -426,6 +427,15 @@
             </select>
             <button onclick="loadTransferuri()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Calculează propuneri</button>
             <span id="tr-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="tr-filtre" style="display:none; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center; padding:12px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+            <strong style="font-size:13px; color:var(--sub);">🔍 Filtre:</strong>
+            <select id="tr-f-furnizor" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:160px;" onchange="renderTransferuri()"><option value="">— toți furnizorii —</option></select>
+            <select id="tr-f-familie" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:160px;" onchange="renderTransferuri()"><option value="">— toate familiile —</option></select>
+            <select id="tr-f-dest" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:140px;" onchange="renderTransferuri()"><option value="">— toate destinațiile —</option></select>
+            <select id="tr-f-sursa" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:140px;" onchange="renderTransferuri()"><option value="">— toate sursele —</option></select>
+            <button onclick="exportTransferuriExcel()" class="btn" style="padding:7px 14px; border-radius:6px; border:none; background:var(--green); color:white; cursor:pointer; font-weight:600; font-size:13px;">📥 Export Excel</button>
+            <button onclick="resetTransferuriFiltre()" class="btn" style="padding:7px 12px; border-radius:6px; border:1px solid var(--border); background:white; cursor:pointer; font-size:12px; color:var(--sub);">⊖ Reset</button>
           </div>
           <div id="tr-results"><div class="placeholder">Apasă Calculează pentru a genera propunerile</div></div>
         </div>
@@ -1580,81 +1590,187 @@ async function loadTransferuri() {
 
     if (!propuneri.length) {
       info.textContent = '';
+      document.getElementById('tr-filtre').style.display = 'none';
       res.innerHTML = '<div class="placeholder">✅ Nicio propunere de transfer — nu sunt lipsuri cu sursă disponibilă</div>';
       return;
     }
-    info.textContent = `${propuneri.length} transferuri propuse (${new Set(propuneri.map(p=>p.sursa)).size} surse → ${new Set(propuneri.map(p=>p.dest)).size} destinații)`;
 
-    // 6. Info produse
+    // 6. Info produse + ROI score (vanduri × stocSursa)
     const codeC = [...new Set(propuneri.map(p => p.cod))];
     const pmap = await getProdMap(codeC);
-
-    // 7. Grupare: RETURURI (sursa = magazin) + LIVRĂRI (sursa = depot)
-    const retururi = {}; // sursa magazin → [propuneri]
-    const livrariDirect = {}; // dest → [propuneri cu sursa depozit]
-    const livrariIndirect = {}; // dest → [propuneri cu sursa magazin, via depozit]
-
+    // Adauga info pe propunere
     for (const p of propuneri) {
-      const esteDepot = PRIORITATE.includes(p.sursa);
-      if (esteDepot) {
-        if (!livrariDirect[p.dest]) livrariDirect[p.dest] = [];
-        livrariDirect[p.dest].push(p);
-      } else {
-        if (!retururi[p.sursa]) retururi[p.sursa] = [];
-        retururi[p.sursa].push(p);
-        if (!livrariIndirect[p.dest]) livrariIndirect[p.dest] = [];
-        livrariIndirect[p.dest].push(p);
-      }
+      const pr = pmap[p.cod] || {};
+      p.nume = pr.nume_art || '';
+      p.cod_bare = pr.cod_bare || '';
+      p.um = pr.um || '';
+      p.furnizor = pr.furnizor || '';
+      // Vanzari per (cod, dest)
+      const v = vanzPerCodLoc[p.cod + '|' + p.dest] || 0;
+      p.vanzari_perioada = v;
+      p.roi = v * Math.max(1, p.cant); // proxy ROI: vanzari recente × cantitate transfer
     }
 
-    // Render
-    let html = '';
+    // Cache global
+    window._trProp = propuneri;
 
-    // SECTIUNEA 1: RETURURI LA DEPOZIT
-    html += '<h2 style="font-size:18px; color:var(--navy); margin:14px 0 10px;">📤 RETURURI la depozit (per magazin sursă)</h2>';
-    if (Object.keys(retururi).length === 0) {
-      html += '<div class="placeholder">Nicio retur — toate lipsurile au stoc în depozit direct</div>';
-    } else {
-      for (const sursa of Object.keys(retururi).sort()) {
-        const items = retururi[sursa];
-        html += `<div style="margin-bottom:20px;">
-          <div style="background:#dc2626; color:white; padding:10px 14px; border-radius:8px 8px 0 0; font-weight:700; font-size:14px;">📤 ${escHtml(sursa)} → la depozit (${items.length} produse)</div>
-          <table style="width:100%; font-size:12px; border-collapse:collapse; border:1px solid var(--border);"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">COD</th><th style="padding:6px; text-align:left;">Nume</th><th style="padding:6px; text-align:right;">Cant.</th><th style="padding:6px; text-align:right;">Stoc aici</th><th style="padding:6px; text-align:left;">→ pentru</th></tr></thead><tbody>`;
-        items.sort((a,b) => a.cod.localeCompare(b.cod));
-        for (const it of items) {
-          const p = pmap[it.cod] || {};
-          html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(it.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td><td style="padding:6px;">${escHtml(p.nume_art||'')}</td><td style="padding:6px; text-align:right; font-weight:800; color:var(--red); background:#fee2e2;">${fmtNum(it.cant)}</td><td style="padding:6px; text-align:right;">${fmtNum(it.disp)}</td><td style="padding:6px; color:var(--sub); font-size:11px;">→ ${escHtml(it.dest)}</td></tr>`;
-        }
-        html += '</tbody></table></div>';
-      }
+    // 7. Familii — fetch o data
+    if (!window._famMap) {
+      try {
+        const rf = await fetch(`${API}/familii?select=cod_familie,nume`, { headers: HEADERS });
+        const fl = await rf.json();
+        window._famMap = {};
+        for (const f of fl) window._famMap[f.cod_familie] = f.nume;
+      } catch { window._famMap = {}; }
     }
 
-    // SECTIUNEA 2: LIVRARI CATRE MAGAZINE
-    html += '<h2 style="font-size:18px; color:var(--navy); margin:22px 0 10px;">📥 LIVRĂRI către magazine (per destinație)</h2>';
-    const allDest = new Set([...Object.keys(livrariDirect), ...Object.keys(livrariIndirect)]);
-    if (allDest.size === 0) {
-      html += '<div class="placeholder">Nicio livrare propusă</div>';
-    } else {
-      for (const dest of [...allDest].sort()) {
-        const directe = livrariDirect[dest] || [];
-        const indirecte = livrariIndirect[dest] || [];
-        const total = directe.length + indirecte.length;
-        html += `<div style="margin-bottom:20px;">
-          <div style="background:#16a34a; color:white; padding:10px 14px; border-radius:8px 8px 0 0; font-weight:700; font-size:14px;">📥 La ${escHtml(dest)} (${total} produse)</div>
-          <table style="width:100%; font-size:12px; border-collapse:collapse; border:1px solid var(--border);"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">COD</th><th style="padding:6px; text-align:left;">Nume</th><th style="padding:6px; text-align:right;">Cant.</th><th style="padding:6px; text-align:left;">← din</th></tr></thead><tbody>`;
-        const allItems = [...directe, ...indirecte].sort((a,b) => a.cod.localeCompare(b.cod));
-        for (const it of allItems) {
-          const p = pmap[it.cod] || {};
-          const sursaTag = PRIORITATE.includes(it.sursa)
-            ? `<span style="background:#dbeafe; color:#1e40af; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700;">stoc depot</span> ${escHtml(it.sursa)}`
-            : `<span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700;">retur</span> ${escHtml(it.sursa)}`;
-          html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(it.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td><td style="padding:6px;">${escHtml(p.nume_art||'')}</td><td style="padding:6px; text-align:right; font-weight:800; color:var(--green); background:#dcfce7;">${fmtNum(it.cant)}</td><td style="padding:6px; color:var(--sub); font-size:11px;">${sursaTag}</td></tr>`;
-        }
-        html += '</tbody></table></div>';
-      }
-    }
-    res.innerHTML = html;
+    // 8. Populeaza dropdown-uri
+    populateTransferFiltre(propuneri);
+    document.getElementById('tr-filtre').style.display = 'flex';
+
+    // 9. Render initial
+    renderTransferuri();
+    return;
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+function populateTransferFiltre(propuneri) {
+  const cnt = (arr, key) => {
+    const m = new Map();
+    for (const p of arr) {
+      const v = (p[key] || '').trim();
+      if (!v) continue;
+      m.set(v, (m.get(v) || 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]);
+  };
+  const fillSel = (id, items, label) => {
+    const sel = document.getElementById(id);
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">${label}</option>` +
+      items.map(([v, n]) => `<option value="${escHtml(v)}">${escHtml(v)} (${n})</option>`).join('');
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  };
+  fillSel('tr-f-furnizor', cnt(propuneri, 'furnizor'), '— toți furnizorii —');
+  fillSel('tr-f-dest', cnt(propuneri, 'dest'), '— toate destinațiile —');
+  fillSel('tr-f-sursa', cnt(propuneri, 'sursa'), '— toate sursele —');
+  // Familii: nu avem direct la nivel de propunere, derivam din primul caracter al cod_art (familia in SAGA)
+  // Simplificare: extragem prefixul (primele 3 caractere) drept "cod_familie"
+  const famArr = cnt(propuneri.map(p => ({ familie: window._famMap?.[p.cod.substring(0, 3)] || p.cod.substring(0, 3) })), 'familie');
+  fillSel('tr-f-familie', famArr, '— toate familiile —');
+}
+
+function resetTransferuriFiltre() {
+  ['tr-f-furnizor', 'tr-f-familie', 'tr-f-dest', 'tr-f-sursa'].forEach(id => document.getElementById(id).value = '');
+  renderTransferuri();
+}
+
+function getTransferuriFiltrat() {
+  const ff = document.getElementById('tr-f-furnizor').value;
+  const fm = document.getElementById('tr-f-familie').value;
+  const fd = document.getElementById('tr-f-dest').value;
+  const fs = document.getElementById('tr-f-sursa').value;
+  return (window._trProp || []).filter(p => {
+    if (ff && p.furnizor !== ff) return false;
+    if (fd && p.dest !== fd) return false;
+    if (fs && p.sursa !== fs) return false;
+    if (fm) {
+      const fam = window._famMap?.[p.cod.substring(0, 3)] || p.cod.substring(0, 3);
+      if (fam !== fm) return false;
+    }
+    return true;
+  });
+}
+
+function renderTransferuri() {
+  const PRIORITATE = ['DEPOZIT PAPETARIE', 'DEPOZIT CARTE'];
+  const info = document.getElementById('tr-info');
+  const res = document.getElementById('tr-results');
+  const propuneri = getTransferuriFiltrat();
+
+  info.textContent = `${propuneri.length} transferuri (din ${(window._trProp || []).length} total) · ${new Set(propuneri.map(p => p.sursa)).size} surse → ${new Set(propuneri.map(p => p.dest)).size} destinații`;
+
+  if (!propuneri.length) {
+    res.innerHTML = '<div class="placeholder">Niciun transfer cu acest filtru</div>';
+    return;
+  }
+
+  // Sortare ROI descendent
+  propuneri.sort((a, b) => (b.roi || 0) - (a.roi || 0));
+
+  // Grupare per destinatie
+  const livrariDirect = {};
+  const livrariIndirect = {};
+  const retururi = {};
+  for (const p of propuneri) {
+    const esteDepot = PRIORITATE.includes(p.sursa);
+    if (esteDepot) {
+      (livrariDirect[p.dest] = livrariDirect[p.dest] || []).push(p);
+    } else {
+      (retururi[p.sursa] = retururi[p.sursa] || []).push(p);
+      (livrariIndirect[p.dest] = livrariIndirect[p.dest] || []).push(p);
+    }
+  }
+
+  // Render
+  let html = '';
+
+  // Tabel principal sortat ROI cu toate detaliile
+  html += `<table style="width:100%; font-size:12px; border-collapse:collapse;">
+    <thead><tr style="background:#f8fafc;">
+      <th style="padding:8px; text-align:left;">COD</th>
+      <th style="padding:8px; text-align:left;">EAN</th>
+      <th style="padding:8px; text-align:left;">Denumire</th>
+      <th style="padding:8px; text-align:left;">Furnizor</th>
+      <th style="padding:8px; text-align:left;">Sursă</th>
+      <th style="padding:8px; text-align:left;">Destinație</th>
+      <th style="padding:8px; text-align:right;">Cantitate</th>
+      <th style="padding:8px; text-align:right;">Vânduri</th>
+    </tr></thead><tbody>`;
+  for (const p of propuneri) {
+    const esteDepot = PRIORITATE.includes(p.sursa);
+    const sursaColor = esteDepot ? '#dbeafe;color:#1e40af' : '#fef3c7;color:#92400e';
+    html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(p.cod)}'); document.querySelector('[data-page=cautare]').click();">
+      <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(p.cod)}</td>
+      <td style="padding:6px; font-family:monospace; font-size:11px; color:var(--sub);">${escHtml(p.cod_bare || '')}</td>
+      <td style="padding:6px;">${escHtml(p.nume || '')}</td>
+      <td style="padding:6px; font-size:11px;">${escHtml(p.furnizor || '')}</td>
+      <td style="padding:6px;"><span style="background:${sursaColor}; padding:2px 6px; border-radius:3px; font-size:11px; font-weight:600;">${escHtml(p.sursa)}</span></td>
+      <td style="padding:6px; font-weight:600;">${escHtml(p.dest)}</td>
+      <td style="padding:6px; text-align:right; font-weight:800; color:var(--green); background:#dcfce7;">${fmtNum(p.cant)}</td>
+      <td style="padding:6px; text-align:right; color:var(--sub);">${fmtNum(Math.round(p.vanzari_perioada))}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  res.innerHTML = html;
+}
+
+function exportTransferuriExcel() {
+  const propuneri = getTransferuriFiltrat();
+  if (!propuneri.length) { alert('Nicio propunere de exportat'); return; }
+  // Coloane cerute: cod_bare | cod_intern | denumire | cantitate (+ sursa, dest, furnizor pentru context)
+  const data = propuneri.map(p => ({
+    'Cod bare': p.cod_bare || '',
+    'Cod intern': p.cod,
+    'Denumire': p.nume || '',
+    'Cantitate': Math.round(p.cant),
+    'Sursă': p.sursa,
+    'Destinație': p.dest,
+    'Furnizor': p.furnizor || '',
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  // Latimi coloane
+  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:10},{wch:20},{wch:20},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Transferuri');
+  // Numefisier cu data + filtre
+  const f = document.getElementById('tr-f-furnizor').value;
+  const d = document.getElementById('tr-f-dest').value;
+  const today = new Date().toISOString().slice(0,10);
+  const parts = ['transferuri', today];
+  if (f) parts.push(f.replace(/[^a-zA-Z0-9]/g,'_'));
+  if (d) parts.push(d.replace(/[^a-zA-Z0-9]/g,'_'));
+  XLSX.writeFile(wb, parts.join('_') + '.xlsx');
 }
 
 // ── STOC NEGATIV ──
