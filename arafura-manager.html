@@ -1735,16 +1735,16 @@ function renderTransferuri() {
   // Tabel principal sortat ROI cu toate detaliile
   const zile = (window._trZile || parseInt(document.getElementById('tr-zile').value) || 30);
   html += `<table style="width:100%; font-size:12px; border-collapse:collapse;">
-    <thead><tr style="background:#f8fafc;">
-      <th style="padding:8px; text-align:left;">COD</th>
-      <th style="padding:8px; text-align:left;">EAN</th>
-      <th style="padding:8px; text-align:left;">Denumire</th>
-      <th style="padding:8px; text-align:left;">Furnizor</th>
-      <th style="padding:8px; text-align:left;">Sursă</th>
-      <th style="padding:8px; text-align:right;">Stoc sursă</th>
-      <th style="padding:8px; text-align:left;">Destinație</th>
-      <th style="padding:8px; text-align:right;">Cantitate propusă</th>
-      <th style="padding:8px; text-align:right;">Vândut în ${zile} zile</th>
+    <thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:10; box-shadow:0 2px 4px rgba(0,0,0,0.08);">
+      <th style="padding:8px; text-align:left; background:#f8fafc;">COD</th>
+      <th style="padding:8px; text-align:left; background:#f8fafc;">EAN</th>
+      <th style="padding:8px; text-align:left; background:#f8fafc;">Denumire</th>
+      <th style="padding:8px; text-align:left; background:#f8fafc;">Furnizor</th>
+      <th style="padding:8px; text-align:left; background:#f8fafc;">Sursă</th>
+      <th style="padding:8px; text-align:right; background:#f8fafc;">Stoc sursă</th>
+      <th style="padding:8px; text-align:left; background:#f8fafc;">Destinație</th>
+      <th style="padding:8px; text-align:right; background:#f8fafc;">Cantitate propusă</th>
+      <th style="padding:8px; text-align:right; background:#f8fafc;">Vândut în ${zile} zile</th>
     </tr></thead><tbody>`;
   for (const p of propuneri) {
     const esteDepot = PRIORITATE.includes(p.sursa);
