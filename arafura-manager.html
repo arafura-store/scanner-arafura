@@ -1100,10 +1100,23 @@ async function loadStagnat() {
       } catch(e) { console.error('RPC batch error', e); }
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
-    if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
-    let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
-    const dbg406179 = stagnat.some(s => s.cod_art === '406179');
-    info.innerHTML = `<b>${stagnat.length}</b> stagnate / <b>${stoc.length}</b> cu stoc · <b>${vandutRecent.size}</b> vandute in perioada · <b>${fmtMoney(totalVal)}</b> RON valoare <span style="color:${dbg406179?'var(--red)':'var(--green)'}; margin-left:8px;">[debug 406179 inStagnat=${dbg406179}]</span>`;
+    const totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
+    const inStocCnt = stoc.filter(s => s.cod_art === '406179').length;
+    const inVandute = vandutRecent.has('406179');
+    const sampleFromRPC = [...vandutRecent].slice(0,5).join(', ');
+    res.innerHTML = `<div style="background:#fef3c7; border:3px solid #ea580c; padding:16px; border-radius:10px; margin-bottom:16px; font-family:monospace; font-size:13px; color:#9a3412;">
+      🔧 DEBUG (${new Date().toLocaleTimeString()}):<br>
+      stoc.length=${stoc.length}<br>
+      codeUnique.length=${codeUnique.length}<br>
+      vandutRecent.size=${vandutRecent.size}<br>
+      stagnat.length=${stagnat.length}<br>
+      sinceDate=${sinceDate}<br>
+      406179: inStoc=${inStocCnt>0 ? 'DA ('+inStocCnt+' locatii)':'NU'} · inVanduteRecent=${inVandute ? 'DA':'NU'}<br>
+      primele coduri din vandutRecent: ${sampleFromRPC}<br>
+      vandutRecent contine '406179' string? ${vandutRecent.has('406179')} | număr? ${vandutRecent.has(406179)}
+    </div>`;
+    if (!stagnat.length) { info.textContent = ''; return; }
+    info.innerHTML = `<b>${stagnat.length}</b> stagnate · <b>${fmtMoney(totalVal)}</b> RON valoare blocată`;
     // Product info (fallback la facturi daca lipsesc din produse)
     const codeC = [...new Set(stagnat.map(c => c.cod_art))];
     const pmap = await getProdMap(codeC);
