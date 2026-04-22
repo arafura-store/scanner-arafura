@@ -1054,8 +1054,11 @@ async function loadLipsuri() {
     for (const c of lipsa.slice(0, 500)) {
       const p = pmap[c.cod_art] || {};
       const v = c.v || {};
-      const surse = Object.entries(c.stocAlte).filter(([l,s]) => s > 0 && l !== c.locatie).map(([l,s]) => `${l} (${s})`);
-      const surseTxt = surse.length ? '🔄 ' + surse.slice(0,3).join(', ') : '<span style="color:var(--red);">— niciun stoc</span>';
+      const entries = Object.entries(c.stocAlte).filter(([l,s]) => s > 0 && l !== c.locatie);
+      const mag = entries.filter(([l]) => !l.startsWith('TRANZIT ')).map(([l,s]) => `${l} (${s})`);
+      const tr  = entries.filter(([l]) => l.startsWith('TRANZIT ')).map(([l,s]) => `🚚 ${l.replace('TRANZIT ','')} (${s})`);
+      const parts = [...mag.slice(0,3), ...tr.slice(0,2)];
+      const surseTxt = parts.length ? parts.join(', ') : '<span style="color:var(--red);">— niciun stoc</span>';
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(c.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(c.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(c.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(v.total||0)}</td><td style="padding:8px; font-size:12px; color:var(--sub);">${v.ultima ? new Date(v.ultima).toLocaleDateString('ro-RO') : '—'}</td><td style="padding:8px; font-size:12px; color:var(--green);">${surseTxt}</td></tr>`;
     }
     html += '</tbody></table>';
@@ -1342,11 +1345,12 @@ async function loadTransferuri() {
       for (const p of PRIORITATE) {
         if (altele[p] > 0) { sursa = p; stocSursa = altele[p]; break; }
       }
-      // Altfel: magazinul cu cel mai mare stoc (care nu e destinatia)
+      // Altfel: magazinul cu cel mai mare stoc (exclude destinatia si TRANZIT)
       if (!sursa) {
         let best = null;
         for (const [loc, s] of Object.entries(altele)) {
           if (loc === l.loc) continue;
+          if (loc.startsWith('TRANZIT ')) continue; // tranzit nu poate fi sursa
           if (s > 0 && (!best || s > best[1])) best = [loc, s];
         }
         if (best) { sursa = best[0]; stocSursa = best[1]; }
