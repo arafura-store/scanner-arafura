@@ -1489,6 +1489,7 @@ async function loadVanzari() {
 // ── TRANSFERURI ──
 async function loadTransferuri() {
   const zile = parseInt(document.getElementById('tr-zile').value) || 30;
+  window._trZile = zile;
   const info = document.getElementById('tr-info');
   const res = document.getElementById('tr-results');
   info.textContent = 'calculez…';
@@ -1732,6 +1733,7 @@ function renderTransferuri() {
   let html = '';
 
   // Tabel principal sortat ROI cu toate detaliile
+  const zile = (window._trZile || parseInt(document.getElementById('tr-zile').value) || 30);
   html += `<table style="width:100%; font-size:12px; border-collapse:collapse;">
     <thead><tr style="background:#f8fafc;">
       <th style="padding:8px; text-align:left;">COD</th>
@@ -1741,8 +1743,8 @@ function renderTransferuri() {
       <th style="padding:8px; text-align:left;">Sursă</th>
       <th style="padding:8px; text-align:right;">Stoc sursă</th>
       <th style="padding:8px; text-align:left;">Destinație</th>
-      <th style="padding:8px; text-align:right;">Cantitate</th>
-      <th style="padding:8px; text-align:right;">Vânduri</th>
+      <th style="padding:8px; text-align:right;">Cantitate propusă</th>
+      <th style="padding:8px; text-align:right;">Vândut în ${zile} zile</th>
     </tr></thead><tbody>`;
   for (const p of propuneri) {
     const esteDepot = PRIORITATE.includes(p.sursa);
@@ -1767,18 +1769,20 @@ function exportTransferuriExcel() {
   const propuneri = getTransferuriFiltrat();
   if (!propuneri.length) { alert('Nicio propunere de exportat'); return; }
   // Coloane cerute: cod_bare | cod_intern | denumire | cantitate (+ sursa, dest, furnizor pentru context)
+  const zile = window._trZile || 30;
   const data = propuneri.map(p => ({
     'Cod bare': p.cod_bare || '',
     'Cod intern': p.cod,
     'Denumire': p.nume || '',
-    'Cantitate': Math.round(p.cant),
+    'Cantitate propusă': Math.round(p.cant),
     'Sursă': p.sursa,
     'Stoc sursă': p.disp || 0,
     'Destinație': p.dest,
+    [`Vândut în ${zile} zile`]: Math.round(p.vanzari_perioada || 0),
     'Furnizor': p.furnizor || '',
   }));
   const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:10},{wch:20},{wch:10},{wch:20},{wch:20}];
+  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:14},{wch:20},{wch:10},{wch:20},{wch:14},{wch:20}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Transferuri');
   // Numefisier cu data + filtre
