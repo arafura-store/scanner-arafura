@@ -400,7 +400,7 @@
       <!-- STOC NEGATIV -->
       <div class="page" id="page-negativ">
         <div class="card">
-          <h2>🔻 Stoc negativ (erori inventar)</h2>
+          <h2>🔻 Stoc negativ (erori la recepție · coduri de bare · scanat) <span id="neg-periada" style="font-weight:400; color:var(--blue); font-size:15px;"></span></h2>
           <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Produse cu stoc &lt; 0 în ultimul snapshot ERP — de regularizat (recepție lipsă, vânzare greșită, etc.)</p>
           <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
             <label style="font-size:13px; color:var(--sub);">Magazin / Depozit:</label>
@@ -1663,13 +1663,26 @@ let _negPmap = {};
 async function loadNegativ() {
   const info = document.getElementById('neg-info');
   const res = document.getElementById('neg-results');
+  const periadaEl = document.getElementById('neg-periada');
   info.textContent = 'caut…';
   res.innerHTML = '<div class="placeholder">…</div>';
+  if (periadaEl) periadaEl.textContent = '';
   try {
     const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
     const ds = await rs.json();
     const dataSnap = ds[0]?.data_snapshot;
     if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
+    // Preiau fisierul de stoc-negativ pentru a extrage perioada
+    try {
+      const rf = await fetch(`${API}/etl_logs?select=source_file&source_type=eq.balanta-neg&status=in.(success,partial)&order=started_at.desc&limit=1`, { headers: HEADERS });
+      const df = await rf.json();
+      if (df[0] && periadaEl) {
+        const fn = df[0].source_file;
+        // Format: "01.04.2026 - 21.04.2026 .xlsx" → "01.04.2026 - 21.04.2026"
+        const m = fn.match(/(\d{2}\.\d{2}\.\d{4}\s*-\s*\d{1,2}\.?\s*\d{2}\.\d{4})/);
+        if (m) periadaEl.textContent = ` · perioada ${m[1].replace(/\s+/g,' ')}`;
+      }
+    } catch {}
     let neg = [];
     let off = 0;
     while (true) {
