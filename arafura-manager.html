@@ -316,8 +316,18 @@
         <div class="card">
           <h2>📉 Lipsuri / Stoc mic</h2>
           <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-            <select id="lip-locatie" onchange="loadLipsuri()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+            <select id="lip-locatie" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
               <option value="">Toate locațiile</option>
+              <option>MARVIMEX</option>
+              <option>TOMIS 3</option>
+              <option>MEDGIDIA</option>
+              <option>NAVODARI</option>
+              <option>POARTA 6</option>
+              <option>BABADAG</option>
+              <option>BROTACEI</option>
+              <option>SHOWROOM</option>
+              <option>DEPOZIT PAPETARIE</option>
+              <option>DEPOZIT CARTE</option>
             </select>
             <select id="lip-zile" onchange="loadLipsuri()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
               <option value="30">Vânduri în ultimele 30 zile</option>
@@ -336,8 +346,18 @@
         <div class="card">
           <h2>📦 Stoc stagnant</h2>
           <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-            <select id="stag-locatie" onchange="loadStagnat()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+            <select id="stag-locatie" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
               <option value="">Toate locațiile</option>
+              <option>MARVIMEX</option>
+              <option>TOMIS 3</option>
+              <option>MEDGIDIA</option>
+              <option>NAVODARI</option>
+              <option>POARTA 6</option>
+              <option>BABADAG</option>
+              <option>BROTACEI</option>
+              <option>SHOWROOM</option>
+              <option>DEPOZIT PAPETARIE</option>
+              <option>DEPOZIT CARTE</option>
             </select>
             <select id="stag-zile" onchange="loadStagnat()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
               <option value="60">Fără vânzare > 60 zile</option>
@@ -1209,10 +1229,6 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'achizitii')  loadAchizitii();
       if (page === 'duplicate')  loadDuplicate();
       if (page === 'refresh')    loadRefresh();
-      // Magazine list also populates dropdowns for Lipsuri/Stagnat
-      if (page === 'lipsuri' || page === 'stagnat') {
-        if (!_loaded.has('magazine')) { _loaded.add('magazine'); loadMagazine(); }
-      }
     }
   });
 });
