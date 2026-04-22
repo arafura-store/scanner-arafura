@@ -1023,27 +1023,23 @@ async function loadStagnat() {
 
     const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
     const codeUnique = [...new Set(stoc.map(s => s.cod_art))];
-    info.textContent = `verific vânzări RPC (${codeUnique.length} coduri since ${sinceDate})…`;
-    const rpcRes = await fetch(`${API}/rpc/cods_vandute`, {
-      method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cods: codeUnique, since_date: sinceDate })
-    });
-    let vandutArr;
-    try { vandutArr = await rpcRes.json(); } catch { vandutArr = null; }
     const vandutRecent = new Set();
-    if (Array.isArray(vandutArr)) {
-      for (const v of vandutArr) if (v.cod_art) vandutRecent.add(String(v.cod_art));
-    } else {
-      info.textContent = `⚠ RPC eroare: ${JSON.stringify(vandutArr).slice(0,200)}`;
-      res.innerHTML = '<div class="placeholder">Eroare RPC cods_vandute. Vezi consola browser.</div>';
-      console.error('RPC error:', vandutArr);
-      return;
+    // Split in batches de 500 ca sa nu depasim 1000 randuri per RPC response
+    for (let i = 0; i < codeUnique.length; i += 500) {
+      const batch = codeUnique.slice(i, i+500);
+      info.textContent = `RPC ${i}/${codeUnique.length}…`;
+      try {
+        const rpcRes = await fetch(`${API}/rpc/cods_vandute`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cods: batch, since_date: sinceDate })
+        });
+        const arr = await rpcRes.json();
+        if (Array.isArray(arr)) for (const v of arr) if (v.cod_art) vandutRecent.add(String(v.cod_art));
+      } catch(e) { console.error('RPC batch error', e); }
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
-    const debugInfo = `stoc=${stoc.length} | vandute=${vandutRecent.size} | stagnat=${stagnat.length} | 406179: inStoc=${stoc.some(s => s.cod_art === '406179')}, inVandute=${vandutRecent.has('406179')}, inStagnat=${stagnat.some(s => s.cod_art === '406179')}`;
-    res.innerHTML = `<div style="background:#fef3c7; border:3px solid #ea580c; padding:16px; border-radius:10px; margin-bottom:16px; font-family:monospace; font-size:14px; color:#9a3412; font-weight:700;">🔧 DEBUG v3 (${new Date().toLocaleTimeString()}):<br>${debugInfo}</div>`;
-    info.textContent = '';
+    info.textContent = `${stagnat.length} stagnate din ${stoc.length} cu stoc (${vandutRecent.size} vandute recent)`;
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
     info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
