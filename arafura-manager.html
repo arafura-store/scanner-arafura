@@ -402,6 +402,12 @@
         <div class="card">
           <h2>🔻 Stoc negativ (erori inventar)</h2>
           <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Produse cu stoc &lt; 0 în ultimul snapshot ERP — de regularizat (recepție lipsă, vânzare greșită, etc.)</p>
+          <div style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
+            <label style="font-size:13px; color:var(--sub);">Magazin / Depozit:</label>
+            <select id="neg-locatie" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; min-width:240px;" onchange="renderNegativ()">
+              <option value="">— toate locațiile —</option>
+            </select>
+          </div>
           <div id="neg-info" style="margin-bottom:10px; color:var(--sub); font-size:13px;"></div>
           <div id="neg-results"><div class="placeholder">se încarcă…</div></div>
         </div>
@@ -1652,6 +1658,8 @@ async function loadTransferuri() {
 }
 
 // ── STOC NEGATIV ──
+let _negAll = [];
+let _negPmap = {};
 async function loadNegativ() {
   const info = document.getElementById('neg-info');
   const res = document.getElementById('neg-results');
@@ -1662,7 +1670,6 @@ async function loadNegativ() {
     const ds = await rs.json();
     const dataSnap = ds[0]?.data_snapshot;
     if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
-    // Fetch toate stocurile negative
     let neg = [];
     let off = 0;
     while (true) {
@@ -1677,21 +1684,45 @@ async function loadNegativ() {
     if (!neg.length) {
       info.textContent = '';
       res.innerHTML = '<div class="placeholder">✅ Nicio locație cu stoc negativ — totul OK!</div>';
+      document.getElementById('neg-locatie').innerHTML = '<option value="">— toate locațiile —</option>';
       return;
     }
-    const totalNeg = neg.reduce((s,x) => s + parseFloat(x.stoc||0), 0);
-    const valNeg = neg.reduce((s,x) => s + parseFloat(x.valoare_stoc||0), 0);
-    info.innerHTML = `<b>${neg.length}</b> rânduri cu stoc negativ · total <b style="color:var(--red);">${fmtNum(totalNeg)}</b> buc · valoare <b style="color:var(--red);">${fmtMoney(valNeg)}</b> RON`;
-    const pmap = await getProdMap([...new Set(neg.map(n => n.cod_art))]);
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare</th></tr></thead><tbody>';
-    for (const n of neg.slice(0, 500)) {
-      const p = pmap[n.cod_art] || {};
-      html += `<tr style="border-top:1px solid var(--border); cursor:pointer; background:#fef2f2;" onclick="loadProdusDetail('${escHtml(n.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(n.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(n.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:800; color:var(--red);">${fmtNum(n.stoc)}</td><td style="padding:8px; text-align:right; color:var(--red);">${Number(n.valoare_stoc||0).toFixed(2)}</td></tr>`;
-    }
-    html += '</tbody></table>';
-    if (neg.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 500 din ${neg.length}</div>`;
-    res.innerHTML = html;
+    _negAll = neg;
+    _negPmap = await getProdMap([...new Set(neg.map(n => n.cod_art))]);
+    // Populeaza dropdown cu locatii distincte
+    const locSet = new Map(); // locatie → count
+    for (const n of neg) locSet.set(n.locatie, (locSet.get(n.locatie)||0) + 1);
+    const locSorted = [...locSet.entries()].sort((a,b) => b[1] - a[1]);
+    const sel = document.getElementById('neg-locatie');
+    const prev = sel.value;
+    sel.innerHTML = `<option value="">— toate locațiile — (${neg.length})</option>` +
+      locSorted.map(([loc, cnt]) => `<option value="${escHtml(loc)}">${escHtml(loc)} (${cnt})</option>`).join('');
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+    renderNegativ();
   } catch(e) { res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+function renderNegativ() {
+  const info = document.getElementById('neg-info');
+  const res = document.getElementById('neg-results');
+  const sel = document.getElementById('neg-locatie');
+  const loc = sel.value;
+  const neg = loc ? _negAll.filter(n => n.locatie === loc) : _negAll;
+  if (!neg.length) {
+    info.textContent = '';
+    res.innerHTML = '<div class="placeholder">Nicio linie pe acest filtru</div>';
+    return;
+  }
+  const totalNeg = neg.reduce((s,x) => s + parseFloat(x.stoc||0), 0);
+  const valNeg = neg.reduce((s,x) => s + parseFloat(x.valoare_stoc||0), 0);
+  info.innerHTML = `<b>${neg.length}</b> rânduri cu stoc negativ${loc?` · locație: <b>${escHtml(loc)}</b>`:''} · total <b style="color:var(--red);">${fmtNum(totalNeg)}</b> buc · valoare <b style="color:var(--red);">${fmtMoney(valNeg)}</b> RON`;
+  let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare</th></tr></thead><tbody>';
+  for (const n of neg.slice(0, 500)) {
+    const p = _negPmap[n.cod_art] || {};
+    html += `<tr style="border-top:1px solid var(--border); cursor:pointer; background:#fef2f2;" onclick="loadProdusDetail('${escHtml(n.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(n.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(n.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:800; color:var(--red);">${fmtNum(n.stoc)}</td><td style="padding:8px; text-align:right; color:var(--red);">${Number(n.valoare_stoc||0).toFixed(2)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  if (neg.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 500 din ${neg.length}</div>`;
+  res.innerHTML = html;
 }
 
 // ── PRETURI & MARJA ──
