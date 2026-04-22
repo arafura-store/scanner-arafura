@@ -958,21 +958,21 @@ async function loadStagnat() {
     const r = await fetch(url, { headers: HEADERS });
     const stoc = await r.json();
     if (!stoc.length) { res.innerHTML = '<div class="placeholder">Nimic în stoc</div>'; return; }
-    info.textContent = `${stoc.length} produse cu stoc — verific vânzări recente…`;
+    info.textContent = `${stoc.length} produse cu stoc — verific vânzări recente (poate dura puțin)…`;
 
     const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
-    // Fetch DISTINCT cod_art cu vanzari recent — paginat (PostgREST max 1000/query)
+    // Check per-batch: pentru fiecare batch de cod_art, IF are vanzari recent → marcheaza.
+    // Folosim agregare PostgREST (returneaza 1 rand per cod_art cu sales).
     const vandutRecent = new Set();
-    let off = 0;
-    while (true) {
-      const vu = `${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art&order=cod_art.asc&limit=1000&offset=${off}`;
-      const rv = await fetch(vu, { headers: { ...HEADERS, 'Range': `${off}-${off+999}` } });
+    const codeUnique = [...new Set(stoc.map(s => s.cod_art))];
+    for (let i = 0; i < codeUnique.length; i += 100) {
+      const batch = codeUnique.slice(i, i+100);
+      const codStr = batch.map(c => `"${c}"`).join(',');
+      const vu = `${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri.sum()`;
+      const rv = await fetch(vu, { headers: { ...HEADERS, 'Range': '0-999' } });
       const rows = await rv.json();
-      if (!Array.isArray(rows) || !rows.length) break;
-      for (const v of rows) vandutRecent.add(v.cod_art);
-      if (rows.length < 1000) break;
-      off += 1000;
-      if (off > 200000) break; // safety
+      for (const v of rows) if (v.cod_art) vandutRecent.add(v.cod_art);
+      info.textContent = `progres: ${Math.min(i+100, codeUnique.length)}/${codeUnique.length} verificate…`;
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(s.cod_art));
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
