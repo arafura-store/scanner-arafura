@@ -475,6 +475,30 @@ const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${wind
 const API = window.SUPABASE_URL + '/rest/v1';
 
 let currentUser = null;
+const SESSION_KEY = 'arafura_manager_session';
+
+function saveSession(user) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 7*24*60*60*1000 }));
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const { user, expires } = JSON.parse(raw);
+    if (!user || !expires || Date.now() > expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return user;
+  } catch { return null; }
+}
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+function enterApp(user) {
+  currentUser = user;
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-app').style.display = 'flex';
+  document.getElementById('user-nume').textContent = currentUser.nume;
+  document.getElementById('user-avatar').textContent = (currentUser.nume[0] || '?').toUpperCase();
+  loadDashboard();
+}
 
 // ── LOGIN ──
 async function onLoginPin() {
@@ -489,23 +513,26 @@ async function onLoginPin() {
       document.getElementById('login-pin').value = '';
       return;
     }
-    currentUser = data[0];
-    document.getElementById('screen-login').style.display = 'none';
-    document.getElementById('screen-app').style.display = 'flex';
-    document.getElementById('user-nume').textContent = currentUser.nume;
-    document.getElementById('user-avatar').textContent = (currentUser.nume[0] || '?').toUpperCase();
-    loadDashboard();
+    saveSession(data[0]);
+    enterApp(data[0]);
   } catch (e) {
     err.textContent = 'Eroare conexiune';
   }
 }
 
 function logout() {
+  clearSession();
   currentUser = null;
   document.getElementById('screen-app').style.display = 'none';
   document.getElementById('screen-login').style.display = '';
   document.getElementById('login-pin').value = '';
 }
+
+// Auto-login la page load daca sesiune valida
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = loadSession();
+  if (saved) enterApp(saved);
+});
 
 // ── HELPERS ──
 function escHtml(s) {
