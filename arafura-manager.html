@@ -656,15 +656,49 @@ async function doSearch() {
       res.innerHTML = '<div class="placeholder">Niciun rezultat. Încearcă alți termeni…</div>';
       return;
     }
+    info.textContent = `${data.length} rezultate · încarc stoc…`;
+    // Fetch stoc per locatie pentru aceste produse (ultimul snapshot)
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+    const stocMap = {}; // cod → {locatie: stoc}
+    if (dataSnap) {
+      const codes = data.map(p => p.cod_art);
+      for (let i = 0; i < codes.length; i += 50) {
+        const codStr = codes.slice(i,i+50).map(c => `"${c}"`).join(',');
+        const rx = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&stoc=gt.0&select=cod_art,locatie,stoc`, { headers: HEADERS });
+        const rows = await rx.json();
+        if (Array.isArray(rows)) for (const r of rows) {
+          if (!stocMap[r.cod_art]) stocMap[r.cod_art] = {};
+          stocMap[r.cod_art][r.locatie] = parseFloat(r.stoc)||0;
+        }
+      }
+    }
     info.textContent = `${data.length} rezultate (max 50 afișate)`;
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">COD</th><th style="padding:8px;">Cod bare</th><th style="padding:8px;">Nume produs</th><th style="padding:8px;">UM</th><th style="padding:8px;">Furnizor</th></tr></thead><tbody>';
+    const ABREV = {
+      'MARVIMEX':'MV', 'TOMIS 3':'T3', 'MEDGIDIA':'MG', 'NAVODARI':'NV',
+      'POARTA 6':'P6', 'BABADAG':'BB', 'BROTACEI':'BR', 'SHOWROOM':'SH',
+      'DEPOZIT PAPETARIE':'DP', 'DEPOZIT CARTE':'DC',
+    };
+    const fmtStocRow = (cod) => {
+      const m = stocMap[cod] || {};
+      const entries = Object.entries(m).filter(([l,s]) => s > 0);
+      if (!entries.length) return '<span style="color:var(--red); font-size:11px;">— stoc 0</span>';
+      const total = entries.reduce((s,[,v]) => s + v, 0);
+      entries.sort((a,b) => b[1] - a[1]);
+      const items = entries.map(([l,s]) => {
+        const a = ABREV[l] || l.substring(0,3);
+        return `<span title="${escHtml(l)}" style="background:#e0f2fe; color:#0369a1; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:600; white-space:nowrap;">${a}:<b>${fmtNum(s)}</b></span>`;
+      }).join(' ');
+      return `<span style="font-size:11px; color:var(--sub); margin-right:6px;">Σ <b style="color:var(--navy);">${fmtNum(total)}</b></span>${items}`;
+    };
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">COD</th><th style="padding:8px;">Nume produs</th><th style="padding:8px;">Furnizor</th><th style="padding:8px;">Stoc per locație</th></tr></thead><tbody>';
     for (const p of data) {
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(p.cod_art)}')">
-        <td style="padding:8px; font-family:monospace; font-weight:700; color:var(--blue);">${escHtml(p.cod_art)}</td>
-        <td style="padding:8px; font-family:monospace; font-size:12px;">${escHtml(p.cod_bare||'')}</td>
+        <td style="padding:8px; font-family:monospace; font-weight:700; color:var(--blue); white-space:nowrap;">${escHtml(p.cod_art)}<div style="font-size:10px; color:var(--sub); font-weight:400;">${escHtml(p.cod_bare||'')}</div></td>
         <td style="padding:8px;">${escHtml(p.nume_art||'')}</td>
-        <td style="padding:8px;">${escHtml(p.um||'')}</td>
         <td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td>
+        <td style="padding:8px;">${fmtStocRow(p.cod_art)}</td>
       </tr>`;
     }
     html += '</tbody></table>';
