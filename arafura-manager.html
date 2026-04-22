@@ -1756,7 +1756,7 @@ function renderTransferuri() {
       <td style="padding:6px; font-size:11px;">${escHtml(p.furnizor || '')}</td>
       <td style="padding:6px;"><span style="background:${sursaColor}; padding:2px 6px; border-radius:3px; font-size:11px; font-weight:600;">${escHtml(p.sursa)}</span></td>
       <td style="padding:6px; text-align:right; font-weight:700; color:var(--navy);">${fmtNum(p.disp || 0)}</td>
-      <td style="padding:6px; font-weight:600;">${escHtml(p.dest)}</td>
+      <td style="padding:6px; font-weight:600;">${escHtml(p.dest)}<br><span style="font-size:10px; color:var(--red); font-weight:400;">stoc 0</span></td>
       <td style="padding:6px; text-align:right; font-weight:800; color:var(--green); background:#dcfce7;">${fmtNum(p.cant)}</td>
       <td style="padding:6px; text-align:right; color:var(--sub);">${fmtNum(Math.round(p.vanzari_perioada))}</td>
     </tr>`;
