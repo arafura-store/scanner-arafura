@@ -683,6 +683,37 @@ async function loadProdusDetail(cod) {
   }
 }
 
+// ── PRODUS HELPER (fallback nume din facturi) ──
+async function getProdMap(codes) {
+  const pmap = {};
+  if (!codes.length) return pmap;
+  // 1. Prima sursa: produse
+  for (let i = 0; i < codes.length; i += 200) {
+    const codStr = codes.slice(i,i+200).map(c => `"${c}"`).join(',');
+    const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor,cod_bare`, { headers: HEADERS });
+    const prods = await rp.json();
+    for (const p of prods) pmap[p.cod_art] = p;
+  }
+  // 2. Codes lipsa → fallback facturi
+  const missing = codes.filter(c => !pmap[c] || !pmap[c].nume_art);
+  if (missing.length > 0) {
+    for (let i = 0; i < missing.length; i += 200) {
+      const codStr = missing.slice(i,i+200).map(c => `"${c}"`).join(',');
+      const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,nume_art,nume_partener&order=data_factura.desc`, { headers: HEADERS });
+      const fact = await rf.json();
+      for (const f of fact) {
+        if (!pmap[f.cod_art]) {
+          pmap[f.cod_art] = { cod_art: f.cod_art, nume_art: f.nume_art, furnizor: f.nume_partener };
+        } else if (!pmap[f.cod_art].nume_art) {
+          pmap[f.cod_art].nume_art = f.nume_art;
+          if (!pmap[f.cod_art].furnizor) pmap[f.cod_art].furnizor = f.nume_partener;
+        }
+      }
+    }
+  }
+  return pmap;
+}
+
 // ── PER MAGAZIN ──
 async function loadMagazine() {
   try {
@@ -890,14 +921,9 @@ async function loadLipsuri() {
     }
     info.textContent = `${lipsa.length} lipsuri ${loc ? 'la ' + loc : '(global)'} (vândut în ${zile} zile)`;
 
-    // 4. Info produse
-    const pmap = {};
-    for (let i = 0; i < lipsa.length; i += 200) {
-      const codStr = lipsa.slice(i,i+200).map(c => `"${c.cod_art}"`).join(',');
-      const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor`, { headers: HEADERS });
-      const prods = await rp.json();
-      for (const p of prods) pmap[p.cod_art] = p;
-    }
+    // 4. Info produse (cu fallback la facturi pentru nume)
+    const allCods = lipsa.map(c => c.cod_art);
+    const pmap = await getProdMap(allCods);
     lipsa.sort((a,b) => (vanzari[b.cod_art]?.total || 0) - (vanzari[a.cod_art]?.total || 0));
 
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vânduri ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
