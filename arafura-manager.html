@@ -973,26 +973,37 @@ async function loadStagnat() {
     const ds = await rs.json();
     const dataSnap = ds[0]?.data_snapshot;
     if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
-    let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&valoare_stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&order=valoare_stoc.desc&limit=5000`;
-    if (loc) url += `&locatie=eq.${encodeURIComponent(loc)}`;
-    const r = await fetch(url, { headers: HEADERS });
-    const stoc = await r.json();
+    // Paginez stocuri pentru ca PostgREST cap la 1000
+    let stoc = [];
+    let offStoc = 0;
+    while (true) {
+      let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&valoare_stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&order=valoare_stoc.desc&limit=1000&offset=${offStoc}`;
+      if (loc) url += `&locatie=eq.${encodeURIComponent(loc)}`;
+      const r = await fetch(url, { headers: HEADERS });
+      const rows = await r.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      stoc = stoc.concat(rows);
+      offStoc += 1000;
+      if (rows.length < 1000) break;
+      if (offStoc > 50000) break; // safety
+    }
     if (!stoc.length) { res.innerHTML = '<div class="placeholder">Nimic în stoc</div>'; return; }
     info.textContent = `${stoc.length} produse cu stoc — verific vânzări recente (poate dura puțin)…`;
 
     const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
-    // Check per-batch: pentru fiecare batch de cod_art, IF are vanzari recent → marcheaza.
-    // Folosim agregare PostgREST (returneaza 1 rand per cod_art cu sales).
+    // Per batch cod_art: query miscari, dedupe în JS (fără agregare PostgREST)
     const vandutRecent = new Set();
     const codeUnique = [...new Set(stoc.map(s => s.cod_art))];
-    for (let i = 0; i < codeUnique.length; i += 100) {
-      const batch = codeUnique.slice(i, i+100);
+    for (let i = 0; i < codeUnique.length; i += 80) {
+      const batch = codeUnique.slice(i, i+80);
       const codStr = batch.map(c => `"${c}"`).join(',');
-      const vu = `${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri.sum()`;
+      const vu = `${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art&limit=1000`;
       const rv = await fetch(vu, { headers: { ...HEADERS, 'Range': '0-999' } });
       const rows = await rv.json();
-      for (const v of rows) if (v.cod_art) vandutRecent.add(v.cod_art);
-      info.textContent = `progres: ${Math.min(i+100, codeUnique.length)}/${codeUnique.length} verificate…`;
+      if (Array.isArray(rows)) {
+        for (const v of rows) if (v.cod_art) vandutRecent.add(v.cod_art);
+      }
+      info.textContent = `progres: ${Math.min(i+80, codeUnique.length)}/${codeUnique.length} verificate…`;
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(s.cod_art));
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
