@@ -430,8 +430,10 @@
           </div>
           <div id="tr-filtre" style="display:none; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center; padding:12px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
             <strong style="font-size:13px; color:var(--sub);">🔍 Filtre:</strong>
-            <select id="tr-f-furnizor" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:160px;" onchange="renderTransferuri()"><option value="">— toți furnizorii —</option></select>
-            <select id="tr-f-familie" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:160px;" onchange="renderTransferuri()"><option value="">— toate familiile —</option></select>
+            <input list="tr-f-furnizor-list" id="tr-f-furnizor" placeholder="🔍 Caută furnizor…" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:200px;" oninput="onTransferFiltruInput()">
+            <datalist id="tr-f-furnizor-list"></datalist>
+            <input list="tr-f-familie-list" id="tr-f-familie" placeholder="🔍 Caută familie…" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:180px;" oninput="onTransferFiltruInput()">
+            <datalist id="tr-f-familie-list"></datalist>
             <select id="tr-f-dest" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:140px;" onchange="renderTransferuri()"><option value="">— toate destinațiile —</option></select>
             <select id="tr-f-sursa" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; min-width:140px;" onchange="renderTransferuri()"><option value="">— toate sursele —</option></select>
             <button onclick="exportTransferuriExcel()" class="btn" style="padding:7px 14px; border-radius:6px; border:none; background:var(--green); color:white; cursor:pointer; font-weight:600; font-size:13px;">📥 Export Excel</button>
@@ -1651,32 +1653,46 @@ function populateTransferFiltre(propuneri) {
       items.map(([v, n]) => `<option value="${escHtml(v)}">${escHtml(v)} (${n})</option>`).join('');
     if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
   };
-  fillSel('tr-f-furnizor', cnt(propuneri, 'furnizor'), '— toți furnizorii —');
+  const fillDatalist = (id, items) => {
+    const dl = document.getElementById(id);
+    dl.innerHTML = items.map(([v, n]) => `<option value="${escHtml(v)}">${escHtml(v)} (${n})</option>`).join('');
+  };
+  // dropdown-uri scurte (locații)
   fillSel('tr-f-dest', cnt(propuneri, 'dest'), '— toate destinațiile —');
   fillSel('tr-f-sursa', cnt(propuneri, 'sursa'), '— toate sursele —');
-  // Familii: nu avem direct la nivel de propunere, derivam din primul caracter al cod_art (familia in SAGA)
-  // Simplificare: extragem prefixul (primele 3 caractere) drept "cod_familie"
+  // input + datalist — typeahead pentru furnizor și familie
+  fillDatalist('tr-f-furnizor-list', cnt(propuneri, 'furnizor'));
   const famArr = cnt(propuneri.map(p => ({ familie: window._famMap?.[p.cod.substring(0, 3)] || p.cod.substring(0, 3) })), 'familie');
-  fillSel('tr-f-familie', famArr, '— toate familiile —');
+  fillDatalist('tr-f-familie-list', famArr);
+}
+
+let _trFiltruTimer = null;
+function onTransferFiltruInput() {
+  clearTimeout(_trFiltruTimer);
+  _trFiltruTimer = setTimeout(renderTransferuri, 200);
 }
 
 function resetTransferuriFiltre() {
-  ['tr-f-furnizor', 'tr-f-familie', 'tr-f-dest', 'tr-f-sursa'].forEach(id => document.getElementById(id).value = '');
+  ['tr-f-furnizor', 'tr-f-familie', 'tr-f-dest', 'tr-f-sursa'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+  });
   renderTransferuri();
 }
 
 function getTransferuriFiltrat() {
-  const ff = document.getElementById('tr-f-furnizor').value;
-  const fm = document.getElementById('tr-f-familie').value;
+  const ff = document.getElementById('tr-f-furnizor').value.trim().toLowerCase();
+  const fm = document.getElementById('tr-f-familie').value.trim().toLowerCase();
   const fd = document.getElementById('tr-f-dest').value;
   const fs = document.getElementById('tr-f-sursa').value;
   return (window._trProp || []).filter(p => {
-    if (ff && p.furnizor !== ff) return false;
     if (fd && p.dest !== fd) return false;
     if (fs && p.sursa !== fs) return false;
+    // Furnizor & familie: match parțial case-insensitive
+    if (ff && !(p.furnizor || '').toLowerCase().includes(ff)) return false;
     if (fm) {
-      const fam = window._famMap?.[p.cod.substring(0, 3)] || p.cod.substring(0, 3);
-      if (fam !== fm) return false;
+      const fam = (window._famMap?.[p.cod.substring(0, 3)] || p.cod.substring(0, 3)).toLowerCase();
+      if (!fam.includes(fm)) return false;
     }
     return true;
   });
