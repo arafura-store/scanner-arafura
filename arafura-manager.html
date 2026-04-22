@@ -313,12 +313,43 @@
 
       <!-- LIPSURI -->
       <div class="page" id="page-lipsuri">
-        <div class="card"><h2>📉 Lipsuri / Stoc mic</h2><div class="placeholder">Filtru: carte / non-carte / per magazin · Listă alerte cu acțiuni rapide (transfer, comandă)</div></div>
+        <div class="card">
+          <h2>📉 Lipsuri / Stoc mic</h2>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+            <select id="lip-locatie" onchange="loadLipsuri()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="">Toate locațiile</option>
+            </select>
+            <select id="lip-zile" onchange="loadLipsuri()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="30">Vânduri în ultimele 30 zile</option>
+              <option value="60">60 zile</option>
+              <option value="90">90 zile</option>
+            </select>
+            <button onclick="loadLipsuri()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Încarcă</button>
+            <span id="lip-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="lip-results"><div class="placeholder">Selectează filtrele și apasă Încarcă</div></div>
+        </div>
       </div>
 
       <!-- STAGNAT -->
       <div class="page" id="page-stagnat">
-        <div class="card"><h2>📦 Stoc stagnant</h2><div class="placeholder">Filtru zile fără vânzare · valoare blocată · sugestii (returnări, lichidări)</div></div>
+        <div class="card">
+          <h2>📦 Stoc stagnant</h2>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+            <select id="stag-locatie" onchange="loadStagnat()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="">Toate locațiile</option>
+            </select>
+            <select id="stag-zile" onchange="loadStagnat()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="60">Fără vânzare > 60 zile</option>
+              <option value="90">> 90 zile</option>
+              <option value="180" selected>> 180 zile (6 luni)</option>
+              <option value="365">> 1 an</option>
+            </select>
+            <button onclick="loadStagnat()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Încarcă</button>
+            <span id="stag-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="stag-results"><div class="placeholder">Selectează filtrele și apasă Încarcă</div></div>
+        </div>
       </div>
 
       <!-- TRANSFERURI -->
@@ -343,12 +374,30 @@
 
       <!-- MAGAZINE -->
       <div class="page" id="page-magazine">
-        <div class="card"><h2>🏪 Per Magazin</h2><div class="placeholder">Performance per magazin · comparativ · top sellers locali · lipsuri per magazin</div></div>
+        <div class="card">
+          <h2>🏪 Performanță per Magazin</h2>
+          <div id="mag-stats"><div class="placeholder">se încarcă…</div></div>
+        </div>
+        <div class="card">
+          <h2>🔍 Detalii pe magazin</h2>
+          <select id="mag-select" onchange="loadMagDetail()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; min-width:220px;">
+            <option value="">Alege magazin…</option>
+          </select>
+          <div id="mag-detail" style="margin-top:14px;"></div>
+        </div>
       </div>
 
       <!-- FURNIZORI -->
       <div class="page" id="page-furnizori">
-        <div class="card"><h2>🏭 Per Furnizor</h2><div class="placeholder">Top furnizori · volum · valoare · ultime facturi · prețuri medii · scadențe</div></div>
+        <div class="card">
+          <h2>🏭 Top Furnizori (după volum facturi)</h2>
+          <div id="furn-top"><div class="placeholder">se încarcă…</div></div>
+        </div>
+        <div class="card">
+          <h2>🔍 Detalii pe furnizor</h2>
+          <input type="text" id="furn-search" placeholder="Caută furnizor…" oninput="filterFurnizori()" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; margin-bottom:12px;">
+          <div id="furn-list"></div>
+        </div>
       </div>
 
       <!-- FAMILII -->
@@ -608,6 +657,250 @@ async function loadProdusDetail(cod) {
   }
 }
 
+// ── PER MAGAZIN ──
+async function loadMagazine() {
+  // Top stoc per locatie din ultima balanta
+  try {
+    const r = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const d = await r.json();
+    if (!d || !d[0]) return;
+    const dataSnap = d[0].data_snapshot;
+    // Aggregare per locatie via PostgREST
+    const r2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&select=locatie,stoc.sum(),valoare_stoc.sum(),cod_art.count()&stoc=gt.0`, { headers: HEADERS });
+    const arr = await r2.json();
+    arr.sort((a,b) => (b.sum||0) - (a.sum||0));
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:10px;">Locație</th><th style="padding:10px; text-align:right;">Produse</th><th style="padding:10px; text-align:right;">Stoc total</th><th style="padding:10px; text-align:right;">Valoare blocată</th></tr></thead><tbody>';
+    let totalStoc = 0, totalVal = 0, totalProd = 0;
+    for (const l of arr) {
+      // PostgREST aggregate names depend on version — handle both
+      const stoc = parseFloat(l.sum_stoc ?? l.stoc?.sum ?? l.stoc ?? l.sum) || 0;
+      const val = parseFloat(l.sum_valoare_stoc ?? l.valoare_stoc?.sum ?? l.valoare_stoc ?? 0) || 0;
+      const cnt = parseInt(l.count_cod_art ?? l.cod_art?.count ?? l.count) || 0;
+      totalStoc += stoc; totalVal += val; totalProd += cnt;
+      html += `<tr style="border-top:1px solid var(--border);"><td style="padding:10px; font-weight:600;">${escHtml(l.locatie||'')}</td><td style="padding:10px; text-align:right;">${fmtNum(cnt)}</td><td style="padding:10px; text-align:right; font-weight:700;">${fmtNum(stoc)}</td><td style="padding:10px; text-align:right; color:var(--green); font-weight:700;">${fmtMoney(val)}</td></tr>`;
+    }
+    html += `<tr style="border-top:2px solid var(--navy); background:#f1f5f9;"><td style="padding:10px; font-weight:800;">TOTAL</td><td style="padding:10px; text-align:right; font-weight:800;">${fmtNum(totalProd)}</td><td style="padding:10px; text-align:right; font-weight:800;">${fmtNum(totalStoc)}</td><td style="padding:10px; text-align:right; font-weight:800; color:var(--green);">${fmtMoney(totalVal)} RON</td></tr>`;
+    html += '</tbody></table>';
+    document.getElementById('mag-stats').innerHTML = html;
+    // Populate dropdown
+    const sel = document.getElementById('mag-select');
+    const exist = new Set(['']);
+    for (const opt of sel.options) exist.add(opt.value);
+    for (const l of arr) {
+      if (l.locatie && !exist.has(l.locatie)) {
+        const o = document.createElement('option');
+        o.value = l.locatie; o.textContent = l.locatie;
+        sel.appendChild(o);
+        exist.add(l.locatie);
+      }
+    }
+    // Mai populeaza si filtrele Lipsuri/Stagnat
+    for (const sid of ['lip-locatie', 'stag-locatie']) {
+      const s = document.getElementById(sid);
+      if (s && s.options.length <= 1) {
+        for (const l of arr) {
+          if (l.locatie) {
+            const o = document.createElement('option');
+            o.value = l.locatie; o.textContent = l.locatie;
+            s.appendChild(o);
+          }
+        }
+      }
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function loadMagDetail() {
+  const loc = document.getElementById('mag-select').value;
+  const det = document.getElementById('mag-detail');
+  if (!loc) { det.innerHTML = ''; return; }
+  det.innerHTML = '<div class="placeholder">se încarcă top 30 produse…</div>';
+  try {
+    const r = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const dd = await r.json();
+    if (!dd || !dd[0]) return;
+    const r2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dd[0].data_snapshot}&locatie=eq.${encodeURIComponent(loc)}&stoc=gt.0&select=cod_art,stoc,cost,valoare_stoc&order=valoare_stoc.desc&limit=30`, { headers: HEADERS });
+    const arr = await r2.json();
+    if (!arr.length) { det.innerHTML = '<div class="placeholder">Nimic</div>'; return; }
+    // Get nume produse
+    const codes = arr.map(a => `"${a.cod_art}"`).join(',');
+    const rp = await fetch(`${API}/produse?cod_art=in.(${codes})&select=cod_art,nume_art,cod_bare,furnizor`, { headers: HEADERS });
+    const prods = await rp.json();
+    const pmap = Object.fromEntries(prods.map(p => [p.cod_art, p]));
+    let html = `<h3 style="font-size:14px; color:var(--navy); margin-bottom:10px;">Top 30 produse după valoare la <b>${escHtml(loc)}</b></h3>`;
+    html += '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Cost</th><th style="padding:8px; text-align:right;">Valoare</th></tr></thead><tbody>';
+    for (const a of arr) {
+      const p = pmap[a.cod_art] || {};
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue); font-weight:700;">${escHtml(a.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(a.stoc)}</td><td style="padding:8px; text-align:right;">${Number(a.cost||0).toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:var(--green);">${fmtMoney(a.valoare_stoc)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    det.innerHTML = html;
+  } catch(e) { det.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+// ── PER FURNIZOR ──
+let _allFurnizori = [];
+async function loadFurnizori() {
+  const el = document.getElementById('furn-top');
+  el.innerHTML = '<div class="placeholder">se încarcă…</div>';
+  try {
+    // Top furnizori după nr facturi (din facturi)
+    const r = await fetch(`${API}/facturi?select=nume_partener,cod_partener,valoare_fara_tva.sum(),cantitate.sum(),id.count()&nume_partener=not.is.null`, { headers: HEADERS });
+    const arr = await r.json();
+    arr.sort((a,b) => (b.sum_valoare_fara_tva || b.valoare_fara_tva?.sum || b.sum || 0) - (a.sum_valoare_fara_tva || a.valoare_fara_tva?.sum || a.sum || 0));
+    _allFurnizori = arr;
+    renderFurnizoriTop(arr.slice(0, 30));
+    renderFurnizoriList(arr);
+  } catch(e) { el.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+function renderFurnizoriTop(arr) {
+  let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:10px;">Furnizor</th><th style="padding:10px; text-align:right;">Facturi</th><th style="padding:10px; text-align:right;">Cantitate</th><th style="padding:10px; text-align:right;">Valoare fără TVA</th></tr></thead><tbody>';
+  for (const f of arr) {
+    const val = parseFloat(f.sum_valoare_fara_tva ?? f.valoare_fara_tva?.sum ?? f.sum) || 0;
+    const cnt = parseFloat(f.sum_cantitate ?? f.cantitate?.sum ?? 0) || 0;
+    const nrf = parseInt(f.count_id ?? f.id?.count ?? 0) || 0;
+    html += `<tr style="border-top:1px solid var(--border);"><td style="padding:10px; font-weight:600;">${escHtml(f.nume_partener||'')}</td><td style="padding:10px; text-align:right;">${fmtNum(nrf)}</td><td style="padding:10px; text-align:right;">${fmtNum(cnt)}</td><td style="padding:10px; text-align:right; font-weight:700; color:var(--green);">${fmtMoney(val)} RON</td></tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('furn-top').innerHTML = html;
+}
+function renderFurnizoriList(arr) {
+  document.getElementById('furn-list').innerHTML = '<div style="color:var(--sub); font-size:13px;">' + arr.length + ' furnizori în total</div>';
+}
+function filterFurnizori() {
+  const q = document.getElementById('furn-search').value.trim().toLowerCase();
+  const list = q ? _allFurnizori.filter(f => (f.nume_partener||'').toLowerCase().includes(q)) : _allFurnizori.slice(0, 30);
+  renderFurnizoriTop(list.slice(0, 100));
+}
+
+// ── LIPSURI ──
+async function loadLipsuri() {
+  const loc = document.getElementById('lip-locatie').value;
+  const zile = parseInt(document.getElementById('lip-zile').value) || 30;
+  const info = document.getElementById('lip-info');
+  const res = document.getElementById('lip-results');
+  info.textContent = 'caut…';
+  res.innerHTML = '<div class="placeholder">se încarcă…</div>';
+  try {
+    // Latest snapshot
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+    if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
+    // Find products with stock=0 at this snapshot
+    let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=eq.0&select=cod_art,locatie&limit=5000`;
+    if (loc) url += `&locatie=eq.${encodeURIComponent(loc)}`;
+    const r = await fetch(url, { headers: HEADERS });
+    const lipsa = await r.json();
+    if (!lipsa.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs cu stoc 0</div>'; return; }
+    // Group cod_art for batch query
+    const codeUnique = [...new Set(lipsa.map(l => l.cod_art))];
+    info.textContent = `${codeUnique.length} produse cu stoc 0 — verific vânzări recente…`;
+
+    // Sales last N days per cod_art
+    const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
+    const vanzari = {};
+    // Batched fetch
+    for (let i = 0; i < codeUnique.length; i += 200) {
+      const batch = codeUnique.slice(i, i+200);
+      const codStr = batch.map(c => `"${c}"`).join(',');
+      const vu = `${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data&limit=10000`;
+      const rv = await fetch(vu, { headers: HEADERS });
+      const rows = await rv.json();
+      for (const v of rows) {
+        if (!vanzari[v.cod_art]) vanzari[v.cod_art] = { total: 0, ultima: null };
+        vanzari[v.cod_art].total += parseFloat(v.iesiri||0);
+        if (!vanzari[v.cod_art].ultima || v.data > vanzari[v.cod_art].ultima) vanzari[v.cod_art].ultima = v.data;
+      }
+    }
+    // Filter LIPSA candidates
+    const candidates = lipsa.filter(l => vanzari[l.cod_art] && vanzari[l.cod_art].total > 0);
+    if (!candidates.length) { info.textContent = '0 lipsuri reale'; res.innerHTML = '<div class="placeholder">Nicio lipsă (stoc 0 dar fără vânzări recente)</div>'; return; }
+    info.textContent = `${candidates.length} lipsuri (stoc 0 + vândut în ${zile} zile)`;
+    // Get product info
+    const codeC = [...new Set(candidates.map(c => c.cod_art))];
+    const codStr = codeC.map(c => `"${c}"`).join(',');
+    const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor,cod_bare`, { headers: HEADERS });
+    const prods = await rp.json();
+    const pmap = Object.fromEntries(prods.map(p => [p.cod_art, p]));
+    // Fetch stocuri >0 pentru aceste coduri (alte locatii cu stoc)
+    const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&stoc=gt.0&select=cod_art,locatie,stoc&limit=10000`, { headers: HEADERS });
+    const surse = await rs2.json();
+    const sursaMap = {};
+    for (const s of surse) {
+      if (!sursaMap[s.cod_art]) sursaMap[s.cod_art] = [];
+      sursaMap[s.cod_art].push(`${s.locatie} (${s.stoc})`);
+    }
+    candidates.sort((a,b) => (vanzari[b.cod_art]?.total || 0) - (vanzari[a.cod_art]?.total || 0));
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vânzări ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
+    for (const c of candidates.slice(0, 500)) {
+      const p = pmap[c.cod_art] || {};
+      const v = vanzari[c.cod_art] || {};
+      const surse = (sursaMap[c.cod_art] || []).filter(x => !x.startsWith(c.locatie + ' '));
+      const surseTxt = surse.length ? '🔄 ' + surse.slice(0,3).join(', ') : '<span style="color:var(--red);">— niciun stoc</span>';
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(c.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(c.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(c.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(v.total||0)}</td><td style="padding:8px; font-size:12px; color:var(--sub);">${v.ultima ? new Date(v.ultima).toLocaleDateString('ro-RO') : '—'}</td><td style="padding:8px; font-size:12px; color:var(--green);">${surseTxt}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    if (candidates.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px; text-align:center;">⚠ Afișate doar primele 500 din ${candidates.length}. Folosește filtre.</div>`;
+    res.innerHTML = html;
+  } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+// ── STAGNAT ──
+async function loadStagnat() {
+  const loc = document.getElementById('stag-locatie').value;
+  const zile = parseInt(document.getElementById('stag-zile').value) || 180;
+  const info = document.getElementById('stag-info');
+  const res = document.getElementById('stag-results');
+  info.textContent = 'caut…';
+  res.innerHTML = '<div class="placeholder">se încarcă…</div>';
+  try {
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+    if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
+    let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&valoare_stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&order=valoare_stoc.desc&limit=5000`;
+    if (loc) url += `&locatie=eq.${encodeURIComponent(loc)}`;
+    const r = await fetch(url, { headers: HEADERS });
+    const stoc = await r.json();
+    if (!stoc.length) { res.innerHTML = '<div class="placeholder">Nimic în stoc</div>'; return; }
+    info.textContent = `${stoc.length} produse cu stoc — verific vânzări recente…`;
+
+    const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
+    const codeUnique = [...new Set(stoc.map(s => s.cod_art))];
+    const vandutRecent = new Set();
+    for (let i = 0; i < codeUnique.length; i += 200) {
+      const batch = codeUnique.slice(i, i+200);
+      const codStr = batch.map(c => `"${c}"`).join(',');
+      const vu = `${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art&limit=10000`;
+      const rv = await fetch(vu, { headers: HEADERS });
+      const rows = await rv.json();
+      for (const v of rows) vandutRecent.add(v.cod_art);
+    }
+    const stagnat = stoc.filter(s => !vandutRecent.has(s.cod_art));
+    if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
+    let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
+    info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
+    // Product info
+    const codeC = [...new Set(stagnat.map(c => c.cod_art))];
+    const pmap = {};
+    for (let i = 0; i < codeC.length; i += 200) {
+      const codStr = codeC.slice(i,i+200).map(c => `"${c}"`).join(',');
+      const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor`, { headers: HEADERS });
+      const prods = await rp.json();
+      for (const p of prods) pmap[p.cod_art] = p;
+    }
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare blocată</th></tr></thead><tbody>';
+    for (const s of stagnat.slice(0, 500)) {
+      const p = pmap[s.cod_art] || {};
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(s.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(s.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(s.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(s.stoc)}</td><td style="padding:8px; text-align:right; font-weight:700; color:var(--orange);">${fmtMoney(s.valoare_stoc)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    if (stagnat.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px; text-align:center;">⚠ Primele 500 din ${stagnat.length}.</div>`;
+    res.innerHTML = html;
+  } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
 // ── NAVIGATION ──
 const titles = {
   dashboard:'🏠 Dashboard', cautare:'🔍 Căutare produs',
@@ -616,6 +909,7 @@ const titles = {
   magazine:'🏪 Per Magazin', furnizori:'🏭 Per Furnizor', familii:'📚 Per Familie',
   duplicate:'⚠️ Coduri duplicate', refresh:'🔄 Refresh date'
 };
+const _loaded = new Set(['dashboard']); // pre-loaded
 document.querySelectorAll('.menu-item').forEach(item => {
   item.addEventListener('click', () => {
     const page = item.getAttribute('data-page');
@@ -625,6 +919,16 @@ document.querySelectorAll('.menu-item').forEach(item => {
     const pageEl = document.getElementById('page-' + page);
     if (pageEl) pageEl.classList.add('active');
     document.getElementById('page-title').textContent = titles[page] || page;
+    // Lazy-load page data first time
+    if (!_loaded.has(page)) {
+      _loaded.add(page);
+      if (page === 'magazine')   loadMagazine();
+      if (page === 'furnizori')  loadFurnizori();
+      // Magazine list also populates dropdowns for Lipsuri/Stagnat
+      if (page === 'lipsuri' || page === 'stagnat') {
+        if (!_loaded.has('magazine')) { _loaded.add('magazine'); loadMagazine(); }
+      }
+    }
   });
 });
 
