@@ -440,8 +440,9 @@
         <div class="card">
           <h2>🔄 Refresh date din Drive</h2>
           <p style="color:var(--sub); font-size:13px; margin-bottom:16px;">Rulează ETL-ul Python care citește fișierele din <code>E:\My Drive\ARAFURA-ERP\</code> și le încarcă în Supabase.</p>
-          <button class="btn primary" style="font-size:14px; padding:12px 22px;">🔄 Pornește ETL acum</button>
-          <div class="placeholder" style="margin-top:16px;">Status: ultimele import-uri (din etl_logs)</div>
+          <p style="font-size:13px; padding:14px; background:#fef3c7; border-radius:8px; color:#92400e; margin-bottom:16px;">⚠ Pornirea ETL-ului din browser necesită un mic serviciu local (urmează în versiunea 2). Pentru moment, rulează manual:<br><code style="background:white; padding:6px 10px; border-radius:4px; display:inline-block; margin-top:8px;">python C:\Users\LENOVO\Desktop\Code\arafura\arafura-erp\etl_arafura.py --tip=all</code></p>
+          <h3 style="font-size:14px; color:var(--navy); margin:18px 0 10px;">📋 Ultimele 30 import-uri</h3>
+          <div id="refresh-logs"><div class="placeholder">se încarcă…</div></div>
         </div>
       </div>
 
@@ -1050,6 +1051,24 @@ async function loadVanzari() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
+// ── REFRESH ──
+async function loadRefresh() {
+  const el = document.getElementById('refresh-logs');
+  try {
+    const r = await fetch(`${API}/etl_logs?select=source_file,source_type,rows_imported,status,started_at&order=started_at.desc&limit=30`, { headers: HEADERS });
+    const logs = await r.json();
+    if (!logs.length) { el.innerHTML = '<div class="placeholder">Niciun import înregistrat</div>'; return; }
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Fișier</th><th style="padding:8px; text-align:left;">Tip</th><th style="padding:8px; text-align:right;">Rânduri</th><th style="padding:8px; text-align:left;">Status</th><th style="padding:8px; text-align:left;">Când</th></tr></thead><tbody>';
+    for (const l of logs) {
+      const dt = l.started_at ? new Date(l.started_at).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
+      const stColor = l.status === 'success' ? 'var(--green)' : (l.status === 'partial' ? 'var(--orange)' : 'var(--red)');
+      html += `<tr style="border-top:1px solid var(--border);"><td style="padding:8px; font-size:12px;">${escHtml(l.source_file||'')}</td><td style="padding:8px;"><span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(l.source_type||'')}</span></td><td style="padding:8px; text-align:right; font-variant-numeric:tabular-nums;">${fmtNum(l.rows_imported||0)}</td><td style="padding:8px;"><span style="color:${stColor}; font-weight:700;">${escHtml(l.status||'')}</span></td><td style="padding:8px; color:var(--sub); font-size:12px;">${dt}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
 // ── DUPLICATE COD BARE ──
 async function loadDuplicate() {
   const res = document.getElementById('dup-results');
@@ -1118,6 +1137,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'furnizori')  loadFurnizori();
       if (page === 'achizitii')  loadAchizitii();
       if (page === 'duplicate')  loadDuplicate();
+      if (page === 'refresh')    loadRefresh();
       // Magazine list also populates dropdowns for Lipsuri/Stagnat
       if (page === 'lipsuri' || page === 'stagnat') {
         if (!_loaded.has('magazine')) { _loaded.add('magazine'); loadMagazine(); }
