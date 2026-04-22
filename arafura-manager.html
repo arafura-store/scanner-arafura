@@ -278,25 +278,37 @@
       <!-- DASHBOARD -->
       <div class="page active" id="page-dashboard">
         <div class="stats-grid">
-          <div class="stat-card"><div class="label">Stoc total</div><div class="value">—</div><div class="delta">15.6k produse</div></div>
-          <div class="stat-card green"><div class="label">Vânzări azi</div><div class="value">—</div><div class="delta up">+12% vs ieri</div></div>
-          <div class="stat-card red"><div class="label">Lipsuri active</div><div class="value">—</div><div class="delta down">+8 noi azi</div></div>
-          <div class="stat-card orange"><div class="label">Stagnat &gt; 6 luni</div><div class="value">—</div><div class="delta">4.1k produse</div></div>
-          <div class="stat-card violet"><div class="label">Valoare blocată</div><div class="value">—</div><div class="delta">RON</div></div>
+          <div class="stat-card"        ><div class="label">Snapshot stoc</div><div class="value" id="d-snap-date">—</div><div class="delta" id="d-snap-info">se încarcă…</div></div>
+          <div class="stat-card violet" ><div class="label">Produse în stoc</div><div class="value" id="d-prod-stoc">—</div><div class="delta" id="d-locatii">—</div></div>
+          <div class="stat-card green"  ><div class="label">Valoare blocată</div><div class="value" id="d-valoare">—</div><div class="delta">RON la cost</div></div>
+          <div class="stat-card orange" ><div class="label">Mișcări înregistrate</div><div class="value" id="d-miscari">—</div><div class="delta">total în Supabase</div></div>
+          <div class="stat-card red"    ><div class="label">Furnizori</div><div class="value" id="d-furnizori">—</div><div class="delta">activi în facturi</div></div>
         </div>
-        <div class="card"><h2>📈 Vânzări 30 zile (grafic)</h2><div class="placeholder">Aici va veni graficul</div></div>
-        <div class="card"><h2>🏆 Top 10 produse vândute săptămâna asta</h2><div class="placeholder">Listă top 10</div></div>
-        <div class="card"><h2>🔔 Alerte azi</h2><div class="placeholder">Lipsuri noi · stagnat critic · marje mici · scumpiri furnizori</div></div>
+        <div class="card">
+          <h2>🔄 Status import-uri (ultimele 8)</h2>
+          <div id="d-etl-logs"><div class="placeholder">se încarcă…</div></div>
+        </div>
+        <div class="card"><h2>📈 Vânzări 30 zile (grafic)</h2><div class="placeholder">— necesită miscari + agregare zilnică (faza 2)</div></div>
+        <div class="card"><h2>🏆 Top 10 produse vândute săptămâna asta</h2><div class="placeholder">— necesită miscari + tip_doc='Bon Fiscal'</div></div>
       </div>
 
       <!-- CAUTARE PRODUS -->
       <div class="page" id="page-cautare">
         <div class="card">
           <h2>🔍 Căutare produs</h2>
-          <input type="text" placeholder="Cod intern · cod bară · nume produs · furnizor · familie…"
-                 style="width:100%; padding:14px; font-size:15px; border:1px solid var(--border); border-radius:10px;">
+          <input type="text" id="search-input" placeholder="Cod intern · cod bară · nume produs · furnizor…"
+                 style="width:100%; padding:14px; font-size:15px; border:1px solid var(--border); border-radius:10px;"
+                 oninput="onSearchInput()">
+          <div id="search-info" style="margin-top:8px; font-size:12px; color:var(--sub);"></div>
         </div>
-        <div class="card"><h2>Rezultat</h2><div class="placeholder">Click pe un produs → fișa completă: stoc per magazin, istoric prețuri achiziție/vânzare, foto, mișcări, marjă</div></div>
+        <div class="card">
+          <h2>Rezultate</h2>
+          <div id="search-results"><div class="placeholder">Tastează cel puțin 3 caractere pentru a căuta…</div></div>
+        </div>
+        <div class="card" id="produs-detail" style="display:none;">
+          <h2 id="pd-titlu">Detalii produs</h2>
+          <div id="pd-content"></div>
+        </div>
       </div>
 
       <!-- LIPSURI -->
@@ -387,6 +399,7 @@ async function onLoginPin() {
     document.getElementById('screen-app').style.display = 'flex';
     document.getElementById('user-nume').textContent = currentUser.nume;
     document.getElementById('user-avatar').textContent = (currentUser.nume[0] || '?').toUpperCase();
+    loadDashboard();
   } catch (e) {
     err.textContent = 'Eroare conexiune';
   }
@@ -397,6 +410,202 @@ function logout() {
   document.getElementById('screen-app').style.display = 'none';
   document.getElementById('screen-login').style.display = '';
   document.getElementById('login-pin').value = '';
+}
+
+// ── HELPERS ──
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function fmtNum(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('ro-RO');
+}
+function fmtMoney(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('ro-RO', {minimumFractionDigits:0, maximumFractionDigits:0});
+}
+async function getCount(url) {
+  try {
+    const r = await fetch(url, { headers: { ...HEADERS, 'Prefer': 'count=exact', 'Range': '0-0' } });
+    const cr = r.headers.get('Content-Range');
+    if (cr) return parseInt(cr.split('/')[1]) || 0;
+  } catch {}
+  return 0;
+}
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  // 1. Latest snapshot date
+  try {
+    const r = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const d = await r.json();
+    if (d && d[0]) {
+      const dataSnap = d[0].data_snapshot;
+      document.getElementById('d-snap-date').textContent = new Date(dataSnap).toLocaleDateString('ro-RO', {day:'2-digit', month:'short', year:'numeric'});
+      // Fetch counts for that snapshot
+      const [cnt, locCnt, valSum] = await Promise.all([
+        getCount(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0`),
+        fetch(`${API}/stocuri_snapshot?select=locatie&data_snapshot=eq.${dataSnap}&stoc=gt.0`, { headers: HEADERS })
+          .then(r=>r.json()).then(arr => new Set(arr.map(x=>x.locatie)).size),
+        // Sum valoare_stoc — folosim aggregare PostgREST
+        fetch(`${API}/stocuri_snapshot?select=valoare_stoc.sum()&data_snapshot=eq.${dataSnap}`, { headers: HEADERS })
+          .then(r=>r.json()).then(arr => arr[0]?.sum || 0)
+      ]);
+      document.getElementById('d-prod-stoc').textContent = fmtNum(cnt);
+      document.getElementById('d-locatii').textContent = `${locCnt} locații cu stoc`;
+      document.getElementById('d-valoare').textContent = fmtMoney(valSum);
+      document.getElementById('d-snap-info').textContent = `ultima balanță încărcată`;
+    } else {
+      document.getElementById('d-snap-info').textContent = 'fără date încă';
+    }
+  } catch(e) { console.error(e); }
+
+  // 2. Mișcări total
+  getCount(`${API}/miscari?select=id`).then(n => document.getElementById('d-miscari').textContent = fmtNum(n));
+
+  // 3. Furnizori
+  getCount(`${API}/furnizori?select=cod_partener`).then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
+
+  // 4. ETL logs
+  try {
+    const r = await fetch(`${API}/etl_logs?select=source_file,source_type,rows_imported,status,started_at&order=started_at.desc&limit=8`, { headers: HEADERS });
+    const logs = await r.json();
+    const el = document.getElementById('d-etl-logs');
+    if (!Array.isArray(logs) || logs.length === 0) {
+      el.innerHTML = '<div class="placeholder">Niciun import înregistrat încă</div>';
+      return;
+    }
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;">';
+    html += '<thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">Fișier</th><th style="padding:8px;">Tip</th><th style="padding:8px; text-align:right;">Rânduri</th><th style="padding:8px;">Status</th><th style="padding:8px;">Când</th></tr></thead><tbody>';
+    for (const l of logs) {
+      const dt = l.started_at ? new Date(l.started_at).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
+      const stColor = l.status === 'success' ? 'var(--green)' : (l.status === 'partial' ? 'var(--orange)' : 'var(--red)');
+      html += `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:8px;">${escHtml(l.source_file||'')}</td>
+        <td style="padding:8px;"><span style="background:#dbeafe; color:#1e40af; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600;">${escHtml(l.source_type||'')}</span></td>
+        <td style="padding:8px; text-align:right; font-variant-numeric:tabular-nums;">${fmtNum(l.rows_imported||0)}</td>
+        <td style="padding:8px;"><span style="color:${stColor}; font-weight:700;">${escHtml(l.status||'')}</span></td>
+        <td style="padding:8px; color:var(--sub); font-size:12px;">${dt}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) {}
+}
+
+// ── CAUTARE PRODUS ──
+let _searchTimer = null;
+function onSearchInput() {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(doSearch, 250);
+}
+async function doSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  const info = document.getElementById('search-info');
+  const res = document.getElementById('search-results');
+  if (q.length < 3) {
+    info.textContent = '';
+    res.innerHTML = '<div class="placeholder">Tastează cel puțin 3 caractere pentru a căuta…</div>';
+    return;
+  }
+  info.textContent = 'caut…';
+  const qEnc = encodeURIComponent(q.toLowerCase());
+  // search_text e deja construit pentru full-text search rapid
+  const url = `${API}/produse?or=(search_text.ilike.*${qEnc}*,cod_art.ilike.*${qEnc}*,cod_bare.ilike.*${qEnc}*)&select=cod_art,cod_bare,nume_art,um,furnizor,foto_url&limit=50`;
+  try {
+    const r = await fetch(url, { headers: HEADERS });
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      info.textContent = '0 rezultate';
+      res.innerHTML = '<div class="placeholder">Niciun rezultat. Încearcă alți termeni…</div>';
+      return;
+    }
+    info.textContent = `${data.length} rezultate (max 50 afișate)`;
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">COD</th><th style="padding:8px;">Cod bare</th><th style="padding:8px;">Nume produs</th><th style="padding:8px;">UM</th><th style="padding:8px;">Furnizor</th></tr></thead><tbody>';
+    for (const p of data) {
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(p.cod_art)}')">
+        <td style="padding:8px; font-family:monospace; font-weight:700; color:var(--blue);">${escHtml(p.cod_art)}</td>
+        <td style="padding:8px; font-family:monospace; font-size:12px;">${escHtml(p.cod_bare||'')}</td>
+        <td style="padding:8px;">${escHtml(p.nume_art||'')}</td>
+        <td style="padding:8px;">${escHtml(p.um||'')}</td>
+        <td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    res.innerHTML = html;
+  } catch(e) {
+    info.textContent = 'eroare: ' + e.message;
+  }
+}
+
+async function loadProdusDetail(cod) {
+  const det = document.getElementById('produs-detail');
+  const titlu = document.getElementById('pd-titlu');
+  const cont = document.getElementById('pd-content');
+  det.style.display = '';
+  titlu.textContent = 'Produs ' + cod + ' — se încarcă…';
+  cont.innerHTML = '<div class="placeholder">caut date…</div>';
+
+  try {
+    const [prod, stocuri, miscari, facturi] = await Promise.all([
+      fetch(`${API}/produse?cod_art=eq.${encodeURIComponent(cod)}&limit=1`, { headers: HEADERS }).then(r=>r.json()),
+      fetch(`${API}/stocuri_snapshot?cod_art=eq.${encodeURIComponent(cod)}&order=data_snapshot.desc&limit=20`, { headers: HEADERS }).then(r=>r.json()),
+      fetch(`${API}/miscari?cod_art=eq.${encodeURIComponent(cod)}&order=data.desc&limit=15`, { headers: HEADERS }).then(r=>r.json()),
+      fetch(`${API}/facturi?cod_art=eq.${encodeURIComponent(cod)}&order=data_factura.desc&limit=10`, { headers: HEADERS }).then(r=>r.json()),
+    ]);
+    const p = prod[0] || {};
+    titlu.textContent = `${p.cod_art || cod} — ${p.nume_art || '—'}`;
+
+    // Stoc per locatie (din ultima balanta)
+    let html = `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:18px;">
+      <div><b>Cod bare:</b> ${escHtml(p.cod_bare||'—')}</div>
+      <div><b>UM:</b> ${escHtml(p.um||'—')}</div>
+      <div><b>Furnizor:</b> ${escHtml(p.furnizor||'—')}</div>
+    </div>`;
+
+    if (stocuri.length > 0) {
+      const ultimaData = stocuri[0].data_snapshot;
+      const stocAct = stocuri.filter(s => s.data_snapshot === ultimaData);
+      let totalStoc = 0;
+      let perLoc = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">Locație</th><th style="padding:6px; text-align:right;">Stoc</th><th style="padding:6px; text-align:right;">Cost</th><th style="padding:6px; text-align:right;">Valoare</th></tr></thead><tbody>';
+      stocAct.sort((a,b) => (b.stoc||0) - (a.stoc||0));
+      for (const s of stocAct) {
+        if (!s.stoc) continue;
+        totalStoc += parseFloat(s.stoc);
+        perLoc += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px;">${escHtml(s.locatie)}</td><td style="padding:6px; text-align:right; font-weight:700;">${fmtNum(s.stoc)}</td><td style="padding:6px; text-align:right;">${fmtMoney(s.cost)}</td><td style="padding:6px; text-align:right;">${fmtMoney(s.valoare_stoc)}</td></tr>`;
+      }
+      perLoc += '</tbody></table>';
+      html += `<h3 style="font-size:14px; color:var(--navy); margin:14px 0 8px;">📦 Stoc per locație (snapshot ${new Date(ultimaData).toLocaleDateString('ro-RO')}, total: <b>${fmtNum(totalStoc)} buc</b>)</h3>${perLoc}`;
+    } else {
+      html += '<p style="color:var(--sub); font-size:13px;">📦 Niciun stoc înregistrat pe acest produs.</p>';
+    }
+
+    if (facturi.length > 0) {
+      let fHtml = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">Data</th><th style="padding:6px; text-align:left;">Furnizor</th><th style="padding:6px; text-align:right;">Cant</th><th style="padding:6px; text-align:right;">Preț net</th><th style="padding:6px; text-align:left;">Nr. factură</th></tr></thead><tbody>';
+      for (const f of facturi) {
+        fHtml += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px;">${new Date(f.data_factura).toLocaleDateString('ro-RO')}</td><td style="padding:6px;">${escHtml(f.nume_partener||'')}</td><td style="padding:6px; text-align:right;">${fmtNum(f.cantitate)}</td><td style="padding:6px; text-align:right; font-weight:700;">${Number(f.pret_net||0).toFixed(2)}</td><td style="padding:6px; font-family:monospace; font-size:11px; color:var(--sub);">${escHtml(f.nr_factura||'')}</td></tr>`;
+      }
+      fHtml += '</tbody></table>';
+      html += `<h3 style="font-size:14px; color:var(--navy); margin:18px 0 8px;">💼 Ultimele 10 facturi de aprovizionare</h3>${fHtml}`;
+    }
+
+    if (miscari.length > 0) {
+      let mHtml = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">Data</th><th style="padding:6px; text-align:left;">Locație</th><th style="padding:6px; text-align:left;">Tip document</th><th style="padding:6px; text-align:right;">Intrări</th><th style="padding:6px; text-align:right;">Ieșiri</th></tr></thead><tbody>';
+      for (const m of miscari) {
+        const intr = m.intrari || 0;
+        const ies = m.iesiri || 0;
+        mHtml += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px;">${m.data ? new Date(m.data).toLocaleDateString('ro-RO') : ''}</td><td style="padding:6px;">${escHtml(m.locatie_norm || m.partener || '')}</td><td style="padding:6px;">${escHtml(m.tip_doc||'')}</td><td style="padding:6px; text-align:right; color:var(--green); font-weight:${intr?'700':'400'};">${intr?fmtNum(intr):''}</td><td style="padding:6px; text-align:right; color:var(--red); font-weight:${ies?'700':'400'};">${ies?fmtNum(ies):''}</td></tr>`;
+      }
+      mHtml += '</tbody></table>';
+      html += `<h3 style="font-size:14px; color:var(--navy); margin:18px 0 8px;">📋 Ultimele 15 mișcări</h3>${mHtml}`;
+    }
+
+    cont.innerHTML = html;
+    det.scrollIntoView({behavior:'smooth'});
+  } catch(e) {
+    cont.innerHTML = '<div class="placeholder">Eroare la încărcare: ' + e.message + '</div>';
+  }
 }
 
 // ── NAVIGATION ──
