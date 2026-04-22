@@ -286,6 +286,10 @@
           <div class="stat-card red"    ><div class="label">Furnizori</div><div class="value" id="d-furnizori">—</div><div class="delta">activi în facturi</div></div>
         </div>
         <div class="card">
+          <h2>📅 Ultima actualizare per tip document</h2>
+          <div id="d-ultim-update"><div class="placeholder">se încarcă…</div></div>
+        </div>
+        <div class="card">
           <h2>🔄 Status import-uri (ultimele 8)</h2>
           <div id="d-etl-logs"><div class="placeholder">se încarcă…</div></div>
         </div>
@@ -636,6 +640,9 @@ async function loadDashboard() {
   // 2. Mișcări total
   getCount(`${API}/miscari?select=id`).then(n => document.getElementById('d-miscari').textContent = fmtNum(n));
 
+  // 2b. Ultima actualizare per tip document (din etl_logs + tabele sursa)
+  loadUltimaActualizare();
+
   // 3. Furnizori
   getCount(`${API}/furnizori?select=cod_partener`).then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
 
@@ -664,6 +671,125 @@ async function loadDashboard() {
     html += '</tbody></table>';
     el.innerHTML = html;
   } catch(e) {}
+}
+
+// ── ULTIMA ACTUALIZARE PER TIP ──
+function clasificaBalanta(fn) {
+  // Format lunare:       "01.04.2026 - 30.04.2026.xlsx"
+  // Format saptamanale:  "2026.04.14 - 2026.04.20.xlsx"
+  // Stoc negativ: marker e keyword in nume SAU detectat prin folder — aici prin keyword optional
+  const f = (fn||'').toLowerCase();
+  if (/^\d{4}\.\d{2}\.\d{2}/.test(fn)) return 'Balanță săptămânală';
+  if (f.includes('negativ') || f.includes('stoc-neg')) return 'Balanță stoc negativ';
+  return 'Balanță lunară';
+}
+function parseFilenamePerioada(fn) {
+  // Extrage data de sfarsit din nume. Accepta: "01.04.2026 - 21.04.2026", "2026.04.14 - 2026.04.20"
+  let m = fn.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{2})\.(\d{4})/);
+  if (m) return `${m[6]}-${m[5]}-${m[4].padStart(2,'0')}`;
+  m = fn.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{4})\.(\d{2})\.(\d{2})/);
+  if (m) return `${m[4]}-${m[5]}-${m[6]}`;
+  return null;
+}
+async function loadUltimaActualizare() {
+  const el = document.getElementById('d-ultim-update');
+  try {
+    // Toate etl_logs cu status=success, grupate pe source_type
+    const r = await fetch(`${API}/etl_logs?select=source_type,source_file,started_at,rows_imported&status=eq.success&order=started_at.desc&limit=500`, { headers: HEADERS });
+    const logs = await r.json();
+    if (!Array.isArray(logs)) { el.innerHTML = '<div class="placeholder">—</div>'; return; }
+
+    // Pentru balante: separam pe 3 categorii
+    const grupat = {
+      'Balanță lunară': null,
+      'Balanță săptămânală': null,
+      'Balanță stoc negativ': null,
+      'Fișe magazie': null,
+      'Facturi achiziții': null,
+      'Prețuri vânzare': null,
+      'Familii produse': null
+    };
+    for (const l of logs) {
+      let key;
+      if (l.source_type === 'balanta') key = clasificaBalanta(l.source_file);
+      else if (l.source_type === 'fisa')    key = 'Fișe magazie';
+      else if (l.source_type === 'factura') key = 'Facturi achiziții';
+      else if (l.source_type === 'preturi') key = 'Prețuri vânzare';
+      else if (l.source_type === 'familii') key = 'Familii produse';
+      else continue;
+      if (!grupat[key] || new Date(l.started_at) > new Date(grupat[key].started_at)) {
+        grupat[key] = l;
+      }
+    }
+
+    const rows = [];
+    for (const [key, log] of Object.entries(grupat)) {
+      if (!log) {
+        rows.push({ tip: key, fisier: '—', data: '—', cand: '—', lipsa: true });
+        continue;
+      }
+      const dataPer = parseFilenamePerioada(log.source_file);
+      const cand = new Date(log.started_at).toLocaleString('ro-RO', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+      rows.push({
+        tip: key,
+        fisier: log.source_file,
+        data: dataPer ? new Date(dataPer).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'}) : (log.source_file.match(/\d{4}/)?.[0] || '—'),
+        cand,
+        lipsa: false
+      });
+    }
+
+    // Verifica sincronizarea: compara max(data reflectata) intre balante vs fise vs facturi
+    const getDataRow = (k) => {
+      const log = grupat[k];
+      if (!log) return null;
+      const d = parseFilenamePerioada(log.source_file);
+      return d ? new Date(d) : null;
+    };
+    const dataSnap = getDataRow('Balanță stoc negativ') || getDataRow('Balanță săptămânală') || getDataRow('Balanță lunară');
+    const dataFise = getDataRow('Fișe magazie');
+    const dataFact = getDataRow('Facturi achiziții');
+    let html = '';
+    if (dataSnap && dataFise) {
+      const gapFise = Math.round((dataSnap - dataFise) / 86400000);
+      const gapFact = dataFact ? Math.round((dataSnap - dataFact) / 86400000) : null;
+      if (gapFise > 3 || (gapFact !== null && gapFact > 3)) {
+        html += `<div style="background:#fef3c7; border-left:4px solid #f59e0b; padding:12px 16px; margin-bottom:14px; border-radius:6px;">
+          <div style="font-weight:700; color:#92400e; margin-bottom:4px;">⚠️ Date nesincronizate — rapoartele pot fi imprecise</div>
+          <div style="color:#78350f; font-size:13px; line-height:1.6;">
+            Snapshot-ul de stoc e la <b>${dataSnap.toLocaleDateString('ro-RO',{day:'2-digit',month:'short'})}</b>,
+            dar fișele de magazie sunt doar până la <b>${dataFise.toLocaleDateString('ro-RO',{day:'2-digit',month:'short'})}</b>
+            (decalaj: <b>${gapFise} zile</b>${gapFact !== null ? `, facturi: ${gapFact} zile` : ''}).<br>
+            Rapoartele <b>Lipsuri / Stagnat / Vânzări</b> nu reflectă vânzările din perioada lipsă.
+            Descarcă fișe + facturi pentru a sincroniza.
+          </div>
+        </div>`;
+      } else {
+        html += `<div style="background:#dcfce7; border-left:4px solid #22c55e; padding:10px 14px; margin-bottom:14px; border-radius:6px; color:#166534; font-size:13px; font-weight:600;">
+          ✅ Datele sunt sincronizate (decalaj ≤ 3 zile)
+        </div>`;
+      }
+    }
+    html += '<table style="width:100%; font-size:13px; border-collapse:collapse;">';
+    html += '<thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">Tip document</th><th style="padding:8px;">Reflectă data</th><th style="padding:8px;">Fișier sursă</th><th style="padding:8px;">Importat</th></tr></thead><tbody>';
+    for (const row of rows) {
+      const color = row.lipsa ? 'color:var(--red); font-style:italic;' : '';
+      const tipBadge = row.lipsa
+        ? `<span style="background:#fee2e2; color:#b91c1c; padding:3px 8px; border-radius:5px; font-size:12px; font-weight:600;">⚠ lipsă</span>`
+        : `<span style="background:#dcfce7; color:#166534; padding:3px 8px; border-radius:5px; font-size:12px; font-weight:600;">✓</span>`;
+      html += `<tr style="border-top:1px solid var(--border); ${color}">
+        <td style="padding:10px; font-weight:600;">${tipBadge} ${escHtml(row.tip)}</td>
+        <td style="padding:10px; color:${row.lipsa?'var(--red)':'var(--blue)'}; font-weight:700; font-variant-numeric:tabular-nums;">${row.data}</td>
+        <td style="padding:10px; color:var(--sub); font-size:12px;">${escHtml(row.fisier)}</td>
+        <td style="padding:10px; color:var(--sub); font-size:12px;">${row.cand}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) {
+    console.error(e);
+    el.innerHTML = '<div class="placeholder">Eroare la încărcare</div>';
+  }
 }
 
 // ── CAUTARE PRODUS ──
