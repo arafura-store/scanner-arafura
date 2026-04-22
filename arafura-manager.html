@@ -674,15 +674,16 @@ async function loadDashboard() {
 }
 
 // ── ULTIMA ACTUALIZARE PER TIP ──
-function clasificaBalanta(fn) {
-  // Format lunare:       "01.04.2026 - 30.04.2026.xlsx"
-  // Format saptamanale:  "2026.04.14 - 2026.04.20.xlsx"
-  // Stoc negativ: marker e keyword in nume SAU detectat prin folder — aici prin keyword optional
-  const f = (fn||'').toLowerCase();
-  if (/^\d{4}\.\d{2}\.\d{2}/.test(fn)) return 'Balanță săptămânală';
-  if (f.includes('negativ') || f.includes('stoc-neg')) return 'Balanță stoc negativ';
-  return 'Balanță lunară';
-}
+const TYPE_LABEL = {
+  'balanta-lunara':       'Balanță lunară',
+  'balanta-saptamanala':  'Balanță săptămânală',
+  'balanta-neg':          'Balanță stoc negativ',
+  'balanta':              'Balanță (necategorizat)',
+  'fisa':                 'Fișe magazie',
+  'factura':              'Facturi achiziții',
+  'preturi':              'Prețuri vânzare',
+  'familii':              'Familii produse'
+};
 function parseFilenamePerioada(fn) {
   // Extrage data de sfarsit din nume. Accepta: "01.04.2026 - 21.04.2026", "2026.04.14 - 2026.04.20"
   let m = fn.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{2})\.(\d{4})/);
@@ -699,7 +700,7 @@ async function loadUltimaActualizare() {
     const logs = await r.json();
     if (!Array.isArray(logs)) { el.innerHTML = '<div class="placeholder">—</div>'; return; }
 
-    // Pentru balante: separam pe 3 categorii
+    // Grupare directa pe source_type
     const grupat = {
       'Balanță lunară': null,
       'Balanță săptămânală': null,
@@ -710,13 +711,8 @@ async function loadUltimaActualizare() {
       'Familii produse': null
     };
     for (const l of logs) {
-      let key;
-      if (l.source_type === 'balanta') key = clasificaBalanta(l.source_file);
-      else if (l.source_type === 'fisa')    key = 'Fișe magazie';
-      else if (l.source_type === 'factura') key = 'Facturi achiziții';
-      else if (l.source_type === 'preturi') key = 'Prețuri vânzare';
-      else if (l.source_type === 'familii') key = 'Familii produse';
-      else continue;
+      const key = TYPE_LABEL[l.source_type];
+      if (!key || !(key in grupat)) continue;
       if (!grupat[key] || new Date(l.started_at) > new Date(grupat[key].started_at)) {
         grupat[key] = l;
       }
