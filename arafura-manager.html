@@ -1100,10 +1100,10 @@ async function loadStagnat() {
       } catch(e) { console.error('RPC batch error', e); }
     }
     const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
-    info.textContent = `${stagnat.length} stagnate din ${stoc.length} cu stoc (${vandutRecent.size} vandute recent)`;
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
-    info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
+    const dbg406179 = stagnat.some(s => s.cod_art === '406179');
+    info.innerHTML = `<b>${stagnat.length}</b> stagnate / <b>${stoc.length}</b> cu stoc · <b>${vandutRecent.size}</b> vandute in perioada · <b>${fmtMoney(totalVal)}</b> RON valoare <span style="color:${dbg406179?'var(--red)':'var(--green)'}; margin-left:8px;">[debug 406179 inStagnat=${dbg406179}]</span>`;
     // Product info (fallback la facturi daca lipsesc din produse)
     const codeC = [...new Set(stagnat.map(c => c.cod_art))];
     const pmap = await getProdMap(codeC);
