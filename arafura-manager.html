@@ -374,7 +374,20 @@
 
       <!-- TRANSFERURI -->
       <div class="page" id="page-transferuri">
-        <div class="card"><h2>🚚 Transferuri propuse</h2><div class="placeholder">Sheet-uri: Retururi la depozit · Livrări către magazine · Marcare aprobări</div></div>
+        <div class="card">
+          <h2>🚚 Transferuri propuse</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Pentru fiecare LIPSĂ găsim sursa optimă (prioritate: DEPOZIT > magazin stagnat). Rezultă 2 liste:</p>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+            <select id="tr-zile" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="30" selected>Lipsuri din ultimele 30 zile</option>
+              <option value="60">60 zile</option>
+              <option value="90">90 zile</option>
+            </select>
+            <button onclick="loadTransferuri()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Calculează propuneri</button>
+            <span id="tr-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="tr-results"><div class="placeholder">Apasă Calculează pentru a genera propunerile</div></div>
+        </div>
       </div>
 
       <!-- ACHIZITII -->
@@ -1181,6 +1194,183 @@ async function loadVanzari() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
+// ── TRANSFERURI ──
+async function loadTransferuri() {
+  const zile = parseInt(document.getElementById('tr-zile').value) || 30;
+  const info = document.getElementById('tr-info');
+  const res = document.getElementById('tr-results');
+  info.textContent = 'calculez…';
+  res.innerHTML = '<div class="placeholder">se încarcă…</div>';
+  try {
+    // 1. Ultimul snapshot
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+
+    // 2. Toate stocurile la ultima data — paginat
+    let stoc = [];
+    let off = 0;
+    while (true) {
+      const r = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&select=cod_art,locatie,stoc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const rows = await r.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      stoc = stoc.concat(rows);
+      off += 1000;
+      if (rows.length < 1000) break;
+      if (off > 100000) break;
+    }
+    // Map: cod_art → {locatie: stoc}
+    const stocPerCod = {};
+    for (const s of stoc) {
+      if (!stocPerCod[s.cod_art]) stocPerCod[s.cod_art] = {};
+      stocPerCod[s.cod_art][s.locatie] = parseFloat(s.stoc) || 0;
+    }
+    info.textContent = `${stoc.length} stocuri · detectez lipsuri…`;
+
+    // 3. Vânzări în perioada (cu partener = magazin)
+    const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
+    let sales = [];
+    let salesOff = 0;
+    while (true) {
+      const sr = await fetch(`${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,partener&order=cod_art.asc&limit=1000&offset=${salesOff}`, { headers: HEADERS });
+      const rows = await sr.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      sales = sales.concat(rows);
+      salesOff += 1000;
+      if (rows.length < 1000) break;
+      if (salesOff > 500000) break;
+    }
+
+    // Mapa vânzări per (cod, locatie) folosind PARTENER_MAP inversat
+    const locPerPartener = {};
+    for (const [loc, pats] of Object.entries(PARTENER_MAP)) {
+      for (const p of pats) locPerPartener[p.toUpperCase()] = loc;
+    }
+    const vanzPerCodLoc = {};
+    for (const v of sales) {
+      const p = (v.partener || '').toUpperCase();
+      let loc = null;
+      for (const [key, val] of Object.entries(locPerPartener)) {
+        if (p.includes(key.toUpperCase())) { loc = val; break; }
+      }
+      if (!loc) continue;
+      const k = v.cod_art + '|' + loc;
+      vanzPerCodLoc[k] = (vanzPerCodLoc[k] || 0) + parseFloat(v.iesiri || 0);
+    }
+
+    // 4. Detectează LIPSA: pentru fiecare (cod, locatie) cu vanzari, dacă stoc=0 → LIPSA
+    const lipsuri = [];
+    for (const k of Object.keys(vanzPerCodLoc)) {
+      const [cod, loc] = k.split('|');
+      const stocLocal = stocPerCod[cod]?.[loc] || 0;
+      if (stocLocal > 0) continue; // nu e lipsa, are stoc
+      lipsuri.push({ cod, loc, vanduri: vanzPerCodLoc[k] });
+    }
+    info.textContent = `${lipsuri.length} lipsuri identificate · propunerisursa…`;
+
+    // 5. Pentru fiecare lipsă, alege sursa optimă
+    const PRIORITATE = ['DEPOZIT PAPETARIE', 'DEPOZIT CARTE'];
+    const propuneri = []; // {cod, sursa, dest, cant}
+    for (const l of lipsuri) {
+      const altele = stocPerCod[l.cod] || {};
+      let sursa = null, stocSursa = 0;
+      // Prioritate depozite
+      for (const p of PRIORITATE) {
+        if (altele[p] > 0) { sursa = p; stocSursa = altele[p]; break; }
+      }
+      // Altfel: magazinul cu cel mai mare stoc (care nu e destinatia)
+      if (!sursa) {
+        let best = null;
+        for (const [loc, s] of Object.entries(altele)) {
+          if (loc === l.loc) continue;
+          if (s > 0 && (!best || s > best[1])) best = [loc, s];
+        }
+        if (best) { sursa = best[0]; stocSursa = best[1]; }
+      }
+      if (!sursa) continue; // nu are sursa disponibila
+      const cant = Math.max(1, Math.min(Math.ceil(l.vanduri), stocSursa));
+      propuneri.push({ cod: l.cod, sursa, dest: l.loc, cant, disp: stocSursa });
+    }
+
+    if (!propuneri.length) {
+      info.textContent = '';
+      res.innerHTML = '<div class="placeholder">✅ Nicio propunere de transfer — nu sunt lipsuri cu sursă disponibilă</div>';
+      return;
+    }
+    info.textContent = `${propuneri.length} transferuri propuse (${new Set(propuneri.map(p=>p.sursa)).size} surse → ${new Set(propuneri.map(p=>p.dest)).size} destinații)`;
+
+    // 6. Info produse
+    const codeC = [...new Set(propuneri.map(p => p.cod))];
+    const pmap = await getProdMap(codeC);
+
+    // 7. Grupare: RETURURI (sursa = magazin) + LIVRĂRI (sursa = depot)
+    const retururi = {}; // sursa magazin → [propuneri]
+    const livrariDirect = {}; // dest → [propuneri cu sursa depozit]
+    const livrariIndirect = {}; // dest → [propuneri cu sursa magazin, via depozit]
+
+    for (const p of propuneri) {
+      const esteDepot = PRIORITATE.includes(p.sursa);
+      if (esteDepot) {
+        if (!livrariDirect[p.dest]) livrariDirect[p.dest] = [];
+        livrariDirect[p.dest].push(p);
+      } else {
+        if (!retururi[p.sursa]) retururi[p.sursa] = [];
+        retururi[p.sursa].push(p);
+        if (!livrariIndirect[p.dest]) livrariIndirect[p.dest] = [];
+        livrariIndirect[p.dest].push(p);
+      }
+    }
+
+    // Render
+    let html = '';
+
+    // SECTIUNEA 1: RETURURI LA DEPOZIT
+    html += '<h2 style="font-size:18px; color:var(--navy); margin:14px 0 10px;">📤 RETURURI la depozit (per magazin sursă)</h2>';
+    if (Object.keys(retururi).length === 0) {
+      html += '<div class="placeholder">Nicio retur — toate lipsurile au stoc în depozit direct</div>';
+    } else {
+      for (const sursa of Object.keys(retururi).sort()) {
+        const items = retururi[sursa];
+        html += `<div style="margin-bottom:20px;">
+          <div style="background:#dc2626; color:white; padding:10px 14px; border-radius:8px 8px 0 0; font-weight:700; font-size:14px;">📤 ${escHtml(sursa)} → la depozit (${items.length} produse)</div>
+          <table style="width:100%; font-size:12px; border-collapse:collapse; border:1px solid var(--border);"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">COD</th><th style="padding:6px; text-align:left;">Nume</th><th style="padding:6px; text-align:right;">Cant.</th><th style="padding:6px; text-align:right;">Stoc aici</th><th style="padding:6px; text-align:left;">→ pentru</th></tr></thead><tbody>`;
+        items.sort((a,b) => a.cod.localeCompare(b.cod));
+        for (const it of items) {
+          const p = pmap[it.cod] || {};
+          html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(it.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td><td style="padding:6px;">${escHtml(p.nume_art||'')}</td><td style="padding:6px; text-align:right; font-weight:800; color:var(--red); background:#fee2e2;">${fmtNum(it.cant)}</td><td style="padding:6px; text-align:right;">${fmtNum(it.disp)}</td><td style="padding:6px; color:var(--sub); font-size:11px;">→ ${escHtml(it.dest)}</td></tr>`;
+        }
+        html += '</tbody></table></div>';
+      }
+    }
+
+    // SECTIUNEA 2: LIVRARI CATRE MAGAZINE
+    html += '<h2 style="font-size:18px; color:var(--navy); margin:22px 0 10px;">📥 LIVRĂRI către magazine (per destinație)</h2>';
+    const allDest = new Set([...Object.keys(livrariDirect), ...Object.keys(livrariIndirect)]);
+    if (allDest.size === 0) {
+      html += '<div class="placeholder">Nicio livrare propusă</div>';
+    } else {
+      for (const dest of [...allDest].sort()) {
+        const directe = livrariDirect[dest] || [];
+        const indirecte = livrariIndirect[dest] || [];
+        const total = directe.length + indirecte.length;
+        html += `<div style="margin-bottom:20px;">
+          <div style="background:#16a34a; color:white; padding:10px 14px; border-radius:8px 8px 0 0; font-weight:700; font-size:14px;">📥 La ${escHtml(dest)} (${total} produse)</div>
+          <table style="width:100%; font-size:12px; border-collapse:collapse; border:1px solid var(--border);"><thead><tr style="background:#f8fafc;"><th style="padding:6px; text-align:left;">COD</th><th style="padding:6px; text-align:left;">Nume</th><th style="padding:6px; text-align:right;">Cant.</th><th style="padding:6px; text-align:left;">← din</th></tr></thead><tbody>`;
+        const allItems = [...directe, ...indirecte].sort((a,b) => a.cod.localeCompare(b.cod));
+        for (const it of allItems) {
+          const p = pmap[it.cod] || {};
+          const sursaTag = PRIORITATE.includes(it.sursa)
+            ? `<span style="background:#dbeafe; color:#1e40af; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700;">stoc depot</span> ${escHtml(it.sursa)}`
+            : `<span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700;">retur</span> ${escHtml(it.sursa)}`;
+          html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(it.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td><td style="padding:6px;">${escHtml(p.nume_art||'')}</td><td style="padding:6px; text-align:right; font-weight:800; color:var(--green); background:#dcfce7;">${fmtNum(it.cant)}</td><td style="padding:6px; color:var(--sub); font-size:11px;">${sursaTag}</td></tr>`;
+        }
+        html += '</tbody></table></div>';
+      }
+    }
+    res.innerHTML = html;
+  } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
 // ── REFRESH ──
 async function loadRefresh() {
   const el = document.getElementById('refresh-logs');
@@ -1268,6 +1458,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'achizitii')  loadAchizitii();
       if (page === 'duplicate')  loadDuplicate();
       if (page === 'refresh')    loadRefresh();
+      // page transferuri: no preload — user clicks button
     }
   });
 });
