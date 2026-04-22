@@ -675,11 +675,6 @@ async function doSearch() {
       }
     }
     info.textContent = `${data.length} rezultate (max 50 afișate)`;
-    const ABREV = {
-      'MARVIMEX':'MV', 'TOMIS 3':'T3', 'MEDGIDIA':'MG', 'NAVODARI':'NV',
-      'POARTA 6':'P6', 'BABADAG':'BB', 'BROTACEI':'BR', 'SHOWROOM':'SH',
-      'DEPOZIT PAPETARIE':'DP', 'DEPOZIT CARTE':'DC',
-    };
     const fmtStocRow = (cod) => {
       const m = stocMap[cod] || {};
       const entries = Object.entries(m).filter(([l,s]) => s > 0);
@@ -687,10 +682,9 @@ async function doSearch() {
       const total = entries.reduce((s,[,v]) => s + v, 0);
       entries.sort((a,b) => b[1] - a[1]);
       const items = entries.map(([l,s]) => {
-        const a = ABREV[l] || l.substring(0,3);
-        return `<span title="${escHtml(l)}" style="background:#e0f2fe; color:#0369a1; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:600; white-space:nowrap;">${a}:<b>${fmtNum(s)}</b></span>`;
-      }).join(' ');
-      return `<span style="font-size:11px; color:var(--sub); margin-right:6px;">Σ <b style="color:var(--navy);">${fmtNum(total)}</b></span>${items}`;
+        return `<span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; white-space:nowrap; display:inline-block; margin:1px 2px;">${escHtml(l)}: <b>${fmtNum(s)}</b></span>`;
+      }).join('');
+      return `<div><span style="font-size:12px; color:var(--sub); margin-right:8px;">Total: <b style="color:var(--navy); font-size:13px;">${fmtNum(total)}</b></span></div><div style="margin-top:3px;">${items}</div>`;
     };
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:8px;">COD</th><th style="padding:8px;">Nume produs</th><th style="padding:8px;">Furnizor</th><th style="padding:8px;">Stoc per locație</th></tr></thead><tbody>';
     for (const p of data) {
