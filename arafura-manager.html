@@ -802,7 +802,19 @@ function filterFurnizori() {
   renderFurnizoriTop(list.slice(0, 100));
 }
 
-// ── LIPSURI ──
+// Mapare magazin → pattern partener (pentru filtru sales per locatie)
+const PARTENER_MAP = {
+  'MARVIMEX':  ['Marvimex'],
+  'TOMIS 3':   ['Tomis'],
+  'MEDGIDIA':  ['Medgidia'],
+  'NAVODARI':  ['Navodari'],
+  'POARTA 6':  ['Poarta'],
+  'BABADAG':   ['Babadag'],
+  'BROTACEI':  ['Brotacei'],
+  'SHOWROOM':  ['Showroom'],
+};
+
+// ── LIPSURI (sales-driven) ──
 async function loadLipsuri() {
   const loc = document.getElementById('lip-locatie').value;
   const zile = parseInt(document.getElementById('lip-zile').value) || 30;
@@ -811,66 +823,93 @@ async function loadLipsuri() {
   info.textContent = 'caut…';
   res.innerHTML = '<div class="placeholder">se încarcă…</div>';
   try {
-    // Latest snapshot
     const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
     const ds = await rs.json();
     const dataSnap = ds[0]?.data_snapshot;
     if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
-    // Find products with stock=0 at this snapshot
-    let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=eq.0&select=cod_art,locatie&limit=5000`;
-    if (loc) url += `&locatie=eq.${encodeURIComponent(loc)}`;
-    const r = await fetch(url, { headers: HEADERS });
-    const lipsa = await r.json();
-    if (!lipsa.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs cu stoc 0</div>'; return; }
-    // Group cod_art for batch query
-    const codeUnique = [...new Set(lipsa.map(l => l.cod_art))];
-    info.textContent = `${codeUnique.length} produse cu stoc 0 — verific vânzări recente…`;
 
-    // Sales last N days per cod_art
+    // 1. Vânzări în perioada (filtru locație via partener pentru Bon Fiscal)
     const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
+    let salesUrl = `${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data,partener&limit=20000`;
+    if (loc && PARTENER_MAP[loc]) {
+      const pattern = PARTENER_MAP[loc][0];
+      salesUrl += `&partener=ilike.*${encodeURIComponent(pattern)}*`;
+    }
+    info.textContent = 'caut vânzări…';
+    const rv = await fetch(salesUrl, { headers: HEADERS });
+    const sales = await rv.json();
+    if (!Array.isArray(sales) || !sales.length) {
+      info.textContent = '';
+      res.innerHTML = `<div class="placeholder">Nicio vânzare în ultimele ${zile} zile${loc ? ' la ' + loc : ''}</div>`;
+      return;
+    }
+    // Aggregate sales per cod_art
     const vanzari = {};
-    // Batched fetch
-    for (let i = 0; i < codeUnique.length; i += 200) {
-      const batch = codeUnique.slice(i, i+200);
+    for (const v of sales) {
+      if (!vanzari[v.cod_art]) vanzari[v.cod_art] = { total: 0, ultima: null };
+      vanzari[v.cod_art].total += parseFloat(v.iesiri||0);
+      if (!vanzari[v.cod_art].ultima || v.data > vanzari[v.cod_art].ultima) vanzari[v.cod_art].ultima = v.data;
+    }
+    const codeVandute = Object.keys(vanzari);
+    info.textContent = `${codeVandute.length} produse vândute — verific stoc actual…`;
+
+    // 2. Stoc actual pentru aceste coduri
+    const stocMap = {}; // cod_art → {locatie: stoc}
+    for (let i = 0; i < codeVandute.length; i += 200) {
+      const batch = codeVandute.slice(i, i+200);
       const codStr = batch.map(c => `"${c}"`).join(',');
-      const vu = `${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data&limit=10000`;
-      const rv = await fetch(vu, { headers: HEADERS });
-      const rows = await rv.json();
-      for (const v of rows) {
-        if (!vanzari[v.cod_art]) vanzari[v.cod_art] = { total: 0, ultima: null };
-        vanzari[v.cod_art].total += parseFloat(v.iesiri||0);
-        if (!vanzari[v.cod_art].ultima || v.data > vanzari[v.cod_art].ultima) vanzari[v.cod_art].ultima = v.data;
+      const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=20000`, { headers: HEADERS });
+      const rows = await rs2.json();
+      for (const r of rows) {
+        if (!stocMap[r.cod_art]) stocMap[r.cod_art] = {};
+        stocMap[r.cod_art][r.locatie] = parseFloat(r.stoc||0);
       }
     }
-    // Filter LIPSA candidates
-    const candidates = lipsa.filter(l => vanzari[l.cod_art] && vanzari[l.cod_art].total > 0);
-    if (!candidates.length) { info.textContent = '0 lipsuri reale'; res.innerHTML = '<div class="placeholder">Nicio lipsă (stoc 0 dar fără vânzări recente)</div>'; return; }
-    info.textContent = `${candidates.length} lipsuri (stoc 0 + vândut în ${zile} zile)`;
-    // Get product info
-    const codeC = [...new Set(candidates.map(c => c.cod_art))];
-    const codStr = codeC.map(c => `"${c}"`).join(',');
-    const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor,cod_bare`, { headers: HEADERS });
-    const prods = await rp.json();
-    const pmap = Object.fromEntries(prods.map(p => [p.cod_art, p]));
-    // Fetch stocuri >0 pentru aceste coduri (alte locatii cu stoc)
-    const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&stoc=gt.0&select=cod_art,locatie,stoc&limit=10000`, { headers: HEADERS });
-    const surse = await rs2.json();
-    const sursaMap = {};
-    for (const s of surse) {
-      if (!sursaMap[s.cod_art]) sursaMap[s.cod_art] = [];
-      sursaMap[s.cod_art].push(`${s.locatie} (${s.stoc})`);
+
+    // 3. Determină LIPSA: pentru fiecare cod vândut, dacă (loc selectat) nu are stoc → LIPSA
+    const lipsa = [];
+    for (const cod of codeVandute) {
+      const stocLoc = stocMap[cod] || {};
+      if (loc) {
+        // Per locație: lipsă dacă stocLoc[loc] e 0 sau undefined
+        if (!stocLoc[loc] || stocLoc[loc] <= 0) {
+          lipsa.push({ cod_art: cod, locatie: loc, stocAlte: stocLoc });
+        }
+      } else {
+        // Global: lipsă dacă nu are stoc nicăieri
+        const oriunde = Object.values(stocLoc).some(s => s > 0);
+        if (!oriunde) {
+          lipsa.push({ cod_art: cod, locatie: '(global)', stocAlte: stocLoc });
+        }
+      }
     }
-    candidates.sort((a,b) => (vanzari[b.cod_art]?.total || 0) - (vanzari[a.cod_art]?.total || 0));
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vânzări ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
-    for (const c of candidates.slice(0, 500)) {
+    if (!lipsa.length) {
+      info.textContent = '0 lipsuri';
+      res.innerHTML = `<div class="placeholder">✅ Nicio lipsă${loc ? ' la ' + loc : ''}: toate produsele vândute au stoc</div>`;
+      return;
+    }
+    info.textContent = `${lipsa.length} lipsuri ${loc ? 'la ' + loc : '(global)'} (vândut în ${zile} zile)`;
+
+    // 4. Info produse
+    const pmap = {};
+    for (let i = 0; i < lipsa.length; i += 200) {
+      const codStr = lipsa.slice(i,i+200).map(c => `"${c.cod_art}"`).join(',');
+      const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor`, { headers: HEADERS });
+      const prods = await rp.json();
+      for (const p of prods) pmap[p.cod_art] = p;
+    }
+    lipsa.sort((a,b) => (vanzari[b.cod_art]?.total || 0) - (vanzari[a.cod_art]?.total || 0));
+
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vânduri ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
+    for (const c of lipsa.slice(0, 500)) {
       const p = pmap[c.cod_art] || {};
       const v = vanzari[c.cod_art] || {};
-      const surse = (sursaMap[c.cod_art] || []).filter(x => !x.startsWith(c.locatie + ' '));
+      const surse = Object.entries(c.stocAlte).filter(([l,s]) => s > 0 && l !== c.locatie).map(([l,s]) => `${l} (${s})`);
       const surseTxt = surse.length ? '🔄 ' + surse.slice(0,3).join(', ') : '<span style="color:var(--red);">— niciun stoc</span>';
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(c.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(c.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(c.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(v.total||0)}</td><td style="padding:8px; font-size:12px; color:var(--sub);">${v.ultima ? new Date(v.ultima).toLocaleDateString('ro-RO') : '—'}</td><td style="padding:8px; font-size:12px; color:var(--green);">${surseTxt}</td></tr>`;
     }
     html += '</tbody></table>';
-    if (candidates.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px; text-align:center;">⚠ Afișate doar primele 500 din ${candidates.length}. Folosește filtre.</div>`;
+    if (lipsa.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px; text-align:center;">⚠ Afișate primele 500 din ${lipsa.length}.</div>`;
     res.innerHTML = html;
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
