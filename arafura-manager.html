@@ -458,7 +458,15 @@
 
       <!-- FAMILII -->
       <div class="page" id="page-familii">
-        <div class="card"><h2>📚 Per Familie / Editură</h2><div class="placeholder">Stoc / vânzări per familie · top edituri · produse noi pe familie</div></div>
+        <div class="card">
+          <h2>📚 Per Familie / Editură</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">31 familii din <code>Coduri Familie.xlsx</code>. Click pe o familie → produsele acelei edituri (din facturi).</p>
+          <div id="fam-list"><div class="placeholder">se încarcă…</div></div>
+        </div>
+        <div class="card" id="fam-detail" style="display:none;">
+          <h2 id="fam-titlu">—</h2>
+          <div id="fam-content"></div>
+        </div>
       </div>
 
       <!-- DUPLICATE -->
@@ -1444,6 +1452,67 @@ async function loadTransferuri() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
+// ── PER FAMILIE ──
+async function loadFamilii() {
+  const el = document.getElementById('fam-list');
+  try {
+    const r = await fetch(`${API}/familii?select=cod_familie,nume,custodie&order=nume.asc`, { headers: HEADERS });
+    const fams = await r.json();
+    if (!Array.isArray(fams) || !fams.length) {
+      el.innerHTML = '<div class="placeholder">Nicio familie</div>';
+      return;
+    }
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; text-align:left;"><th style="padding:10px;">Cod familie</th><th style="padding:10px;">Nume</th><th style="padding:10px;">Custodie</th></tr></thead><tbody>';
+    for (const f of fams) {
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadFamilieDetail('${escHtml(f.nume)}')">
+        <td style="padding:10px; font-family:monospace; color:var(--blue); font-weight:700;">${escHtml(f.cod_familie)}</td>
+        <td style="padding:10px; font-weight:600;">${escHtml(f.nume)}</td>
+        <td style="padding:10px;">${f.custodie ? '<span style="background:#dcfce7; color:#16a34a; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700;">CUSTODIE</span>' : '<span style="color:var(--sub); font-size:11px;">propriu</span>'}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+async function loadFamilieDetail(numeFam) {
+  const det = document.getElementById('fam-detail');
+  const titlu = document.getElementById('fam-titlu');
+  const cont = document.getElementById('fam-content');
+  det.style.display = '';
+  titlu.textContent = `📚 ${numeFam} — se încarcă…`;
+  cont.innerHTML = '<div class="placeholder">caut produse din facturi…</div>';
+  try {
+    // Facturi de la furnizori care conțin numele familiei
+    const fl = await fetch(`${API}/facturi?nume_partener=ilike.*${encodeURIComponent(numeFam.split(' ')[0])}*&select=cod_art,nume_art,cantitate,pret_net,data_factura,nume_partener&order=data_factura.desc&limit=2000`, { headers: HEADERS });
+    const facts = await fl.json();
+    if (!Array.isArray(facts) || !facts.length) {
+      titlu.textContent = `📚 ${numeFam}`;
+      cont.innerHTML = '<div class="placeholder">Nicio factură de la acest furnizor / familie</div>';
+      return;
+    }
+    // Aggregate per cod_art
+    const perCod = {};
+    for (const f of facts) {
+      if (!perCod[f.cod_art]) perCod[f.cod_art] = { cod: f.cod_art, nume: f.nume_art, cant: 0, ultPret: 0, ultData: null };
+      perCod[f.cod_art].cant += parseFloat(f.cantitate||0);
+      if (!perCod[f.cod_art].ultData || f.data_factura > perCod[f.cod_art].ultData) {
+        perCod[f.cod_art].ultData = f.data_factura;
+        perCod[f.cod_art].ultPret = parseFloat(f.pret_net||0);
+      }
+    }
+    const rows = Object.values(perCod).sort((a,b) => b.cant - a.cant);
+    titlu.textContent = `📚 ${numeFam} — ${rows.length} produse · ${facts.length} linii facturi`;
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:right;">Total achiziționat</th><th style="padding:8px; text-align:right;">Preț ultim</th><th style="padding:8px; text-align:left;">Data ultim</th></tr></thead><tbody>';
+    for (const r of rows.slice(0, 200)) {
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(r.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(r.cod)}</td><td style="padding:8px;">${escHtml(r.nume||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(r.cant)}</td><td style="padding:8px; text-align:right;">${Number(r.ultPret).toFixed(2)}</td><td style="padding:8px; font-size:12px; color:var(--sub);">${r.ultData ? new Date(r.ultData).toLocaleDateString('ro-RO') : '—'}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    if (rows.length > 200) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 200 din ${rows.length}</div>`;
+    cont.innerHTML = html;
+  } catch(e) { cont.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
 // ── REFRESH ──
 async function loadRefresh() {
   const el = document.getElementById('refresh-logs');
@@ -1531,6 +1600,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'achizitii')  loadAchizitii();
       if (page === 'duplicate')  loadDuplicate();
       if (page === 'refresh')    loadRefresh();
+      if (page === 'familii')    loadFamilii();
       // page transferuri: no preload — user clicks button
     }
   });
