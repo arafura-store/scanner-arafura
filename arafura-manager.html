@@ -1023,17 +1023,29 @@ async function loadStagnat() {
 
     const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
     const codeUnique = [...new Set(stoc.map(s => s.cod_art))];
-    info.textContent = 'verific vânzări (RPC)…';
-    // RPC: 1 call, returneaza DISTINCT cod_art cu sales in period
+    info.textContent = `verific vânzări RPC (${codeUnique.length} coduri since ${sinceDate})…`;
     const rpcRes = await fetch(`${API}/rpc/cods_vandute`, {
       method: 'POST',
       headers: { ...HEADERS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ cods: codeUnique, since_date: sinceDate })
     });
-    const vandutArr = await rpcRes.json();
+    let vandutArr;
+    try { vandutArr = await rpcRes.json(); } catch { vandutArr = null; }
     const vandutRecent = new Set();
-    if (Array.isArray(vandutArr)) for (const v of vandutArr) vandutRecent.add(v.cod_art);
-    const stagnat = stoc.filter(s => !vandutRecent.has(s.cod_art));
+    if (Array.isArray(vandutArr)) {
+      for (const v of vandutArr) if (v.cod_art) vandutRecent.add(String(v.cod_art));
+    } else {
+      info.textContent = `⚠ RPC eroare: ${JSON.stringify(vandutArr).slice(0,200)}`;
+      res.innerHTML = '<div class="placeholder">Eroare RPC cods_vandute. Vezi consola browser.</div>';
+      console.error('RPC error:', vandutArr);
+      return;
+    }
+    const stagnat = stoc.filter(s => !vandutRecent.has(String(s.cod_art)));
+    console.log(`Stagnat debug: stoc=${stoc.length}, vandute=${vandutRecent.size}, stagnat=${stagnat.length}, probe 406179:`, {
+      inStoc: stoc.some(s => s.cod_art === '406179'),
+      inVandute: vandutRecent.has('406179'),
+      inStagnat: stagnat.some(s => s.cod_art === '406179'),
+    });
     if (!stagnat.length) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Niciun produs stagnant</div>'; return; }
     let totalVal = stagnat.reduce((s,x) => s + (parseFloat(x.valoare_stoc)||0), 0);
     info.textContent = `${stagnat.length} produse stagnate · ${fmtMoney(totalVal)} RON valoare blocată`;
