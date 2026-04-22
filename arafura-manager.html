@@ -923,77 +923,93 @@ async function loadLipsuri() {
     const dataSnap = ds[0]?.data_snapshot;
     if (!dataSnap) { res.innerHTML = '<div class="placeholder">Fără balanță</div>'; return; }
 
-    // 1. Vânzări în perioada (filtru locație via partener pentru Bon Fiscal)
+    // 1. Vânzări în perioada — paginate
     const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
-    let salesUrl = `${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data,partener&limit=20000`;
-    if (loc && PARTENER_MAP[loc]) {
-      const pattern = PARTENER_MAP[loc][0];
-      salesUrl += `&partener=ilike.*${encodeURIComponent(pattern)}*`;
-    }
     info.textContent = 'caut vânzări…';
-    const rv = await fetch(salesUrl, { headers: HEADERS });
-    const sales = await rv.json();
-    if (!Array.isArray(sales) || !sales.length) {
+    let sales = [];
+    let salesOff = 0;
+    while (true) {
+      let salesUrl = `${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data,partener&order=cod_art.asc&limit=1000&offset=${salesOff}`;
+      if (loc && PARTENER_MAP[loc]) {
+        salesUrl += `&partener=ilike.*${encodeURIComponent(PARTENER_MAP[loc][0])}*`;
+      }
+      const rv = await fetch(salesUrl, { headers: HEADERS });
+      const rows = await rv.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      sales = sales.concat(rows);
+      salesOff += 1000;
+      if (rows.length < 1000) break;
+      if (salesOff > 200000) break;
+      if (salesOff % 5000 === 0) info.textContent = `vânzări: ${sales.length}…`;
+    }
+    if (!sales.length) {
       info.textContent = '';
       res.innerHTML = `<div class="placeholder">Nicio vânzare în ultimele ${zile} zile${loc ? ' la ' + loc : ''}</div>`;
       return;
     }
-    // Aggregate sales per cod_art
-    const vanzari = {};
-    for (const v of sales) {
-      if (!vanzari[v.cod_art]) vanzari[v.cod_art] = { total: 0, ultima: null };
-      vanzari[v.cod_art].total += parseFloat(v.iesiri||0);
-      if (!vanzari[v.cod_art].ultima || v.data > vanzari[v.cod_art].ultima) vanzari[v.cod_art].ultima = v.data;
-    }
-    const codeVandute = Object.keys(vanzari);
-    info.textContent = `${codeVandute.length} produse vândute — verific stoc actual…`;
 
-    // 2. Stoc actual pentru aceste coduri (batch mai mic — PostgREST max-rows 1000)
-    const stocMap = {}; // cod_art → {locatie: stoc}
+    // Helper: partener → locatie magazin
+    const locFromPartener = (p) => {
+      if (!p) return null;
+      const up = p.toUpperCase();
+      for (const [L, pats] of Object.entries(PARTENER_MAP)) {
+        for (const pat of pats) if (up.includes(pat.toUpperCase())) return L;
+      }
+      return null;
+    };
+
+    // Aggregate sales per (cod, locatie)
+    const vanzariPerCodLoc = {}; // key: cod|loc
+    for (const v of sales) {
+      const locMag = locFromPartener(v.partener);
+      if (!locMag) continue;
+      const k = v.cod_art + '|' + locMag;
+      if (!vanzariPerCodLoc[k]) vanzariPerCodLoc[k] = { total: 0, ultima: null };
+      vanzariPerCodLoc[k].total += parseFloat(v.iesiri||0);
+      if (!vanzariPerCodLoc[k].ultima || v.data > vanzariPerCodLoc[k].ultima) vanzariPerCodLoc[k].ultima = v.data;
+    }
+    const codeVandute = [...new Set(sales.map(s => s.cod_art))];
+    info.textContent = `${codeVandute.length} produse vândute · verific stoc…`;
+
+    // 2. Stoc actual pentru aceste coduri (batch 80)
+    const stocMap = {};
     for (let i = 0; i < codeVandute.length; i += 80) {
       const batch = codeVandute.slice(i, i+80);
       const codStr = batch.map(c => `"${c}"`).join(',');
-      const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=1000`, { headers: { ...HEADERS, 'Range': '0-999' } });
+      const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=1000`, { headers: HEADERS });
       const rows = await rs2.json();
-      for (const r of rows) {
+      if (Array.isArray(rows)) for (const r of rows) {
         if (!stocMap[r.cod_art]) stocMap[r.cod_art] = {};
         stocMap[r.cod_art][r.locatie] = parseFloat(r.stoc||0);
       }
     }
 
-    // 3. Determină LIPSA: pentru fiecare cod vândut, dacă (loc selectat) nu are stoc → LIPSA
+    // 3. Determină LIPSA per (cod, locatie) — arată per magazin
     const lipsa = [];
-    for (const cod of codeVandute) {
+    for (const k of Object.keys(vanzariPerCodLoc)) {
+      const [cod, locMag] = k.split('|');
+      if (loc && locMag !== loc) continue;
       const stocLoc = stocMap[cod] || {};
-      if (loc) {
-        // Per locație: lipsă dacă stocLoc[loc] e 0 sau undefined
-        if (!stocLoc[loc] || stocLoc[loc] <= 0) {
-          lipsa.push({ cod_art: cod, locatie: loc, stocAlte: stocLoc });
-        }
-      } else {
-        // Global: lipsă dacă nu are stoc nicăieri
-        const oriunde = Object.values(stocLoc).some(s => s > 0);
-        if (!oriunde) {
-          lipsa.push({ cod_art: cod, locatie: '(global)', stocAlte: stocLoc });
-        }
-      }
+      const stocLocal = stocLoc[locMag] || 0;
+      if (stocLocal > 0) continue;
+      lipsa.push({ cod_art: cod, locatie: locMag, stocAlte: stocLoc, v: vanzariPerCodLoc[k] });
     }
     if (!lipsa.length) {
       info.textContent = '0 lipsuri';
       res.innerHTML = `<div class="placeholder">✅ Nicio lipsă${loc ? ' la ' + loc : ''}: toate produsele vândute au stoc</div>`;
       return;
     }
-    info.textContent = `${lipsa.length} lipsuri ${loc ? 'la ' + loc : '(global)'} (vândut în ${zile} zile)`;
+    info.textContent = `${lipsa.length} lipsuri ${loc ? 'la ' + loc : 'în toate magazinele'} (vândut în ${zile} zile)`;
 
-    // 4. Info produse (cu fallback la facturi pentru nume)
-    const allCods = lipsa.map(c => c.cod_art);
+    // 4. Info produse
+    const allCods = [...new Set(lipsa.map(c => c.cod_art))];
     const pmap = await getProdMap(allCods);
-    lipsa.sort((a,b) => (vanzari[b.cod_art]?.total || 0) - (vanzari[a.cod_art]?.total || 0));
+    lipsa.sort((a,b) => (b.v.total||0) - (a.v.total||0));
 
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vânduri ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
     for (const c of lipsa.slice(0, 500)) {
       const p = pmap[c.cod_art] || {};
-      const v = vanzari[c.cod_art] || {};
+      const v = c.v || {};
       const surse = Object.entries(c.stocAlte).filter(([l,s]) => s > 0 && l !== c.locatie).map(([l,s]) => `${l} (${s})`);
       const surseTxt = surse.length ? '🔄 ' + surse.slice(0,3).join(', ') : '<span style="color:var(--red);">— niciun stoc</span>';
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(c.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(c.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(c.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(v.total||0)}</td><td style="padding:8px; font-size:12px; color:var(--sub);">${v.ultima ? new Date(v.ultima).toLocaleDateString('ro-RO') : '—'}</td><td style="padding:8px; font-size:12px; color:var(--green);">${surseTxt}</td></tr>`;
