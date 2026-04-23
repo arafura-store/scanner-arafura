@@ -402,8 +402,16 @@ async function onLoginPin() {
       document.getElementById('login-pin').value = '';
       return;
     }
-    saveSession(data[0]);
-    await completeLogin(data[0]);
+    const user = data[0];
+    // Borderou: acces doar pentru Eugen (admin) sau utilizator de magazin
+    const permis = user.nume === 'EUGEN' || MAGAZINE.includes(user.nume);
+    if (!permis) {
+      showToast('Nu ai acces la Borderou', 'err');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    saveSession(user);
+    await completeLogin(user);
   } catch { showToast('Eroare conexiune', 'err'); }
 }
 
@@ -417,8 +425,8 @@ async function completeLogin(user) {
   const todayStr = new Date().toISOString().slice(0, 10);
   document.getElementById('f-data').value = todayStr;
   document.getElementById('f-data').setAttribute('max', todayStr);
-  // Daca userul e admin (acces_erp), repopulez dropdown cu TOATE magazinele
-  if (user.acces_erp) {
+  // Daca userul e EUGEN (admin), repopulez dropdown cu TOATE magazinele
+  if (user.nume === 'EUGEN') {
     const sel = document.getElementById('f-magazin');
     const prev = sel.value;
     sel.innerHTML = '<option value="">— Alege magazin —</option>';
