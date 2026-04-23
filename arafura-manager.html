@@ -481,6 +481,7 @@
                 <input type="checkbox" id="dist-include-stoc" onchange="saveDistState()" checked> Include stoc curent (cele cu stoc 0 prioritar)
               </label>
               <button onclick="calculeazaDistributie()" class="btn primary" style="padding:10px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Calculează distribuția</button>
+              <button onclick="resetDistState()" class="btn" style="padding:8px 12px; border-radius:8px; border:1px solid var(--red); background:white; color:var(--red); cursor:pointer; font-weight:600; font-size:12px;">🗑️ Șterge și începe altă factură</button>
             </div>
           </div>
           <div id="dist-info" style="font-size:13px; color:var(--sub); margin-bottom:8px;"></div>
@@ -2453,6 +2454,12 @@ function exportDistributieExcel() {
   XLSX.utils.book_append_sheet(wb, ws2, 'Matrice');
   const today = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, `distributie_receptie_${today}.xlsx`);
+  // Dupa scurta pauza, intreb daca finalizam
+  setTimeout(() => {
+    if (confirm('✅ Excel exportat cu succes!\n\nAi terminat distribuția pentru această factură?\nApasă OK pentru a curăța lista (pregătit pentru următoarea factură).\n\nApasă Cancel dacă vrei să faci modificări sau să exporți din nou.')) {
+      resetDistState();
+    }
+  }, 500);
 }
 
 // ── STOC NEGATIV ──
