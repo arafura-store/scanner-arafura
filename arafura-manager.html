@@ -2332,42 +2332,45 @@ async function calculeazaDistributie() {
     html += '<div style="overflow-x:auto;"><table style="width:100%; font-size:11px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0;">';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc; min-width:80px;">COD</th><th style="padding:8px; text-align:left; background:#f8fafc; min-width:200px;">Denumire</th><th style="padding:8px; text-align:right; background:#f8fafc;">Primit</th>';
     for (const m of MAGAZINE_DIST) html += `<th style="padding:8px; text-align:center; background:#f8fafc; min-width:90px;">${m}</th>`;
+    html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Distribuit / Rămas</th>';
     html += '</tr></thead><tbody>';
-    for (const r of rezultat) {
+    for (let idx = 0; idx < rezultat.length; idx++) {
+      const r = rezultat[idx];
       html += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px; font-family:monospace; color:var(--blue); vertical-align:top;">${escHtml(r.cod)}</td><td style="padding:6px; vertical-align:top;">${escHtml(r.nume)}</td><td style="padding:6px; text-align:right; font-weight:800; background:#dbeafe; vertical-align:top;">${fmtNum(r.total)}</td>`;
       for (const m of MAGAZINE_DIST) {
         const cant = r.per_magazin[m] || 0;
         const stoc = r.stoc[m] || 0;
         const vanz = r.vanz[m] || 0;
         const wasEver = everSeen[r.cod + '|' + m] || stoc > 0 || vanz > 0;
-        let cellHtml = '';
-        if (!wasEver && cant === 0) {
-          cellHtml = '<div style="color:#9ca3af; font-size:10px; font-style:italic;">niciodată</div>';
-        } else {
-          // Cantitate propusă
-          if (cant > 0) {
-            cellHtml = `<div style="font-weight:800; color:var(--green); font-size:14px;">→ ${fmtNum(cant)}</div>`;
-          } else {
-            cellHtml = '<div style="color:#9ca3af;">—</div>';
-          }
-          // Sub: stoc + vanz
-          const stocColor = stoc === 0 ? '#dc2626' : 'var(--sub)';
-          const stocLbl = stoc === 0 ? '<b>0!</b>' : fmtNum(stoc);
-          cellHtml += `<div style="font-size:10px; color:${stocColor}; margin-top:2px;">s:${stocLbl}</div>`;
-          if (vanz > 0) cellHtml += `<div style="font-size:10px; color:var(--sub);">v:${fmtNum(Math.round(vanz))}</div>`;
-        }
+        // Input editabil pentru cantitate
+        const inputId = `dist-cell-${idx}-${m.replace(/\s/g,'_')}`;
+        const noteHist = !wasEver ? '<div style="color:#9ca3af; font-size:9px; font-style:italic;">niciodată aici</div>' : '';
+        const stocColor = stoc === 0 ? '#dc2626' : 'var(--sub)';
+        const stocLbl = stoc === 0 ? '<b>0!</b>' : fmtNum(stoc);
+        const stocLine = `<div style="font-size:10px; color:${stocColor}; margin-top:2px;">s:${stocLbl}${vanz > 0 ? ` · v:${fmtNum(Math.round(vanz))}` : ''}</div>`;
+        const cellHtml = `
+          <input type="number" id="${inputId}" value="${cant}" min="0" step="1"
+            data-row="${idx}" data-mag="${escHtml(m)}"
+            oninput="onDistCellChange(this)"
+            style="width:60px; padding:4px 6px; border:1px solid #d1d5db; border-radius:5px; text-align:center; font-weight:700; color:${cant>0?'var(--green)':'#9ca3af'}; background:white;">
+          ${stocLine}
+          ${noteHist}`;
         const bg = cant > 0 ? '#f0fdf4' : (!wasEver ? '#f9fafb' : 'transparent');
         html += `<td style="padding:5px; text-align:center; vertical-align:top; background:${bg};">${cellHtml}</td>`;
       }
+      // Adaug coloana sumar/diferenta la final - se recalculeaza dinamic
+      html += `<td id="dist-rowsum-${idx}" style="padding:6px; text-align:right; font-weight:700; vertical-align:top; background:#f1f5f9;">—</td>`;
       html += '</tr>';
     }
-    // Total per magazin
+    // Total per magazin (cu ID pentru update dinamic)
     html += '<tr style="border-top:2px solid var(--navy); background:#f1f5f9;"><td colspan="2" style="padding:8px; font-weight:800;">TOTAL per magazin</td><td style="padding:8px; text-align:right; font-weight:800;">' + fmtNum(rezultat.reduce((s, r) => s + r.total, 0)) + '</td>';
     for (const m of MAGAZINE_DIST) {
       const tot = rezultat.reduce((s, r) => s + (r.per_magazin[m] || 0), 0);
-      html += `<td style="padding:8px; text-align:center; font-weight:800; color:var(--navy);">${fmtNum(tot)}</td>`;
+      html += `<td id="dist-coltot-${m.replace(/\s/g,'_')}" style="padding:8px; text-align:center; font-weight:800; color:var(--navy);">${fmtNum(tot)}</td>`;
     }
-    html += '</tr></tbody></table></div>';
+    html += '<td></td></tr></tbody></table></div>';
+    // Recalculez sumele rândurilor după render
+    setTimeout(() => { for (let i = 0; i < rezultat.length; i++) updateRowSum(i); }, 50);
 
     html += '<div style="margin-top:14px; display:flex; gap:10px;"><button onclick="exportDistributieExcel()" class="btn" style="padding:10px 16px; border-radius:8px; border:none; background:var(--green); color:white; cursor:pointer; font-weight:600;">📥 Export Excel</button></div>';
 
@@ -2376,6 +2379,44 @@ async function calculeazaDistributie() {
     info.textContent = '';
     res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>';
     console.error(e);
+  }
+}
+
+function onDistCellChange(input) {
+  const idx = parseInt(input.dataset.row);
+  const mag = input.dataset.mag;
+  let val = parseInt(input.value) || 0;
+  if (val < 0) val = 0;
+  input.value = val;
+  if (!_distRezultat[idx]) return;
+  _distRezultat[idx].per_magazin[mag] = val;
+  // Vizual: schimba culoarea text-ului
+  input.style.color = val > 0 ? 'var(--green)' : '#9ca3af';
+  // Updatez celula de Distribuit + total per magazin
+  updateRowSum(idx);
+  updateColTotals();
+}
+function updateRowSum(idx) {
+  const r = _distRezultat[idx];
+  if (!r) return;
+  const sum = MAGAZINE_DIST.reduce((s, m) => s + (r.per_magazin[m] || 0), 0);
+  const ramane = r.total - sum;
+  const cell = document.getElementById('dist-rowsum-' + idx);
+  if (cell) {
+    let color = 'var(--sub)';
+    let txt = `${sum}/${r.total}`;
+    if (ramane > 0) { color = 'var(--orange)'; txt += ` <span style="font-size:10px;">(rămân ${ramane})</span>`; }
+    else if (ramane < 0) { color = 'var(--red)'; txt += ` <span style="font-size:10px;">(+${-ramane}!)</span>`; }
+    else { color = 'var(--green)'; txt = `✓ ${sum}/${r.total}`; }
+    cell.innerHTML = txt;
+    cell.style.color = color;
+  }
+}
+function updateColTotals() {
+  for (const m of MAGAZINE_DIST) {
+    const tot = _distRezultat.reduce((s, r) => s + (r.per_magazin[m] || 0), 0);
+    const cell = document.getElementById('dist-coltot-' + m.replace(/\s/g,'_'));
+    if (cell) cell.textContent = fmtNum(tot);
   }
 }
 
