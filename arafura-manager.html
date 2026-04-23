@@ -972,7 +972,7 @@ async function doSearch() {
     if (dataSnap) {
       const codes = data.map(p => p.cod_art);
       for (let i = 0; i < codes.length; i += 50) {
-        const codStr = codes.slice(i,i+50).map(c => `"${c}"`).join(',');
+        const codStr = codes.slice(i,i+50).map(c => `"${encodeURIComponent(c)}"`).join(',');
         const rx = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&stoc=gt.0&select=cod_art,locatie,stoc`, { headers: HEADERS });
         const rows = await rx.json();
         if (Array.isArray(rows)) for (const r of rows) {
@@ -1103,14 +1103,14 @@ async function getProdMap(codes) {
     } catch { return []; }
   };
   for (let i = 0; i < codes.length; i += 50) {
-    const codStr = codes.slice(i,i+50).map(c => `"${c}"`).join(',');
+    const codStr = codes.slice(i,i+50).map(c => `"${encodeURIComponent(c)}"`).join(',');
     const prods = await doFetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor,cod_bare`);
     for (const p of prods) pmap[p.cod_art] = p;
   }
   const missing = codes.filter(c => !pmap[c] || !pmap[c].nume_art);
   if (missing.length > 0) {
     for (let i = 0; i < missing.length; i += 50) {
-      const codStr = missing.slice(i,i+50).map(c => `"${c}"`).join(',');
+      const codStr = missing.slice(i,i+50).map(c => `"${encodeURIComponent(c)}"`).join(',');
       const fact = await doFetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,nume_art,nume_partener&order=data_factura.desc`);
       for (const f of fact) {
         if (!pmap[f.cod_art]) {
@@ -1328,7 +1328,7 @@ async function loadLipsuri() {
     const stocMap = {};
     for (let i = 0; i < codeVandute.length; i += 80) {
       const batch = codeVandute.slice(i, i+80);
-      const codStr = batch.map(c => `"${c}"`).join(',');
+      const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
       const rs2 = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=1000`, { headers: HEADERS });
       const rows = await rs2.json();
       if (Array.isArray(rows)) for (const r of rows) {
@@ -1523,7 +1523,7 @@ async function calculeazaComanda() {
     const stocPerCod = {};
     for (let i = 0; i < codes.length; i += 100) {
       const batch = codes.slice(i, i+100);
-      const codStr = batch.map(c => `"${c}"`).join(',');
+      const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
       const rstoc = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=2000`, { headers: HEADERS });
       const rows = await rstoc.json();
       for (const s of rows) {
@@ -1539,7 +1539,7 @@ async function calculeazaComanda() {
     const vanzLong = {};       // 3x perioada (pentru trend)
     for (let i = 0; i < codes.length; i += 100) {
       const batch = codes.slice(i, i+100);
-      const codStr = batch.map(c => `"${c}"`).join(',');
+      const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
       // long range
       const rv = await fetch(`${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDateLong}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data&limit=10000`, { headers: HEADERS });
       const rows = await rv.json();
@@ -1596,7 +1596,7 @@ async function calculeazaComanda() {
     html += '</tr></thead><tbody>';
 
     // Map produse pentru EAN
-    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const codFilter = '(' + codes.map(c => `"${encodeURIComponent(c)}"`).join(',') + ')';
     const rprod = await fetch(`${API}/produse?cod_art=in.${codFilter}&select=cod_art,cod_bare`, { headers: HEADERS });
     const prods = await rprod.json();
     const eanMap = {};
@@ -2143,7 +2143,7 @@ async function procesareXlsxBuffer(buffer, fileName, dirHandle) {
 
     // Verifica produse noi (nu există în catalog)
     const codes = items.map(i => i.cod);
-    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const codFilter = '(' + codes.map(c => `"${encodeURIComponent(c)}"`).join(',') + ')';
     const r = await fetch(`${API}/produse?cod_art=in.${codFilter}&select=cod_art`, { headers: HEADERS });
     const exist = new Set((await r.json()).map(x => x.cod_art));
     const noi = items.filter(i => !exist.has(i.cod));
@@ -2290,7 +2290,7 @@ async function refreshDistPreview() {
   cont.innerHTML = '<div style="padding:10px; color:var(--sub); font-size:12px;">se încarcă numele produselor…</div>';
   try {
     const codes = items.map(i => i.cod);
-    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const codFilter = '(' + codes.map(c => `"${encodeURIComponent(c)}"`).join(',') + ')';
     const r = await fetch(`${API}/produse?cod_art=in.${codFilter}&select=cod_art,nume_art,cod_bare,um`, { headers: HEADERS });
     const prods = await r.json();
     const pmap = {};
@@ -2351,7 +2351,7 @@ async function calculeazaDistributie() {
     const sinceDate = new Date(Date.now() - zile * 86400000).toISOString().slice(0, 10);
 
     // 1. Vânzări per (cod, magazin) din miscari (Bon Fiscal + Factura Vanzare)
-    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const codFilter = '(' + codes.map(c => `"${encodeURIComponent(c)}"`).join(',') + ')';
     let sales = [];
     let off = 0;
     while (true) {
@@ -2465,7 +2465,7 @@ async function calculeazaDistributie() {
 
     // Pentru a sti daca produsul a fost VREODATA pe locatie (istoric), trebuie un query suplimentar
     // Verific in TOATE miscarile (nu doar perioada) daca exista cel putin 1 miscare
-    const codFilter2 = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const codFilter2 = '(' + codes.map(c => `"${encodeURIComponent(c)}"`).join(',') + ')';
     let everSeen = {}; // cod|loc → bool
     let off2 = 0;
     while (true) {
@@ -2740,7 +2740,7 @@ async function loadPreturi() {
     const codes = preturi.map(p => p.cod_art);
     for (let i = 0; i < codes.length; i += 50) {
       const batch = codes.slice(i, i+50);
-      const codStr = batch.map(c => `"${c}"`).join(',');
+      const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
       const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,pret_net,data_factura&order=data_factura.desc&limit=1000`, { headers: HEADERS });
       const fact = await rf.json();
       if (!Array.isArray(fact)) continue;
