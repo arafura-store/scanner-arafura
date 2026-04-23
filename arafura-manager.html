@@ -461,9 +461,12 @@
 
           <div style="display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; align-items:end;">
             <div style="flex:1; min-width:280px;">
-              <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">📋 Lista produse (cod intern + cantitate, separate prin TAB sau spațiu, un produs per rând):</label>
-              <textarea id="dist-input" rows="6" placeholder="Exemplu:&#10;10572&#9;100&#10;105128&#9;50&#10;11116&#9;30" oninput="onDistInputChange()" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:13px;"></textarea>
-              <div id="dist-preview" style="margin-top:8px; max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fafafa; display:none;"></div>
+              <textarea id="dist-input" oninput="onDistInputChange()" style="display:none;"></textarea>
+              <div id="dist-preview" style="max-height:380px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fafafa; display:none;"></div>
+              <details style="margin-top:8px;">
+                <summary style="cursor:pointer; color:var(--sub); font-size:12px;">✏️ Editare manuală (avansat)</summary>
+                <textarea id="dist-input-edit" rows="6" placeholder="Format: cod intern [TAB] cantitate, un produs per rând" oninput="document.getElementById('dist-input').value = this.value; onDistInputChange();" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:13px; margin-top:6px;"></textarea>
+              </details>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; min-width:180px;">
               <label style="font-size:12px; color:var(--sub);">Bază vânzări (zile):</label>
@@ -2005,8 +2008,12 @@ async function procesareXlsxBuffer(buffer, fileName, dirHandle) {
       if (ri.ok || ri.status === 201 || ri.status === 204) nNew = noi.length;
     }
 
-    // Auto-completează textarea
-    document.getElementById('dist-input').value = items.map(i => `${i.cod}\t${Math.round(i.qty)}`).join('\n');
+    // Auto-completează textarea + preview
+    const txt = items.map(i => `${i.cod}\t${Math.round(i.qty)}`).join('\n');
+    document.getElementById('dist-input').value = txt;
+    const editEl = document.getElementById('dist-input-edit');
+    if (editEl) editEl.value = txt;
+    onDistInputChange();
 
     info.innerHTML = `✅ <b>${items.length}</b> produse extrase din <b>${escHtml(fileName)}</b>` +
       (nNew ? ` · <b style="color:var(--green);">${nNew} produse noi</b> adăugate în catalog` : '') +
@@ -2051,7 +2058,10 @@ async function initDistFolder() {
       const decoded = atob(distData);
       const items = JSON.parse(decoded);
       if (Array.isArray(items) && items.length) {
-        document.getElementById('dist-input').value = items.map(i => `${i.cod}\t${i.qty}`).join('\n');
+        const txt = items.map(i => `${i.cod}\t${i.qty}`).join('\n');
+        document.getElementById('dist-input').value = txt;
+        const editEl = document.getElementById('dist-input-edit');
+        if (editEl) editEl.value = txt;
         document.getElementById('dist-info').innerHTML = `✅ <b>${items.length}</b> produse încărcate automat din factură`;
         // Curat URL pentru a nu se reîncărca la refresh
         window.history.replaceState({}, '', window.location.pathname + '#distributie');
