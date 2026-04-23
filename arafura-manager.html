@@ -462,7 +462,8 @@
           <div style="display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; align-items:end;">
             <div style="flex:1; min-width:280px;">
               <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">📋 Lista produse (cod intern + cantitate, separate prin TAB sau spațiu, un produs per rând):</label>
-              <textarea id="dist-input" rows="6" placeholder="Exemplu:&#10;10572&#9;100&#10;105128&#9;50&#10;11116&#9;30" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:13px;"></textarea>
+              <textarea id="dist-input" rows="6" placeholder="Exemplu:&#10;10572&#9;100&#10;105128&#9;50&#10;11116&#9;30" oninput="onDistInputChange()" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:13px;"></textarea>
+              <div id="dist-preview" style="margin-top:8px; max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:#fafafa; display:none;"></div>
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; min-width:180px;">
               <label style="font-size:12px; color:var(--sub);">Bază vânzări (zile):</label>
@@ -629,6 +630,14 @@ function enterApp(user) {
   document.getElementById('user-nume').textContent = currentUser.nume;
   document.getElementById('user-avatar').textContent = (currentUser.nume[0] || '?').toUpperCase();
   loadDashboard();
+  // Auto-navighează la Distribuție dacă URL conține dist_data
+  if (new URLSearchParams(window.location.search).has('dist_data') ||
+      window.location.hash === '#distributie') {
+    setTimeout(() => {
+      const item = document.querySelector('[data-page="distributie"]');
+      if (item) item.click();
+    }, 300);
+  }
 }
 
 // ── LOGIN ──
@@ -2027,12 +2036,71 @@ async function procesareXlsxBuffer(buffer, fileName, dirHandle) {
   }
 }
 
-// La încărcarea paginii distributie, încercăm să recuperăm folderul memorat
+// La încărcarea paginii distributie, încercăm să recuperăm folderul memorat + auto-load din URL
 async function initDistFolder() {
   const handle = await getStoredDirHandle();
   if (handle && (await verifyHandlePermission(handle).catch(() => false))) {
     document.getElementById('dist-folder-info').innerHTML = `✅ Folder conectat: <b>${escHtml(handle.name)}</b>`;
     await listeazaFacturiFolder(handle);
+  }
+  // Auto-load din URL parameter dist_data (base64 JSON)
+  const params = new URLSearchParams(window.location.search);
+  const distData = params.get('dist_data');
+  if (distData) {
+    try {
+      const decoded = atob(distData);
+      const items = JSON.parse(decoded);
+      if (Array.isArray(items) && items.length) {
+        document.getElementById('dist-input').value = items.map(i => `${i.cod}\t${i.qty}`).join('\n');
+        document.getElementById('dist-info').innerHTML = `✅ <b>${items.length}</b> produse încărcate automat din factură`;
+        // Curat URL pentru a nu se reîncărca la refresh
+        window.history.replaceState({}, '', window.location.pathname + '#distributie');
+        await onDistInputChange();
+      }
+    } catch (e) { console.error('Eroare decode dist_data:', e); }
+  }
+}
+
+// Live preview produse cu nume
+let _distPreviewTimer = null;
+function onDistInputChange() {
+  clearTimeout(_distPreviewTimer);
+  _distPreviewTimer = setTimeout(refreshDistPreview, 400);
+}
+async function refreshDistPreview() {
+  const items = parseDistInput(document.getElementById('dist-input').value);
+  const cont = document.getElementById('dist-preview');
+  if (!items.length) { cont.style.display = 'none'; return; }
+  cont.style.display = 'block';
+  cont.innerHTML = '<div style="padding:10px; color:var(--sub); font-size:12px;">se încarcă numele produselor…</div>';
+  try {
+    const codes = items.map(i => i.cod);
+    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const r = await fetch(`${API}/produse?cod_art=in.${codFilter}&select=cod_art,nume_art,cod_bare,um`, { headers: HEADERS });
+    const prods = await r.json();
+    const pmap = {};
+    for (const p of prods) pmap[p.cod_art] = p;
+
+    let html = '<table style="width:100%; font-size:12px; border-collapse:collapse;">';
+    html += '<thead><tr style="background:#f1f5f9;"><th style="padding:6px; text-align:left;">#</th><th style="padding:6px; text-align:left;">COD</th><th style="padding:6px; text-align:left;">EAN</th><th style="padding:6px; text-align:left;">Denumire</th><th style="padding:6px; text-align:right;">Cantitate</th></tr></thead><tbody>';
+    let total = 0;
+    items.forEach((it, idx) => {
+      const p = pmap[it.cod] || {};
+      const noua = !pmap[it.cod];
+      total += it.qty;
+      html += `<tr style="border-top:1px solid #e2e8f0; ${noua?'background:#fef3c7;':''}">
+        <td style="padding:5px; color:var(--sub);">${idx+1}</td>
+        <td style="padding:5px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td>
+        <td style="padding:5px; font-family:monospace; color:var(--sub); font-size:11px;">${escHtml(p.cod_bare||'')}</td>
+        <td style="padding:5px;">${escHtml(p.nume_art||'<i style="color:var(--red);">— produs necunoscut, va fi adăugat —</i>')}</td>
+        <td style="padding:5px; text-align:right; font-weight:700;">${fmtNum(it.qty)}</td>
+      </tr>`;
+    });
+    html += `<tr style="border-top:2px solid var(--navy); background:#f1f5f9;"><td colspan="4" style="padding:6px; font-weight:700;">TOTAL ${items.length} produse</td><td style="padding:6px; text-align:right; font-weight:800;">${fmtNum(total)}</td></tr>`;
+    html += '</tbody></table>';
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = '<div style="padding:10px; color:var(--red);">Eroare: '+e.message+'</div>';
   }
 }
 
