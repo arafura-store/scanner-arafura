@@ -339,24 +339,23 @@ const MAGAZINE = ['TOMIS 3','POARTA 6','MARVIMEX','MEDGIDIA','NAVODARI','BABADAG
 const MAGAZINE_2_CASE = ['TOMIS 3']; // magazinele cu 2 case de marcat
 
 // Populate dropdown + auto-select + lock pentru user normal
+// Admin vede toate; user normal vede DOAR magazinul sau + SERVICII
 window.addEventListener('DOMContentLoaded', () => {
   const sel = document.getElementById('f-magazin');
-  MAGAZINE.forEach(m => {
+  const storedMagazin = localStorage.getItem('arafura_magazin');
+  const isAdmin = window.location.hash === '#admin' || localStorage.getItem('arafura_admin') === 'true';
+  // Limitez optiunile pentru user normal
+  const magazineVizibile = (isAdmin || !storedMagazin)
+    ? MAGAZINE
+    : [...new Set([storedMagazin, 'SERVICII'].filter(m => MAGAZINE.includes(m)))];
+  magazineVizibile.forEach(m => {
     const opt = document.createElement('option');
     opt.value = m; opt.textContent = m;
     sel.appendChild(opt);
   });
-  // Auto-select magazinul instalat (din localStorage de la index.html)
-  const storedMagazin = localStorage.getItem('arafura_magazin');
-  const isAdmin = window.location.hash === '#admin' || localStorage.getItem('arafura_admin') === 'true';
-  if (storedMagazin && MAGAZINE.includes(storedMagazin)) {
+  // Auto-select magazinul instalat
+  if (storedMagazin && magazineVizibile.includes(storedMagazin)) {
     sel.value = storedMagazin;
-    if (!isAdmin) {
-      sel.disabled = true;
-      sel.style.cursor = 'not-allowed';
-      sel.style.background = '#f1f5f9';
-    }
-    // Triggerez logica onMagazinChange daca exista
     if (typeof onMagazinChange === 'function') onMagazinChange();
   }
 });
