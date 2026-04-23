@@ -285,7 +285,7 @@
           <div class="stat-card violet" ><div class="label">Produse în stoc</div><div class="value" id="d-prod-stoc">—</div><div class="delta" id="d-locatii">—</div></div>
           <div class="stat-card green"  ><div class="label">Valoare blocată</div><div class="value" id="d-valoare">—</div><div class="delta">RON la cost</div></div>
           <div class="stat-card orange" ><div class="label">Mișcări înregistrate</div><div class="value" id="d-miscari">—</div><div class="delta">total în Supabase</div></div>
-          <div class="stat-card red"    ><div class="label">Furnizori</div><div class="value" id="d-furnizori">—</div><div class="delta">activi în facturi</div></div>
+          <div class="stat-card red"    ><div class="label">Furnizori marfă</div><div class="value" id="d-furnizori">—</div><div class="delta">cu intrări în NIR</div></div>
         </div>
         <div class="card">
           <h2>📅 Ultima actualizare per tip document</h2>
@@ -734,7 +734,7 @@ async function loadDashboard() {
   loadUltimaActualizare();
 
   // 3. Furnizori
-  getCount(`${API}/furnizori?select=cod_partener`).then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
+  getCount(`${API}/furnizori?tip=eq.marfa&select=cod_partener`).then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
 
   // 4. ETL logs — toate, cu filtre
   loadAllEtlLogs();
