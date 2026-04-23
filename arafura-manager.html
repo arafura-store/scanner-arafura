@@ -470,7 +470,7 @@
             </div>
             <div style="display:flex; flex-direction:column; gap:8px; min-width:180px;">
               <label style="font-size:12px; color:var(--sub);">Bază vânzări (zile):</label>
-              <select id="dist-zile" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <select id="dist-zile" onchange="saveDistState()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
                 <option value="30">Ultimele 30 zile</option>
                 <option value="60">60 zile</option>
                 <option value="90" selected>90 zile</option>
@@ -478,7 +478,7 @@
                 <option value="365">1 an</option>
               </select>
               <label style="font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px;">
-                <input type="checkbox" id="dist-include-stoc" checked> Include stoc curent (cele cu stoc 0 prioritar)
+                <input type="checkbox" id="dist-include-stoc" onchange="saveDistState()" checked> Include stoc curent (cele cu stoc 0 prioritar)
               </label>
               <button onclick="calculeazaDistributie()" class="btn primary" style="padding:10px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Calculează distribuția</button>
             </div>
@@ -2050,7 +2050,7 @@ async function initDistFolder() {
     document.getElementById('dist-folder-info').innerHTML = `✅ Folder conectat: <b>${escHtml(handle.name)}</b>`;
     await listeazaFacturiFolder(handle);
   }
-  // Auto-load din URL parameter dist_data (base64 JSON)
+  // Auto-load din URL parameter dist_data (base64 JSON) — prioritate maximă
   const params = new URLSearchParams(window.location.search);
   const distData = params.get('dist_data');
   if (distData) {
@@ -2063,19 +2063,66 @@ async function initDistFolder() {
         const editEl = document.getElementById('dist-input-edit');
         if (editEl) editEl.value = txt;
         document.getElementById('dist-info').innerHTML = `✅ <b>${items.length}</b> produse încărcate automat din factură`;
-        // Curat URL pentru a nu se reîncărca la refresh
         window.history.replaceState({}, '', window.location.pathname + '#distributie');
-        await onDistInputChange();
+        saveDistState();
+        refreshDistPreview();
+        return;
       }
     } catch (e) { console.error('Eroare decode dist_data:', e); }
   }
+  // Altfel: încearcă să recuperezi sesiunea salvată
+  loadDistState();
 }
 
-// Live preview produse cu nume
+// Live preview produse cu nume + auto-save în localStorage
+const DIST_STORAGE_KEY = 'arafura_dist_state';
 let _distPreviewTimer = null;
 function onDistInputChange() {
   clearTimeout(_distPreviewTimer);
-  _distPreviewTimer = setTimeout(refreshDistPreview, 400);
+  _distPreviewTimer = setTimeout(() => {
+    refreshDistPreview();
+    saveDistState();
+  }, 400);
+}
+function saveDistState() {
+  try {
+    const state = {
+      input: document.getElementById('dist-input').value,
+      zile: document.getElementById('dist-zile').value,
+      include_stoc: document.getElementById('dist-include-stoc').checked,
+      timestamp: Date.now()
+    };
+    localStorage.setItem(DIST_STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+function loadDistState() {
+  try {
+    const raw = localStorage.getItem(DIST_STORAGE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    if (!s.input) return false;
+    // Verifica daca e mai vechi de 7 zile
+    if (s.timestamp && (Date.now() - s.timestamp) > 7*86400000) return false;
+    document.getElementById('dist-input').value = s.input;
+    const editEl = document.getElementById('dist-input-edit');
+    if (editEl) editEl.value = s.input;
+    if (s.zile) document.getElementById('dist-zile').value = s.zile;
+    if (typeof s.include_stoc === 'boolean') document.getElementById('dist-include-stoc').checked = s.include_stoc;
+    const items = parseDistInput(s.input);
+    document.getElementById('dist-info').innerHTML = `📌 <b>Lista salvată recuperată</b>: ${items.length} produse · <a href="#" onclick="event.preventDefault(); resetDistState();" style="color:var(--red);">șterge și începe altă listă</a>`;
+    refreshDistPreview();
+    return true;
+  } catch { return false; }
+}
+function resetDistState() {
+  if (!confirm('Sigur vrei să ștergi lista actuală?')) return;
+  localStorage.removeItem(DIST_STORAGE_KEY);
+  document.getElementById('dist-input').value = '';
+  const editEl = document.getElementById('dist-input-edit');
+  if (editEl) editEl.value = '';
+  document.getElementById('dist-info').textContent = '';
+  document.getElementById('dist-results').innerHTML = '<div class="placeholder">Introdu lista de produse și apasă Calculează.</div>';
+  refreshDistPreview();
 }
 async function refreshDistPreview() {
   const items = parseDistInput(document.getElementById('dist-input').value);
