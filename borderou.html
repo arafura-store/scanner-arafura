@@ -345,9 +345,15 @@ window.addEventListener('DOMContentLoaded', () => {
   const storedMagazin = localStorage.getItem('arafura_magazin');
   const isAdmin = window.location.hash === '#admin' || localStorage.getItem('arafura_admin') === 'true';
   // Limitez optiunile pentru user normal
-  const magazineVizibile = (isAdmin || !storedMagazin)
-    ? MAGAZINE
-    : [...new Set([storedMagazin, 'SERVICII'].filter(m => MAGAZINE.includes(m)))];
+  // SERVICII e disponibil DOAR la TOMIS 3 (acolo se gestioneaza serviciile)
+  let magazineVizibile;
+  if (isAdmin || !storedMagazin) {
+    magazineVizibile = MAGAZINE;
+  } else if (storedMagazin === 'TOMIS 3') {
+    magazineVizibile = ['TOMIS 3', 'SERVICII'];
+  } else {
+    magazineVizibile = [storedMagazin];
+  }
   magazineVizibile.forEach(m => {
     const opt = document.createElement('option');
     opt.value = m; opt.textContent = m;
