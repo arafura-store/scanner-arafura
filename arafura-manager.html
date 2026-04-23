@@ -450,6 +450,15 @@
           <h2>📦 Distribuție recepție nouă</h2>
           <p style="color:var(--sub); font-size:13px; margin-bottom:14px;">Marfă proaspăt primită care nu e încă în TeamApps. Introdu produsele + cantitatea, sistemul îți propune distribuția optimă pe magazine bazat pe vânzările istorice.</p>
 
+          <div style="margin-bottom:14px; padding:12px; background:#f0f9ff; border:1px solid #93c5fd; border-radius:8px;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button onclick="conectFolderFacturi()" id="dist-btn-folder" class="btn" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600; font-size:13px;">🔗 Conectează folder facturi</button>
+              <button onclick="incarcaFacturaFisier()" class="btn" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:white; cursor:pointer; font-size:13px;">📤 sau încarcă fișier (.xlsx)</button>
+              <span id="dist-folder-info" style="font-size:12px; color:var(--sub);"></span>
+            </div>
+            <div id="dist-folder-files" style="margin-top:10px;"></div>
+          </div>
+
           <div style="display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; align-items:end;">
             <div style="flex:1; min-width:280px;">
               <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">📋 Lista produse (cod intern + cantitate, separate prin TAB sau spațiu, un produs per rând):</label>
@@ -1827,6 +1836,198 @@ function exportTransferuriExcel() {
   XLSX.writeFile(wb, parts.join('_') + '.xlsx');
 }
 
+// ── DISTRIBUTIE: GESTIONARE FOLDER FACTURI (File System Access API) ──
+async function getStoredDirHandle() {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('arafura-fsa', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => {
+      const tx = req.result.transaction('handles', 'readonly');
+      const get = tx.objectStore('handles').get('facturi-noi');
+      get.onsuccess = () => resolve(get.result || null);
+      get.onerror = () => resolve(null);
+    };
+    req.onerror = () => resolve(null);
+  });
+}
+async function setStoredDirHandle(handle) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('arafura-fsa', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('handles');
+    req.onsuccess = () => {
+      const tx = req.result.transaction('handles', 'readwrite');
+      tx.objectStore('handles').put(handle, 'facturi-noi');
+      tx.oncomplete = () => resolve(true);
+    };
+  });
+}
+
+async function verifyHandlePermission(handle) {
+  if (!handle) return false;
+  const opts = { mode: 'readwrite' };
+  if ((await handle.queryPermission(opts)) === 'granted') return true;
+  if ((await handle.requestPermission(opts)) === 'granted') return true;
+  return false;
+}
+
+async function conectFolderFacturi() {
+  if (!window.showDirectoryPicker) {
+    alert('Browser-ul nu suportă File System Access API. Folosește Chrome sau Edge desktop, sau folosește butonul "Încarcă fișier".');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ id: 'arafura-facturi-noi', mode: 'readwrite' });
+    await setStoredDirHandle(handle);
+    document.getElementById('dist-folder-info').innerHTML = `✅ Folder conectat: <b>${escHtml(handle.name)}</b>`;
+    await listeazaFacturiFolder(handle);
+  } catch (e) {
+    if (e.name !== 'AbortError') alert('Eroare: ' + e.message);
+  }
+}
+
+async function listeazaFacturiFolder(handle) {
+  const cont = document.getElementById('dist-folder-files');
+  cont.innerHTML = '<div style="font-size:13px; color:var(--sub);">se citește folderul…</div>';
+  try {
+    const files = [];
+    for await (const [name, h] of handle.entries()) {
+      if (h.kind === 'file' && name.endsWith('.xlsx') && !name.startsWith('~$')) {
+        files.push({ name, handle: h });
+      }
+    }
+    if (!files.length) {
+      cont.innerHTML = '<div style="font-size:13px; color:var(--sub); font-style:italic;">Folderul e gol — pune un fișier .xlsx aici și apasă Conectează din nou.</div>';
+      return;
+    }
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    let html = `<div style="font-size:13px; color:var(--sub); margin-bottom:6px;">📂 ${files.length} factură(i) disponibile:</div>`;
+    html += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
+    for (const f of files) {
+      html += `<button onclick="proceseazaFactura('${escHtml(f.name)}')" class="btn" style="padding:6px 12px; border-radius:6px; border:1px solid var(--blue); background:white; color:var(--blue); cursor:pointer; font-size:12px; font-weight:600;">📄 ${escHtml(f.name)}</button>`;
+    }
+    html += '</div>';
+    cont.innerHTML = html;
+  } catch (e) {
+    cont.innerHTML = '<div style="color:var(--red); font-size:13px;">Eroare citire folder: ' + e.message + '</div>';
+  }
+}
+
+async function incarcaFacturaFisier() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx';
+  input.onchange = async () => {
+    const f = input.files[0];
+    if (!f) return;
+    await procesareXlsxBuffer(await f.arrayBuffer(), f.name, null);
+  };
+  input.click();
+}
+
+async function proceseazaFactura(name) {
+  const handle = await getStoredDirHandle();
+  if (!handle || !(await verifyHandlePermission(handle))) {
+    alert('Conectează din nou folderul');
+    return;
+  }
+  const fh = await handle.getFileHandle(name);
+  const file = await fh.getFile();
+  await procesareXlsxBuffer(await file.arrayBuffer(), name, handle);
+}
+
+async function procesareXlsxBuffer(buffer, fileName, dirHandle) {
+  const info = document.getElementById('dist-info');
+  info.textContent = `Procesez ${fileName}…`;
+  try {
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    // Header e pe randul 3 (index 2 - 0-based)
+    const rows = XLSX.utils.sheet_to_json(ws, { range: 2, defval: '' });
+    if (!rows.length) { info.textContent = 'Fișier gol'; return; }
+
+    // Detectie coloane
+    const c0 = rows[0];
+    const codCol = ('Articol' in c0) ? 'Articol' : (('Cod Articol' in c0) ? 'Cod Articol' : null);
+    const numeCol = 'Nume Articol';
+    const cantCol = 'Cantitate';
+    if (!codCol) { alert('Nu găsesc coloana cod articol în fișier'); return; }
+
+    // Agregare cod → cantitate (sum) + nume
+    const aggr = {};
+    for (const r of rows) {
+      const cod = String(r[codCol] || '').replace(/\.0$/, '').trim();
+      if (!cod) continue;
+      const qty = parseFloat(String(r[cantCol] || 0).replace(',', '.')) || 0;
+      if (qty <= 0) continue;
+      if (!aggr[cod]) aggr[cod] = { cod, nume: String(r[numeCol] || '').trim(), qty: 0 };
+      aggr[cod].qty += qty;
+    }
+    const items = Object.values(aggr);
+    if (!items.length) { info.textContent = 'Niciun produs cu cantitate validă'; return; }
+
+    // Verifica produse noi (nu există în catalog)
+    const codes = items.map(i => i.cod);
+    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const r = await fetch(`${API}/produse?cod_art=in.${codFilter}&select=cod_art`, { headers: HEADERS });
+    const exist = new Set((await r.json()).map(x => x.cod_art));
+    const noi = items.filter(i => !exist.has(i.cod));
+
+    // Insert produse noi
+    let nNew = 0;
+    if (noi.length) {
+      const newRows = noi.map(n => ({
+        cod_art: n.cod, nume_art: n.nume, cod_bare: '', um: '',
+        search_text: (n.cod + ' ' + (n.nume || '')).toLowerCase(),
+        furnizor: null, foto_url: null
+      }));
+      const ri = await fetch(`${API}/produse?on_conflict=cod_art`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
+        body: JSON.stringify(newRows)
+      });
+      if (ri.ok || ri.status === 201 || ri.status === 204) nNew = noi.length;
+    }
+
+    // Auto-completează textarea
+    document.getElementById('dist-input').value = items.map(i => `${i.cod}\t${Math.round(i.qty)}`).join('\n');
+
+    info.innerHTML = `✅ <b>${items.length}</b> produse extrase din <b>${escHtml(fileName)}</b>` +
+      (nNew ? ` · <b style="color:var(--green);">${nNew} produse noi</b> adăugate în catalog` : '') +
+      ` · apasă <b>Calculează distribuția</b>`;
+
+    // Mută fișierul în "procesate" dacă vine din folder
+    if (dirHandle) {
+      try {
+        const procDir = await dirHandle.getDirectoryHandle('procesate', { create: true });
+        const newName = new Date().toISOString().slice(0,10).replace(/-/g,'') + '_' + fileName;
+        const newFh = await procDir.getFileHandle(newName, { create: true });
+        const fh = await dirHandle.getFileHandle(fileName);
+        const file = await fh.getFile();
+        const w = await newFh.createWritable();
+        await w.write(file);
+        await w.close();
+        await dirHandle.removeEntry(fileName);
+        info.innerHTML += ` · 📁 mutat în <code>procesate/</code>`;
+        await listeazaFacturiFolder(dirHandle); // refresh lista
+      } catch (e) {
+        console.warn('Mutare eșuată:', e);
+      }
+    }
+  } catch (e) {
+    info.innerHTML = '<span style="color:var(--red);">Eroare: ' + escHtml(e.message) + '</span>';
+    console.error(e);
+  }
+}
+
+// La încărcarea paginii distributie, încercăm să recuperăm folderul memorat
+async function initDistFolder() {
+  const handle = await getStoredDirHandle();
+  if (handle && (await verifyHandlePermission(handle).catch(() => false))) {
+    document.getElementById('dist-folder-info').innerHTML = `✅ Folder conectat: <b>${escHtml(handle.name)}</b>`;
+    await listeazaFacturiFolder(handle);
+  }
+}
+
 // ── DISTRIBUTIE RECEPTIE NOUA ──
 const MAGAZINE_DIST = ['MARVIMEX', 'TOMIS 3', 'MEDGIDIA', 'NAVODARI', 'POARTA 6', 'BABADAG', 'BROTACEI', 'SHOWROOM'];
 let _distRezultat = [];
@@ -2361,6 +2562,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       if (page === 'familii')    loadFamilii();
       if (page === 'preturi')    loadPreturi();
       if (page === 'negativ')    loadNegativ();
+      if (page === 'distributie') initDistFolder();
       // page transferuri: no preload — user clicks button
     }
   });
