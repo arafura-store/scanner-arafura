@@ -229,6 +229,7 @@
       <div class="menu-item" data-page="stagnat"     ><span class="ico">📦</span><span class="label">Stagnat</span></div>
       <div class="menu-item" data-page="negativ"     ><span class="ico">🔻</span><span class="label">Stoc negativ</span></div>
       <div class="menu-item" data-page="transferuri" ><span class="ico">🚚</span><span class="label">Transferuri</span></div>
+      <div class="menu-item" data-page="distributie" ><span class="ico">📦</span><span class="label">Distribuție recepție</span></div>
     </div>
 
     <div class="menu-section">
@@ -440,6 +441,37 @@
             <button onclick="resetTransferuriFiltre()" class="btn" style="padding:7px 12px; border-radius:6px; border:1px solid var(--border); background:white; cursor:pointer; font-size:12px; color:var(--sub);">⊖ Reset</button>
           </div>
           <div id="tr-results"><div class="placeholder">Apasă Calculează pentru a genera propunerile</div></div>
+        </div>
+      </div>
+
+      <!-- DISTRIBUTIE RECEPTIE NOUA -->
+      <div class="page" id="page-distributie">
+        <div class="card">
+          <h2>📦 Distribuție recepție nouă</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:14px;">Marfă proaspăt primită care nu e încă în TeamApps. Introdu produsele + cantitatea, sistemul îți propune distribuția optimă pe magazine bazat pe vânzările istorice.</p>
+
+          <div style="display:flex; gap:14px; margin-bottom:14px; flex-wrap:wrap; align-items:end;">
+            <div style="flex:1; min-width:280px;">
+              <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">📋 Lista produse (cod intern + cantitate, separate prin TAB sau spațiu, un produs per rând):</label>
+              <textarea id="dist-input" rows="6" placeholder="Exemplu:&#10;10572&#9;100&#10;105128&#9;50&#10;11116&#9;30" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-family:monospace; font-size:13px;"></textarea>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px; min-width:180px;">
+              <label style="font-size:12px; color:var(--sub);">Bază vânzări (zile):</label>
+              <select id="dist-zile" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+                <option value="30">Ultimele 30 zile</option>
+                <option value="60">60 zile</option>
+                <option value="90" selected>90 zile</option>
+                <option value="180">180 zile</option>
+                <option value="365">1 an</option>
+              </select>
+              <label style="font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="dist-include-stoc" checked> Include stoc curent (cele cu stoc 0 prioritar)
+              </label>
+              <button onclick="calculeazaDistributie()" class="btn primary" style="padding:10px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Calculează distribuția</button>
+            </div>
+          </div>
+          <div id="dist-info" style="font-size:13px; color:var(--sub); margin-bottom:8px;"></div>
+          <div id="dist-results"><div class="placeholder">Introdu lista de produse și apasă Calculează.</div></div>
         </div>
       </div>
 
@@ -1795,6 +1827,218 @@ function exportTransferuriExcel() {
   XLSX.writeFile(wb, parts.join('_') + '.xlsx');
 }
 
+// ── DISTRIBUTIE RECEPTIE NOUA ──
+const MAGAZINE_DIST = ['MARVIMEX', 'TOMIS 3', 'MEDGIDIA', 'NAVODARI', 'POARTA 6', 'BABADAG', 'BROTACEI', 'SHOWROOM'];
+let _distRezultat = [];
+
+function parseDistInput(text) {
+  const out = [];
+  for (const line of (text || '').split('\n')) {
+    const parts = line.trim().split(/[\s\t,;]+/).filter(Boolean);
+    if (parts.length < 2) continue;
+    const cod = parts[0].trim();
+    const qty = parseFloat(parts[parts.length - 1].replace(',', '.'));
+    if (!cod || isNaN(qty) || qty <= 0) continue;
+    out.push({ cod, qty });
+  }
+  return out;
+}
+
+async function calculeazaDistributie() {
+  const items = parseDistInput(document.getElementById('dist-input').value);
+  const zile = parseInt(document.getElementById('dist-zile').value) || 90;
+  const includeStoc = document.getElementById('dist-include-stoc').checked;
+  const info = document.getElementById('dist-info');
+  const res = document.getElementById('dist-results');
+  if (!items.length) { res.innerHTML = '<div class="placeholder">Listă goală sau format invalid</div>'; return; }
+  info.textContent = `Calculez pentru ${items.length} produse…`;
+  res.innerHTML = '<div class="placeholder">se încarcă…</div>';
+
+  try {
+    const codes = items.map(i => i.cod);
+    const sinceDate = new Date(Date.now() - zile * 86400000).toISOString().slice(0, 10);
+
+    // 1. Vânzări per (cod, magazin) din miscari (Bon Fiscal + Factura Vanzare)
+    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    let sales = [];
+    let off = 0;
+    while (true) {
+      const r = await fetch(`${API}/miscari?cod_art=in.${codFilter}&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,partener&limit=1000&offset=${off}`, { headers: HEADERS });
+      const d = await r.json();
+      if (!Array.isArray(d) || !d.length) break;
+      sales = sales.concat(d); off += 1000;
+      if (d.length < 1000) break;
+    }
+    // Map vânzări per (cod, magazin)
+    const locPerPartener = {};
+    for (const [loc, pats] of Object.entries(PARTENER_MAP)) {
+      for (const p of pats) locPerPartener[p.toUpperCase()] = loc;
+    }
+    const vanzPerCodLoc = {};
+    for (const v of sales) {
+      const p = (v.partener || '').toUpperCase();
+      let loc = null;
+      for (const [key, val] of Object.entries(locPerPartener)) {
+        if (p.includes(key)) { loc = val; break; }
+      }
+      if (!loc || !MAGAZINE_DIST.includes(loc)) continue;
+      const k = v.cod_art + '|' + loc;
+      vanzPerCodLoc[k] = (vanzPerCodLoc[k] || 0) + parseFloat(v.iesiri || 0);
+    }
+
+    // 2. Stoc curent per (cod, magazin) — din ultimul snapshot
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+    let stocs = [];
+    off = 0;
+    while (true) {
+      const r = await fetch(`${API}/stocuri_snapshot?cod_art=in.${codFilter}&data_snapshot=eq.${dataSnap}&select=cod_art,locatie,stoc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const d = await r.json();
+      if (!Array.isArray(d) || !d.length) break;
+      stocs = stocs.concat(d); off += 1000;
+      if (d.length < 1000) break;
+    }
+    const stocPerCodLoc = {};
+    for (const s of stocs) {
+      stocPerCodLoc[s.cod_art + '|' + s.locatie] = parseFloat(s.stoc) || 0;
+    }
+
+    // 3. Info produse
+    const pmap = await getProdMap(codes);
+
+    // 4. Distribuție per produs
+    const rezultat = [];
+    for (const it of items) {
+      const cod = it.cod;
+      const totalQty = Math.round(it.qty);
+      const p = pmap[cod] || {};
+
+      // Vânzări per magazin
+      const vanz = {};
+      for (const m of MAGAZINE_DIST) vanz[m] = vanzPerCodLoc[cod + '|' + m] || 0;
+      const totalVanz = MAGAZINE_DIST.reduce((s, m) => s + vanz[m], 0);
+
+      // Stoc curent per magazin
+      const stoc = {};
+      for (const m of MAGAZINE_DIST) stoc[m] = stocPerCodLoc[cod + '|' + m] || 0;
+
+      // Calculul ponderilor
+      let pond = {};
+      if (totalVanz > 0) {
+        for (const m of MAGAZINE_DIST) pond[m] = vanz[m] / totalVanz;
+      } else {
+        // Fără vânzări recente: distribuție uniformă pe magazinele active (cu cel puțin un cod în stoc istoric)
+        const activ = MAGAZINE_DIST.filter(m => stoc[m] > 0 || vanz[m] > 0);
+        const list = activ.length ? activ : MAGAZINE_DIST;
+        for (const m of list) pond[m] = 1 / list.length;
+      }
+
+      // Boost magazinele cu stoc 0 (×1.5) dacă s-au mai vândut
+      if (includeStoc) {
+        let s = 0;
+        for (const m of MAGAZINE_DIST) {
+          if (stoc[m] === 0 && vanz[m] > 0) pond[m] = (pond[m] || 0) * 1.5;
+          s += pond[m] || 0;
+        }
+        if (s > 0) for (const m of MAGAZINE_DIST) pond[m] = (pond[m] || 0) / s;
+      }
+
+      // Distribuție cu rotunjire (largest remainder method)
+      const raw = {}; const floor = {}; const remainder = [];
+      let assigned = 0;
+      for (const m of MAGAZINE_DIST) {
+        raw[m] = totalQty * (pond[m] || 0);
+        floor[m] = Math.floor(raw[m]);
+        remainder.push([m, raw[m] - floor[m]]);
+        assigned += floor[m];
+      }
+      let remain = totalQty - assigned;
+      remainder.sort((a, b) => b[1] - a[1]);
+      let idx = 0;
+      while (remain > 0 && idx < remainder.length) {
+        floor[remainder[idx][0]] += 1;
+        remain--; idx++;
+      }
+
+      rezultat.push({
+        cod, nume: p.nume_art || '', cod_bare: p.cod_bare || '', furnizor: p.furnizor || '',
+        total: totalQty,
+        per_magazin: floor,
+        vanz, stoc
+      });
+    }
+    _distRezultat = rezultat;
+    info.innerHTML = `<b>${items.length}</b> produse · distribuit pe <b>${MAGAZINE_DIST.length}</b> magazine · bazat pe vânzări ${zile} zile`;
+
+    // Render matrice
+    let html = '<div style="overflow-x:auto;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0;">';
+    html += '<th style="padding:8px; text-align:left; background:#f8fafc;">COD</th><th style="padding:8px; text-align:left; background:#f8fafc;">Denumire</th><th style="padding:8px; text-align:right; background:#f8fafc;">Total</th>';
+    for (const m of MAGAZINE_DIST) html += `<th style="padding:8px; text-align:right; background:#f8fafc;">${m}</th>`;
+    html += '</tr></thead><tbody>';
+    for (const r of rezultat) {
+      html += `<tr style="border-top:1px solid var(--border);"><td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(r.cod)}</td><td style="padding:6px;">${escHtml(r.nume)}</td><td style="padding:6px; text-align:right; font-weight:800; background:#dbeafe;">${fmtNum(r.total)}</td>`;
+      for (const m of MAGAZINE_DIST) {
+        const cant = r.per_magazin[m] || 0;
+        const stoc0 = r.stoc[m] === 0;
+        const cellStyle = cant > 0 ? `font-weight:700; color:var(--green); background:#dcfce7;` : 'color:var(--sub);';
+        const stocBadge = stoc0 && cant > 0 ? '<br><span style="font-size:9px; color:#dc2626;">stoc 0</span>' : '';
+        html += `<td style="padding:6px; text-align:right; ${cellStyle}">${cant > 0 ? fmtNum(cant) : '—'}${stocBadge}</td>`;
+      }
+      html += '</tr>';
+    }
+    // Total per magazin
+    html += '<tr style="border-top:2px solid var(--navy); background:#f1f5f9;"><td colspan="2" style="padding:8px; font-weight:800;">TOTAL per magazin</td><td style="padding:8px; text-align:right; font-weight:800;">' + fmtNum(rezultat.reduce((s, r) => s + r.total, 0)) + '</td>';
+    for (const m of MAGAZINE_DIST) {
+      const tot = rezultat.reduce((s, r) => s + (r.per_magazin[m] || 0), 0);
+      html += `<td style="padding:8px; text-align:right; font-weight:800; color:var(--navy);">${fmtNum(tot)}</td>`;
+    }
+    html += '</tr></tbody></table></div>';
+
+    html += '<div style="margin-top:14px; display:flex; gap:10px;"><button onclick="exportDistributieExcel()" class="btn" style="padding:10px 16px; border-radius:8px; border:none; background:var(--green); color:white; cursor:pointer; font-weight:600;">📥 Export Excel</button></div>';
+
+    res.innerHTML = html;
+  } catch (e) {
+    info.textContent = '';
+    res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>';
+    console.error(e);
+  }
+}
+
+function exportDistributieExcel() {
+  if (!_distRezultat.length) { alert('Nimic de exportat'); return; }
+  // Format LONG: o linie per (produs × magazin)
+  const data = [];
+  for (const r of _distRezultat) {
+    for (const m of MAGAZINE_DIST) {
+      const cant = r.per_magazin[m] || 0;
+      if (cant <= 0) continue;
+      data.push({
+        'Cod bare': r.cod_bare || '',
+        'Cod intern': r.cod,
+        'Denumire': r.nume,
+        'Magazin': m,
+        'Cantitate': cant,
+        'Furnizor': r.furnizor || '',
+      });
+    }
+  }
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:18},{wch:10},{wch:20}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Distribuție');
+  // Sheet 2: matrice
+  const matRow = ['Cod intern', 'Denumire', 'Total', ...MAGAZINE_DIST];
+  const mat = [matRow];
+  for (const r of _distRezultat) {
+    mat.push([r.cod, r.nume, r.total, ...MAGAZINE_DIST.map(m => r.per_magazin[m] || 0)]);
+  }
+  const ws2 = XLSX.utils.aoa_to_sheet(mat);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Matrice');
+  const today = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `distributie_receptie_${today}.xlsx`);
+}
+
 // ── STOC NEGATIV ──
 let _negAll = [];
 let _negPmap = {};
@@ -2091,7 +2335,7 @@ async function loadDuplicate() {
 // ── NAVIGATION ──
 const titles = {
   dashboard:'🏠 Dashboard', cautare:'🔍 Căutare produs',
-  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri',
+  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri', distributie:'📦 Distribuție recepție',
   achizitii:'🛒 Comenzi sugerate', vanzari:'💸 Vânzări & Marjă', preturi:'💰 Prețuri',
   magazine:'🏪 Per Magazin', furnizori:'🏭 Per Furnizor', familii:'📚 Per Familie',
   duplicate:'⚠️ Coduri duplicate', refresh:'🔄 Refresh date'
