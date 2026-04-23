@@ -1952,14 +1952,20 @@ async function procesareXlsxBuffer(buffer, fileName, dirHandle) {
     const cantCol = 'Cantitate';
     if (!codCol) { alert('Nu găsesc coloana cod articol în fișier'); return; }
 
-    // Agregare cod → cantitate (sum) + nume
+    // Agregare cod → cantitate (sum) + nume + EAN
     const aggr = {};
     for (const r of rows) {
       const cod = String(r[codCol] || '').replace(/\.0$/, '').trim();
       if (!cod) continue;
       const qty = parseFloat(String(r[cantCol] || 0).replace(',', '.')) || 0;
       if (qty <= 0) continue;
-      if (!aggr[cod]) aggr[cod] = { cod, nume: String(r[numeCol] || '').trim(), qty: 0 };
+      if (!aggr[cod]) aggr[cod] = {
+        cod,
+        nume: String(r[numeCol] || '').trim(),
+        ean: String(r['Cod Bare'] || r['EAN'] || '').trim(),
+        um: String(r['UM Vz'] || r['UM'] || '').trim(),
+        qty: 0
+      };
       aggr[cod].qty += qty;
     }
     const items = Object.values(aggr);
@@ -1976,8 +1982,10 @@ async function procesareXlsxBuffer(buffer, fileName, dirHandle) {
     let nNew = 0;
     if (noi.length) {
       const newRows = noi.map(n => ({
-        cod_art: n.cod, nume_art: n.nume, cod_bare: '', um: '',
-        search_text: (n.cod + ' ' + (n.nume || '')).toLowerCase(),
+        cod_art: n.cod, nume_art: n.nume,
+        cod_bare: n.ean || '',
+        um: n.um || '',
+        search_text: (n.cod + ' ' + (n.nume || '') + ' ' + (n.ean || '')).toLowerCase(),
         furnizor: null, foto_url: null
       }));
       const ri = await fetch(`${API}/produse?on_conflict=cod_art`, {
