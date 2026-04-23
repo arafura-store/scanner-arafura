@@ -1189,9 +1189,15 @@ async function loadFurnizori() {
   const el = document.getElementById('furn-top');
   el.innerHTML = '<div class="placeholder">se încarcă…</div>';
   try {
-    // Top furnizori după nr facturi (din facturi)
+    // 1. Lista coduri furnizori MARFA
+    const rf = await fetch(`${API}/furnizori?tip=eq.marfa&select=cod_partener`, { headers: HEADERS });
+    const marfaCods = new Set((await rf.json()).map(x => x.cod_partener));
+
+    // 2. Top furnizori după facturi
     const r = await fetch(`${API}/facturi?select=nume_partener,cod_partener,valoare_fara_tva.sum(),cantitate.sum(),id.count()&nume_partener=not.is.null`, { headers: HEADERS });
-    const arr = await r.json();
+    let arr = await r.json();
+    // Filtru: doar furnizori marfa
+    arr = arr.filter(x => marfaCods.has(x.cod_partener));
     arr.sort((a,b) => (b.sum_valoare_fara_tva || b.valoare_fara_tva?.sum || b.sum || 0) - (a.sum_valoare_fara_tva || a.valoare_fara_tva?.sum || a.sum || 0));
     _allFurnizori = arr;
     renderFurnizoriTop(arr.slice(0, 30));
