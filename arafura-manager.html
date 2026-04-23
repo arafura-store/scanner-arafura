@@ -488,12 +488,42 @@
       <!-- ACHIZITII -->
       <div class="page" id="page-achizitii">
         <div class="card">
-          <h2>🛒 Comenzi sugerate (lipsuri grupate pe furnizor)</h2>
-          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-            <input type="text" id="ach-search" placeholder="Caută furnizor…" oninput="filterAchizitii()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; min-width:220px;">
-            <span id="ach-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          <h2>🛒 Comandă furnizor (algoritm smart)</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">
+            Alege furnizorul și sistemul îți propune cantitățile pe baza: vânzări istorice, stoc actual, trend, sezonalitate (peak august-octombrie, decembrie, februarie).
+          </p>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:end;">
+            <div>
+              <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">Furnizor</label>
+              <input list="ach-furnizor-list" id="ach-furnizor" placeholder="🔍 Caută furnizor…" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px; min-width:260px; font-size:13px;">
+              <datalist id="ach-furnizor-list"></datalist>
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">Perioadă analiză</label>
+              <select id="ach-perioada" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+                <option value="30">Ultimele 30 zile</option>
+                <option value="60" selected>60 zile</option>
+                <option value="90">90 zile</option>
+                <option value="180">180 zile</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px; color:var(--sub); display:block; margin-bottom:4px;">Zile acoperire comandă</label>
+              <select id="ach-acoperire" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+                <option value="14">14 zile</option>
+                <option value="30" selected>30 zile (1 lună)</option>
+                <option value="45">45 zile</option>
+                <option value="60">60 zile (2 luni)</option>
+              </select>
+            </div>
+            <label style="font-size:12px; color:var(--sub); display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+              <input type="checkbox" id="ach-sezon" checked> Sezonalitate
+            </label>
+            <button onclick="calculeazaComanda()" class="btn primary" style="padding:10px 16px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Calculează comanda</button>
+            <button onclick="exportComandaExcel()" class="btn" style="padding:10px 16px; border-radius:8px; border:none; background:var(--green); color:white; cursor:pointer; font-weight:600;">📥 Export Excel</button>
           </div>
-          <div id="ach-results"><div class="placeholder">Pornesc analiza la prima vizită a paginii…</div></div>
+          <div id="ach-info" style="font-size:13px; color:var(--sub); margin-bottom:10px;"></div>
+          <div id="ach-results"><div class="placeholder">Alege un furnizor și apasă Calculează.</div></div>
         </div>
       </div>
 
@@ -1418,9 +1448,221 @@ async function loadStagnat() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
-// ── ACHIZITII ──
-let _allAchizitii = [];
+// ── COMENZI SUGERATE (algoritm smart per furnizor) ──
+let _comandaItems = [];
+let _comandaFurnizor = '';
+let _allAchizitii = {}; // legacy
+
+// Sezonalitate: multiplicator pe luna (luna 1=Ian, 12=Dec)
+const SEZON_MULT = { 1: 0.9, 2: 1.3, 3: 1.0, 4: 1.0, 5: 1.0, 6: 0.8, 7: 0.7, 8: 1.5, 9: 2.0, 10: 1.5, 11: 1.0, 12: 1.3 };
+const SEZON_NUME = { 1:'Ian', 2:'Feb', 3:'Mar', 4:'Apr', 5:'Mai', 6:'Iun', 7:'Iul', 8:'Aug', 9:'Sep', 10:'Oct', 11:'Nov', 12:'Dec' };
+
+// Calculez multiplicator sezon pentru perioada de acoperire
+function multiplicatorSezon(zileAcoperire, includeSezon) {
+  if (!includeSezon) return { mult: 1.0, detalii: 'fără sezon' };
+  const acum = new Date();
+  let suma = 0;
+  const luniContribuite = {};
+  for (let i = 0; i < zileAcoperire; i++) {
+    const d = new Date(acum.getTime() + i*86400000);
+    const luna = d.getMonth() + 1;
+    suma += SEZON_MULT[luna] || 1.0;
+    luniContribuite[luna] = (luniContribuite[luna] || 0) + 1;
+  }
+  const mult = suma / zileAcoperire;
+  const detalii = Object.entries(luniContribuite).map(([l,n]) => `${SEZON_NUME[l]}×${SEZON_MULT[l]||1}`).join(' + ');
+  return { mult, detalii };
+}
+
+let _achInit = false;
 async function loadAchizitii() {
+  if (_achInit) return;
+  _achInit = true;
+  // Populeaza dropdown furnizori marfa
+  try {
+    const r = await fetch(`${API}/furnizori?tip=eq.marfa&select=nume,cod_partener&order=nume.asc&limit=500`, { headers: HEADERS });
+    const arr = await r.json();
+    const dl = document.getElementById('ach-furnizor-list');
+    dl.innerHTML = arr.map(f => `<option value="${escHtml(f.nume)}">${escHtml(f.cod_partener||'')}</option>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function calculeazaComanda() {
+  const furnNume = document.getElementById('ach-furnizor').value.trim();
+  const perioada = parseInt(document.getElementById('ach-perioada').value) || 60;
+  const acoperire = parseInt(document.getElementById('ach-acoperire').value) || 30;
+  const includeSezon = document.getElementById('ach-sezon').checked;
+  const info = document.getElementById('ach-info');
+  const res = document.getElementById('ach-results');
+  if (!furnNume) { res.innerHTML = '<div class="placeholder">Alege un furnizor din lista</div>'; return; }
+
+  info.textContent = 'caut produse de la ' + furnNume + '…';
+  res.innerHTML = '<div class="placeholder">se calculează…</div>';
+
+  try {
+    // 1. Toate produsele furnizate de acest furnizor (din facturi distincte)
+    const rf = await fetch(`${API}/facturi?nume_partener=eq.${encodeURIComponent(furnNume)}&select=cod_art,nume_art,pret_net,data_factura&order=data_factura.desc&limit=10000`, { headers: HEADERS });
+    const facturi = await rf.json();
+    if (!Array.isArray(facturi) || !facturi.length) {
+      info.textContent = '';
+      res.innerHTML = `<div class="placeholder">Niciun produs livrat de "${escHtml(furnNume)}" în istoric</div>`;
+      return;
+    }
+    // Map: cod → ultimul preț + data
+    const ultimPret = {};
+    for (const f of facturi) {
+      if (!ultimPret[f.cod_art]) ultimPret[f.cod_art] = { pret: parseFloat(f.pret_net)||0, data: f.data_factura, nume: f.nume_art };
+    }
+    const codes = Object.keys(ultimPret);
+    info.textContent = `${codes.length} produse de la ${furnNume} · verific stoc + vânzări…`;
+
+    // 2. Stoc actual per cod (sumat pe toate locațiile, exclud TRANZIT)
+    const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
+    const ds = await rs.json();
+    const dataSnap = ds[0]?.data_snapshot;
+    const stocPerCod = {};
+    for (let i = 0; i < codes.length; i += 100) {
+      const batch = codes.slice(i, i+100);
+      const codStr = batch.map(c => `"${c}"`).join(',');
+      const rstoc = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&cod_art=in.(${codStr})&select=cod_art,locatie,stoc&limit=2000`, { headers: HEADERS });
+      const rows = await rstoc.json();
+      for (const s of rows) {
+        if ((s.locatie||'').startsWith('TRANZIT ')) continue;
+        stocPerCod[s.cod_art] = (stocPerCod[s.cod_art] || 0) + parseFloat(s.stoc||0);
+      }
+    }
+
+    // 3. Vânzări în perioada (din miscari Bon Fiscal + Factura Vanzare) + perioada lungă (3x) pt trend
+    const sinceDate = new Date(Date.now() - perioada*86400000).toISOString().slice(0,10);
+    const sinceDateLong = new Date(Date.now() - 3*perioada*86400000).toISOString().slice(0,10);
+    const vanzPerioada = {};  // perioada selectata
+    const vanzLong = {};       // 3x perioada (pentru trend)
+    for (let i = 0; i < codes.length; i += 100) {
+      const batch = codes.slice(i, i+100);
+      const codStr = batch.map(c => `"${c}"`).join(',');
+      // long range
+      const rv = await fetch(`${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDateLong}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data&limit=10000`, { headers: HEADERS });
+      const rows = await rv.json();
+      for (const m of rows) {
+        const ies = parseFloat(m.iesiri||0);
+        vanzLong[m.cod_art] = (vanzLong[m.cod_art] || 0) + ies;
+        if (m.data >= sinceDate) vanzPerioada[m.cod_art] = (vanzPerioada[m.cod_art] || 0) + ies;
+      }
+    }
+
+    // 4. Calcul sugestie per produs
+    const sezonInfo = multiplicatorSezon(acoperire, includeSezon);
+    const items = [];
+    for (const cod of codes) {
+      const v = vanzPerioada[cod] || 0;
+      if (v === 0) continue; // ignor produsele fără vânzări recente
+      const stoc = stocPerCod[cod] || 0;
+      const viteza = v / perioada;
+      // Trend: vânzări recente vs lungă (multiplicare ușoară dacă crește)
+      const vLong = vanzLong[cod] || v;
+      const vNormaLong = vLong / (3 * perioada);
+      let trendMult = 1.0;
+      if (vNormaLong > 0) {
+        const ratio = viteza / vNormaLong;
+        if (ratio > 1.2) trendMult = Math.min(1.3, 1 + (ratio - 1) * 0.3);
+      }
+      const stocTinta = viteza * acoperire * sezonInfo.mult * trendMult;
+      const sugerat = Math.max(0, Math.ceil(stocTinta - stoc));
+      items.push({
+        cod, nume: ultimPret[cod].nume, pret: ultimPret[cod].pret, data_ultim: ultimPret[cod].data,
+        vandut: v, stoc, viteza_zi: viteza, sezon_mult: sezonInfo.mult, trend_mult: trendMult,
+        stoc_tinta: stocTinta, sugerat
+      });
+    }
+    items.sort((a,b) => b.sugerat - a.sugerat);
+    _comandaItems = items;
+    _comandaFurnizor = furnNume;
+
+    const totalSug = items.reduce((s,x) => s + x.sugerat, 0);
+    const totalVal = items.reduce((s,x) => s + x.sugerat * x.pret, 0);
+    info.innerHTML = `<b>${furnNume}</b> · <b>${items.length}</b> produse cu vânzări · <b>${totalSug}</b> bucăți totale · <b style="color:var(--green);">${fmtMoney(totalVal)}</b> RON estimat · sezon ×${sezonInfo.mult.toFixed(2)} (${sezonInfo.detalii})`;
+
+    // Render tabel
+    let html = '<div style="overflow-x:auto;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:5;">';
+    html += '<th style="padding:8px; text-align:left; background:#f8fafc;">COD</th>';
+    html += '<th style="padding:8px; text-align:left; background:#f8fafc;">EAN</th>';
+    html += '<th style="padding:8px; text-align:left; background:#f8fafc;">Denumire</th>';
+    html += `<th style="padding:8px; text-align:right; background:#f8fafc;">Vândut ${perioada}z</th>`;
+    html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Stoc actual</th>';
+    html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Viteză/zi</th>';
+    html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Preț ultim</th>';
+    html += '<th style="padding:8px; text-align:right; background:#f8fafc; color:var(--blue);">Comandă propusă</th>';
+    html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Valoare</th>';
+    html += '</tr></thead><tbody>';
+
+    // Map produse pentru EAN
+    const codFilter = '(' + codes.map(c => `"${c}"`).join(',') + ')';
+    const rprod = await fetch(`${API}/produse?cod_art=in.${codFilter}&select=cod_art,cod_bare`, { headers: HEADERS });
+    const prods = await rprod.json();
+    const eanMap = {};
+    for (const p of prods) eanMap[p.cod_art] = p.cod_bare || '';
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const it = items[idx];
+      const ean = eanMap[it.cod] || '';
+      const valoare = it.sugerat * it.pret;
+      const trendBadge = it.trend_mult > 1.05 ? `<span title="Vânzări în creștere" style="color:var(--green); font-size:10px;">↑${it.trend_mult.toFixed(2)}</span>` : '';
+      html += `<tr style="border-top:1px solid var(--border);">
+        <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td>
+        <td style="padding:6px; font-family:monospace; font-size:11px; color:var(--sub);">${escHtml(ean)}</td>
+        <td style="padding:6px;">${escHtml(it.nume||'')}</td>
+        <td style="padding:6px; text-align:right;">${fmtNum(it.vandut)} ${trendBadge}</td>
+        <td style="padding:6px; text-align:right; ${it.stoc===0?'color:var(--red);font-weight:700;':''}">${fmtNum(it.stoc)}</td>
+        <td style="padding:6px; text-align:right; color:var(--sub); font-size:11px;">${it.viteza_zi.toFixed(2)}</td>
+        <td style="padding:6px; text-align:right;">${it.pret.toFixed(2)}</td>
+        <td style="padding:6px; text-align:right; background:#dbeafe;">
+          <input type="number" value="${it.sugerat}" min="0" step="1" data-idx="${idx}" oninput="onComandaCellChange(this)" style="width:70px; padding:4px; border:1px solid #93c5fd; border-radius:4px; text-align:center; font-weight:700; color:var(--blue);">
+        </td>
+        <td id="ach-val-${idx}" style="padding:6px; text-align:right; font-weight:700; color:var(--green);">${valoare.toFixed(2)}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+    res.innerHTML = html;
+  } catch(e) {
+    info.textContent = '';
+    res.innerHTML = '<div class="placeholder">Eroare: ' + escHtml(e.message) + '</div>';
+    console.error(e);
+  }
+}
+
+function onComandaCellChange(input) {
+  const idx = parseInt(input.dataset.idx);
+  let val = parseInt(input.value) || 0;
+  if (val < 0) val = 0;
+  input.value = val;
+  if (!_comandaItems[idx]) return;
+  _comandaItems[idx].sugerat = val;
+  const valoare = val * _comandaItems[idx].pret;
+  const cell = document.getElementById('ach-val-' + idx);
+  if (cell) cell.textContent = valoare.toFixed(2);
+}
+
+function exportComandaExcel() {
+  if (!_comandaItems.length) { alert('Calculează comanda mai întâi'); return; }
+  const data = _comandaItems.filter(i => i.sugerat > 0).map(i => ({
+    'Cod bare': '', // populat dynamic dacă e cazul
+    'Cod intern': i.cod,
+    'Denumire': i.nume || '',
+    'Cantitate': i.sugerat,
+    'Preț unit': i.pret,
+    'Valoare': i.sugerat * i.pret,
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:14},{wch:12},{wch:50},{wch:10},{wch:10},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Comanda');
+  const today = new Date().toISOString().slice(0, 10);
+  const furn = (_comandaFurnizor || 'comanda').replace(/[^a-zA-Z0-9]/g, '_');
+  XLSX.writeFile(wb, `comanda_${furn}_${today}.xlsx`);
+}
+
+/* ── COD VECHI (înlocuit) ── */
+function _achVechi_neutilizat() {
   const info = document.getElementById('ach-info');
   const res = document.getElementById('ach-results');
   info.textContent = 'analiză lipsuri în curs…';
@@ -1507,7 +1749,7 @@ function renderAchizitii() {
   }
   document.getElementById('ach-results').innerHTML = html;
 }
-function filterAchizitii() { if (Object.keys(_allAchizitii).length) renderAchizitii(); }
+function filterAchizitii() { /* deprecated */ }
 
 // ── VANZARI ──
 async function loadVanzari() {
