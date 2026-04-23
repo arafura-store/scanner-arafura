@@ -679,7 +679,10 @@ async function incarcaIstoric() {
   const card = document.getElementById('card-asteptare');
   const container = document.getElementById('istoric-asteptare');
   try {
-    const resp = await fetch(`${API}/borderouri?or=(status.eq.trimis,status.eq.predat-sofer)&order=status.desc,data.asc,trimis_la.asc`, { headers: HEADERS });
+    // Filtru per magazin curent (dacă e selectat) — admin/depozit fără magazin vede tot
+    const magazinCurent = document.getElementById('f-magazin').value;
+    const filtruMag = magazinCurent ? `&magazin=eq.${encodeURIComponent(magazinCurent)}` : '';
+    const resp = await fetch(`${API}/borderouri?or=(status.eq.trimis,status.eq.predat-sofer)${filtruMag}&order=status.desc,data.asc,trimis_la.asc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
       _asteptareBorderouri = [];
