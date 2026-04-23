@@ -364,7 +364,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ── Session (localStorage 30 zile) ────────────────────────────────
 const SESSION_KEY = 'borderou_session';
 function saveSession(user) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 30*24*60*60*1000 }));
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 8*60*60*1000 }));
 }
 function loadSession() {
   try {

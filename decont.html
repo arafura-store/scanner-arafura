@@ -245,9 +245,9 @@ let currentUser = null;
 let fondTotal = 0;
 let cheltuieliCurente = [];
 
-// ── Sesiune persistentă 7 zile (nu cere PIN la refresh) ──────────
+// ── Sesiune persistentă 8 ore (o tură) — apoi cere PIN ──────────
 const SESSION_KEY = 'decont_session';
-const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 function saveSession(user) {
   try { localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + SESSION_DURATION_MS })); } catch {}
 }

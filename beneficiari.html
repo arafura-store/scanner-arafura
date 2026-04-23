@@ -361,7 +361,7 @@ async function onLoginPin() {
 }
 
 function saveSession(user) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 12*60*60*1000 }));
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 8*60*60*1000 }));
 }
 
 async function completeLogin(user) {
