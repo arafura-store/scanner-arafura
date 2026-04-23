@@ -395,7 +395,7 @@ async function onLoginPin() {
   const pin = document.getElementById('login-pin').value;
   if (pin.length < 4) return;
   try {
-    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&select=id,nume,acces_erp`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
       showToast('PIN incorect', 'err');
@@ -417,6 +417,18 @@ async function completeLogin(user) {
   const todayStr = new Date().toISOString().slice(0, 10);
   document.getElementById('f-data').value = todayStr;
   document.getElementById('f-data').setAttribute('max', todayStr);
+  // Daca userul e admin (acces_erp), repopulez dropdown cu TOATE magazinele
+  if (user.acces_erp) {
+    const sel = document.getElementById('f-magazin');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— Alege magazin —</option>';
+    MAGAZINE.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      sel.appendChild(opt);
+    });
+    if (prev) sel.value = prev;
+  }
   await Promise.all([incarcaIstoric(), incarcaAngajati(), incarcaDispozitiiTeren()]);
 }
 
