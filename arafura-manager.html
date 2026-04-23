@@ -1334,7 +1334,7 @@ async function loadLipsuri() {
     lipsa.sort((a,b) => (b.v.total||0) - (a.v.total||0));
 
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vândut ' + zile + 'z</th><th style="padding:8px; text-align:left;">Ultima vânz.</th><th style="padding:8px; text-align:left;">Stoc altundeva</th></tr></thead><tbody>';
-    for (const c of lipsa.slice(0, 500)) {
+    for (const c of lipsa.slice(0)) {
       const p = pmap[c.cod_art] || {};
       const v = c.v || {};
       const entries = Object.entries(c.stocAlte).filter(([l,s]) => s > 0 && l !== c.locatie);
@@ -1345,7 +1345,7 @@ async function loadLipsuri() {
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(c.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(c.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(c.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(v.total||0)}</td><td style="padding:8px; font-size:12px; color:var(--sub);">${v.ultima ? new Date(v.ultima).toLocaleDateString('ro-RO') : '—'}</td><td style="padding:8px; font-size:12px; color:var(--green);">${surseTxt}</td></tr>`;
     }
     html += '</tbody></table>';
-    if (lipsa.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px; text-align:center;">⚠ Afișate primele 500 din ${lipsa.length}.</div>`;
+    // afișez toate
     res.innerHTML = html;
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
@@ -1410,12 +1410,12 @@ async function loadStagnat() {
     const codeC = [...new Set(stagnat.map(c => c.cod_art))];
     const pmap = await getProdMap(codeC);
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare blocată</th></tr></thead><tbody>';
-    for (const s of stagnat.slice(0, 500)) {
+    for (const s of stagnat.slice(0)) {
       const p = pmap[s.cod_art] || {};
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(s.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(s.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(s.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:700;">${fmtNum(s.stoc)}</td><td style="padding:8px; text-align:right; font-weight:700; color:var(--orange);">${fmtMoney(s.valoare_stoc)}</td></tr>`;
     }
     html += '</tbody></table>';
-    if (stagnat.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px; text-align:center;">⚠ Primele 500 din ${stagnat.length}.</div>`;
+    // afișez toate
     res.innerHTML = html;
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
@@ -2538,12 +2538,12 @@ function renderNegativ() {
   const valNeg = neg.reduce((s,x) => s + parseFloat(x.valoare_stoc||0), 0);
   info.innerHTML = `<b>${neg.length}</b> rânduri cu stoc negativ${loc?` · locație: <b>${escHtml(loc)}</b>`:''} · total <b style="color:var(--red);">${fmtNum(totalNeg)}</b> buc · valoare <b style="color:var(--red);">${fmtMoney(valNeg)}</b> RON`;
   let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">Magazin</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare</th></tr></thead><tbody>';
-  for (const n of neg.slice(0, 500)) {
+  for (const n of neg.slice(0)) {
     const p = _negPmap[n.cod_art] || {};
     html += `<tr style="border-top:1px solid var(--border); cursor:pointer; background:#fef2f2;" onclick="loadProdusDetail('${escHtml(n.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-weight:600;">${escHtml(n.locatie)}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(n.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:800; color:var(--red);">${fmtNum(n.stoc)}</td><td style="padding:8px; text-align:right; color:var(--red);">${Number(n.valoare_stoc||0).toFixed(2)}</td></tr>`;
   }
   html += '</tbody></table>';
-  if (neg.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 500 din ${neg.length}</div>`;
+  // afișez toate
   res.innerHTML = html;
 }
 
@@ -2626,13 +2626,13 @@ async function loadPreturi() {
     const pmap = await getProdMap(codeC);
 
     let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:right;">Cost ultim</th><th style="padding:8px; text-align:right;">Preț vânzare</th><th style="padding:8px; text-align:right;">Marjă RON</th><th style="padding:8px; text-align:right;">Marjă %</th></tr></thead><tbody>';
-    for (const a of analize.slice(0, 500)) {
+    for (const a of analize.slice(0)) {
       const p = pmap[a.cod] || {};
       const marjaColor = a.marjaRon < 0 ? 'var(--red)' : (a.marja && a.marja < 20 ? 'var(--orange)' : 'var(--green)');
       html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(a.cod)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; text-align:right;">${a.cost.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700;">${a.pretVz.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${a.marjaRon.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${a.marja !== null ? a.marja.toFixed(1) + '%' : '—'}</td></tr>`;
     }
     html += '</tbody></table>';
-    if (analize.length > 500) html += `<div style="margin-top:10px; color:var(--sub); font-size:12px;">⚠ Primele 500 din ${analize.length}</div>`;
+    // afișez toate
     res.innerHTML = html;
   } catch(e) { res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; info.textContent = ''; }
 }
