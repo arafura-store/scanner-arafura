@@ -554,11 +554,11 @@
           <div id="pret-status" style="margin-bottom:14px;"></div>
           <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
             <select id="pret-filtru" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
-              <option value="toate">Toate produsele cu preț</option>
+              <option value="toate" selected>Toate produsele cu preț</option>
               <option value="marja-neg">Marjă negativă (vând în pierdere!)</option>
               <option value="marja-mica">Marjă &lt; 20%</option>
               <option value="marja-mare">Marjă &gt; 80%</option>
-              <option value="fara-cost-cu-stoc" selected>⚠ Cu stoc dar fără cost (de investigat)</option>
+              <option value="fara-cost-cu-stoc">⚠ Cu stoc dar fără cost (de investigat)</option>
               <option value="fara-cost">Toate fără cost achiziție</option>
             </select>
             <button onclick="loadPreturi()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Analizează</button>
