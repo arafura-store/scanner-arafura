@@ -2792,27 +2792,23 @@ async function loadPreturi() {
     }
     info.textContent = `${preturi.length} produse cu preț · calculez marjă…`;
 
-    // 3. Pt fiecare cod, gaseste pret ultim achizitie (batch mare + paginare)
+    // 3. Ultim pret achizitie — via RPC (O(1) call, super rapid)
+    info.textContent = 'Calculez marja…';
     const costMap = {};
-    const codes = preturi.map(p => p.cod_art);
-    const BATCH = 300;
-    for (let i = 0; i < codes.length; i += BATCH) {
-      const batch = codes.slice(i, i+BATCH);
-      const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
-      // Paginez pana epuizam facturile pentru batch (multi cod pot avea multe facturi)
-      let offP = 0;
+    try {
+      // PostgREST returneaza max 1000 rezultate, paginăm
+      let offC = 0;
       while (true) {
-        const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,pret_net,data_factura&order=data_factura.desc&limit=1000&offset=${offP}`, { headers: HEADERS });
-        const fact = await rf.json();
-        if (!Array.isArray(fact) || !fact.length) break;
-        for (const f of fact) {
-          if (!costMap[f.cod_art]) costMap[f.cod_art] = { pret: parseFloat(f.pret_net), data: f.data_factura };
-        }
-        offP += 1000;
-        if (fact.length < 1000) break;
+        const rpcRes = await fetch(`${API}/rpc/ultim_pret_achizitie?select=cod_art,pret_net,data_factura&limit=1000&offset=${offC}`, {
+          method: 'GET', headers: HEADERS
+        });
+        const arr = await rpcRes.json();
+        if (!Array.isArray(arr) || !arr.length) break;
+        for (const f of arr) costMap[f.cod_art] = { pret: parseFloat(f.pret_net), data: f.data_factura };
+        offC += 1000;
+        if (arr.length < 1000) break;
       }
-      if (i % 1500 === 0) info.textContent = `Marjă: ${i}/${codes.length}…`;
-    }
+    } catch(e) { console.error('RPC ultim_pret_achizitie eroare:', e); }
 
     // 4. Compute marja & filter
     const analize = [];
