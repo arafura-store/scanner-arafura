@@ -2778,75 +2778,43 @@ async function loadPreturi() {
     const dataPret = dd[0].data_actualizare;
     status.innerHTML = `<div style="background:#dbeafe; border:1px solid #93c5fd; padding:8px 12px; border-radius:8px; font-size:12px;">💰 Preț vânzare actualizat la <b>${new Date(dataPret).toLocaleDateString('ro-RO')}</b></div>`;
 
-    // 2. Preturi + cost ultim achizitie
-    let preturi = [];
+    // TOATĂ analiza într-un singur RPC call — Postgres face join-ul
+    info.textContent = 'Analizez…';
+    const t0 = Date.now();
+    let analize = [];
     let off = 0;
     while (true) {
-      const r = await fetch(`${API}/preturi_vanzare?data_actualizare=eq.${dataPret}&select=cod_art,pret&limit=1000&offset=${off}`, { headers: HEADERS });
-      const rows = await r.json();
-      if (!Array.isArray(rows) || !rows.length) break;
-      preturi = preturi.concat(rows);
+      const rpc = await fetch(`${API}/rpc/analiza_preturi?select=*&limit=1000&offset=${off}`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_filtru: filtru })
+      });
+      const arr = await rpc.json();
+      if (!Array.isArray(arr) || !arr.length) break;
+      analize = analize.concat(arr);
       off += 1000;
-      if (rows.length < 1000) break;
-      if (off > 50000) break;
+      if (arr.length < 1000) break;
+      if (off > 60000) break;
     }
-    info.textContent = `${preturi.length} produse cu preț · calculez marjă…`;
-
-    // 3. Ultim pret achizitie — via RPC (O(1) call, super rapid)
-    info.textContent = 'Calculez marja…';
-    const costMap = {};
-    try {
-      // PostgREST returneaza max 1000 rezultate, paginăm
-      let offC = 0;
-      while (true) {
-        const rpcRes = await fetch(`${API}/rpc/ultim_pret_achizitie?select=cod_art,pret_net,data_factura&limit=1000&offset=${offC}`, {
-          method: 'GET', headers: HEADERS
-        });
-        const arr = await rpcRes.json();
-        if (!Array.isArray(arr) || !arr.length) break;
-        for (const f of arr) costMap[f.cod_art] = { pret: parseFloat(f.pret_net), data: f.data_factura };
-        offC += 1000;
-        if (arr.length < 1000) break;
-      }
-    } catch(e) { console.error('RPC ultim_pret_achizitie eroare:', e); }
-
-    // 4. Compute marja & filter
-    const analize = [];
-    for (const p of preturi) {
-      const pretVz = parseFloat(p.pret) || 0;
-      const cost = costMap[p.cod_art]?.pret || 0;
-      const marja = pretVz > 0 && cost > 0 ? ((pretVz - cost) / cost * 100) : null;
-      const marjaRon = pretVz - cost;
-      let keep = false;
-      if (filtru === 'toate') keep = true;
-      else if (filtru === 'marja-neg') keep = cost > 0 && pretVz > 0 && marjaRon < 0;
-      else if (filtru === 'marja-mica') keep = marja !== null && marja < 20 && marja >= 0;
-      else if (filtru === 'marja-mare') keep = marja !== null && marja > 80;
-      else if (filtru === 'fara-cost') keep = pretVz > 0 && cost === 0;
-      if (keep) analize.push({ cod: p.cod_art, pretVz, cost, marja, marjaRon, dataCost: costMap[p.cod_art]?.data });
-    }
-    // Sort by marja ascending (cele mai problematice sus)
-    analize.sort((a,b) => (a.marja ?? 999) - (b.marja ?? 999));
 
     if (!analize.length) {
       info.textContent = '';
       res.innerHTML = `<div class="placeholder">Niciun rezultat pentru filtrul selectat</div>`;
       return;
     }
-    info.textContent = `${analize.length} produse`;
+    const durata = ((Date.now() - t0) / 1000).toFixed(1);
+    info.textContent = `${analize.length} produse (${durata}s)`;
 
-    // 5. Get nume
-    const codeC = [...new Set(analize.map(a => a.cod))];
-    const pmap = await getProdMap(codeC);
-
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:right;">Cost ultim</th><th style="padding:8px; text-align:right;">Preț vânzare</th><th style="padding:8px; text-align:right;">Marjă RON</th><th style="padding:8px; text-align:right;">Marjă %</th></tr></thead><tbody>';
-    for (const a of analize.slice(0)) {
-      const p = pmap[a.cod] || {};
-      const marjaColor = a.marjaRon < 0 ? 'var(--red)' : (a.marja && a.marja < 20 ? 'var(--orange)' : 'var(--green)');
-      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(a.cod)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; text-align:right;">${a.cost.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700;">${a.pretVz.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${a.marjaRon.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${a.marja !== null ? a.marja.toFixed(1) + '%' : '—'}</td></tr>`;
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:3;"><th style="padding:8px; text-align:left; background:#f8fafc;">COD</th><th style="padding:8px; text-align:left; background:#f8fafc;">Nume</th><th style="padding:8px; text-align:right; background:#f8fafc;">Cost ultim</th><th style="padding:8px; text-align:right; background:#f8fafc;">Preț vânzare</th><th style="padding:8px; text-align:right; background:#f8fafc;">Marjă RON</th><th style="padding:8px; text-align:right; background:#f8fafc;">Marjă %</th></tr></thead><tbody>';
+    for (const a of analize) {
+      const pretVz = parseFloat(a.pret_vanzare) || 0;
+      const cost = parseFloat(a.cost_ultim) || 0;
+      const marjaRon = parseFloat(a.marja_ron) || 0;
+      const marjaPct = a.marja_pct !== null ? parseFloat(a.marja_pct) : null;
+      const marjaColor = marjaRon < 0 ? 'var(--red)' : (marjaPct !== null && marjaPct < 20 ? 'var(--orange)' : 'var(--green)');
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(a.cod_art)}</td><td style="padding:8px;">${escHtml(a.nume_art||'')}</td><td style="padding:8px; text-align:right;">${cost.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700;">${pretVz.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${marjaRon.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${marjaPct !== null ? marjaPct.toFixed(1) + '%' : '—'}</td></tr>`;
     }
     html += '</tbody></table>';
-    // afișez toate
     res.innerHTML = html;
   } catch(e) { res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; info.textContent = ''; }
 }
