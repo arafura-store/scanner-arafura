@@ -554,11 +554,12 @@
           <div id="pret-status" style="margin-bottom:14px;"></div>
           <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
             <select id="pret-filtru" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
-              <option value="toate" selected>Toate produsele cu preț</option>
+              <option value="toate">Toate produsele cu preț</option>
               <option value="marja-neg">Marjă negativă (vând în pierdere!)</option>
               <option value="marja-mica">Marjă &lt; 20%</option>
               <option value="marja-mare">Marjă &gt; 80%</option>
-              <option value="fara-cost">Preț setat dar fără cost achiziție</option>
+              <option value="fara-cost-cu-stoc" selected>⚠ Cu stoc dar fără cost (de investigat)</option>
+              <option value="fara-cost">Toate fără cost achiziție</option>
             </select>
             <button onclick="loadPreturi()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Analizează</button>
             <span id="pret-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
@@ -2805,14 +2806,16 @@ async function loadPreturi() {
     const durata = ((Date.now() - t0) / 1000).toFixed(1);
     info.textContent = `${analize.length} produse (${durata}s)`;
 
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:3;"><th style="padding:8px; text-align:left; background:#f8fafc;">COD</th><th style="padding:8px; text-align:left; background:#f8fafc;">Nume</th><th style="padding:8px; text-align:right; background:#f8fafc;">Cost ultim</th><th style="padding:8px; text-align:right; background:#f8fafc;">Preț vânzare</th><th style="padding:8px; text-align:right; background:#f8fafc;">Marjă RON</th><th style="padding:8px; text-align:right; background:#f8fafc;">Marjă %</th></tr></thead><tbody>';
+    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:3;"><th style="padding:8px; text-align:left; background:#f8fafc;">COD</th><th style="padding:8px; text-align:left; background:#f8fafc;">Nume</th><th style="padding:8px; text-align:right; background:#f8fafc;">Stoc total</th><th style="padding:8px; text-align:right; background:#f8fafc;">Cost ultim</th><th style="padding:8px; text-align:right; background:#f8fafc;">Preț vânzare</th><th style="padding:8px; text-align:right; background:#f8fafc;">Marjă RON</th><th style="padding:8px; text-align:right; background:#f8fafc;">Marjă %</th></tr></thead><tbody>';
     for (const a of analize) {
       const pretVz = parseFloat(a.pret_vanzare) || 0;
       const cost = parseFloat(a.cost_ultim) || 0;
+      const stoc = parseFloat(a.stoc_total) || 0;
       const marjaRon = parseFloat(a.marja_ron) || 0;
       const marjaPct = a.marja_pct !== null ? parseFloat(a.marja_pct) : null;
       const marjaColor = marjaRon < 0 ? 'var(--red)' : (marjaPct !== null && marjaPct < 20 ? 'var(--orange)' : 'var(--green)');
-      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(a.cod_art)}</td><td style="padding:8px;">${escHtml(a.nume_art||'')}</td><td style="padding:8px; text-align:right;">${cost.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700;">${pretVz.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${marjaRon.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${marjaPct !== null ? marjaPct.toFixed(1) + '%' : '—'}</td></tr>`;
+      const stocColor = stoc === 0 ? 'color:#9ca3af;' : (stoc > 0 && cost === 0 ? 'color:#dc2626; font-weight:700;' : 'font-weight:600;');
+      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(a.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(a.cod_art)}</td><td style="padding:8px;">${escHtml(a.nume_art||'')}</td><td style="padding:8px; text-align:right; ${stocColor}">${fmtNum(stoc)}</td><td style="padding:8px; text-align:right;">${cost === 0 ? '<span style="color:var(--red);">— fără</span>' : cost.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700;">${pretVz.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${marjaRon.toFixed(2)}</td><td style="padding:8px; text-align:right; font-weight:700; color:${marjaColor};">${marjaPct !== null ? marjaPct.toFixed(1) + '%' : '—'}</td></tr>`;
     }
     html += '</tbody></table>';
     res.innerHTML = html;
