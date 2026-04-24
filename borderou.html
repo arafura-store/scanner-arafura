@@ -425,17 +425,28 @@ async function completeLogin(user) {
   const todayStr = new Date().toISOString().slice(0, 10);
   document.getElementById('f-data').value = todayStr;
   document.getElementById('f-data').setAttribute('max', todayStr);
-  // Daca userul e EUGEN (admin), repopulez dropdown cu TOATE magazinele
+  // REPOPULEZ dropdown-ul pe baza PIN-ului logat (nu din localStorage)
+  const sel = document.getElementById('f-magazin');
+  sel.innerHTML = '<option value="">— Alege magazin —</option>';
+  let lista;
   if (user.nume === 'EUGEN') {
-    const sel = document.getElementById('f-magazin');
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">— Alege magazin —</option>';
-    MAGAZINE.forEach(m => {
-      const opt = document.createElement('option');
-      opt.value = m; opt.textContent = m;
-      sel.appendChild(opt);
-    });
-    if (prev) sel.value = prev;
+    lista = MAGAZINE; // admin vede tot
+  } else if (user.nume === 'TOMIS 3') {
+    lista = ['TOMIS 3', 'SERVICII'];
+  } else if (MAGAZINE.includes(user.nume)) {
+    lista = [user.nume]; // doar magazinul lor
+  } else {
+    lista = []; // nu ar trebui sa ajunga aici (login blocat)
+  }
+  lista.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    sel.appendChild(opt);
+  });
+  // Auto-select magazinul userului (daca nu e admin)
+  if (user.nume !== 'EUGEN' && lista.length > 0) {
+    sel.value = lista[0];
+    if (typeof onMagazinChange === 'function') onMagazinChange();
   }
   await Promise.all([incarcaIstoric(), incarcaAngajati(), incarcaDispozitiiTeren()]);
 }
