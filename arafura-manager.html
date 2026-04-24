@@ -1555,12 +1555,16 @@ async function calculeazaComanda() {
     }
 
     // 4. Calcul sugestie per produs
+    // REGULA: calculăm sugestia pe baza STOCULUI DE DEPOZIT (nu total) —
+    // pentru că furnizorul livrează la depozit, de unde se distribuie apoi la magazine
     const sezonInfo = multiplicatorSezon(acoperire, includeSezon);
     const items = [];
     for (const cod of codes) {
       const v = vanzPerioada[cod] || 0;
       if (v === 0) continue; // ignor produsele fără vânzări recente
-      const stoc = stocPerCod[cod] || 0;
+      const stocTotal = stocPerCod[cod] || 0;
+      const perLoc = stocPerCodLoc[cod] || {};
+      const stocDepozit = (perLoc['DEPOZIT PAPETARIE'] || 0) + (perLoc['DEPOZIT CARTE'] || 0);
       const viteza = v / perioada;
       // Trend: vânzări recente vs lungă (multiplicare ușoară dacă crește)
       const vLong = vanzLong[cod] || v;
@@ -1571,11 +1575,11 @@ async function calculeazaComanda() {
         if (ratio > 1.2) trendMult = Math.min(1.3, 1 + (ratio - 1) * 0.3);
       }
       const stocTinta = viteza * acoperire * sezonInfo.mult * trendMult;
-      const sugerat = Math.max(0, Math.ceil(stocTinta - stoc));
+      const sugerat = Math.max(0, Math.ceil(stocTinta - stocDepozit));
       items.push({
         cod, nume: ultimPret[cod].nume, pret: ultimPret[cod].pret, data_ultim: ultimPret[cod].data,
-        vandut: v, stoc, stoc_loc: stocPerCodLoc[cod] || {}, viteza_zi: viteza,
-        sezon_mult: sezonInfo.mult, trend_mult: trendMult,
+        vandut: v, stoc: stocTotal, stoc_depozit: stocDepozit, stoc_loc: perLoc,
+        viteza_zi: viteza, sezon_mult: sezonInfo.mult, trend_mult: trendMult,
         stoc_tinta: stocTinta, sugerat
       });
     }
