@@ -1529,6 +1529,7 @@ async function calculeazaComanda() {
       const rows = await rstoc.json();
       for (const s of rows) {
         if ((s.locatie||'').startsWith('TRANZIT ')) continue;
+        if (s.locatie === 'BROTACEI') continue; // magazin inchis
         stocPerCod[s.cod_art] = (stocPerCod[s.cod_art] || 0) + parseFloat(s.stoc||0);
         if (!stocPerCodLoc[s.cod_art]) stocPerCodLoc[s.cod_art] = {};
         stocPerCodLoc[s.cod_art][s.locatie] = (stocPerCodLoc[s.cod_art][s.locatie] || 0) + parseFloat(s.stoc||0);
@@ -1544,7 +1545,7 @@ async function calculeazaComanda() {
       const batch = codes.slice(i, i+100);
       const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
       // long range
-      const rv = await fetch(`${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDateLong}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data&limit=10000`, { headers: HEADERS });
+      const rv = await fetch(`${API}/miscari?cod_art=in.(${codStr})&data=gte.${sinceDateLong}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&locatie_norm=neq.BROTACEI&select=cod_art,iesiri,data&limit=10000`, { headers: HEADERS });
       const rows = await rv.json();
       for (const m of rows) {
         const ies = parseFloat(m.iesiri||0);
