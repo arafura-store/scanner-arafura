@@ -1554,19 +1554,16 @@ async function calculeazaComanda() {
       }
     }
 
-    // 4. Calcul sugestie per produs
-    // REGULA: calculăm sugestia pe baza STOCULUI DE DEPOZIT (nu total) —
-    // pentru că furnizorul livrează la depozit, de unde se distribuie apoi la magazine
+    // 4. Calcul sugestie per produs — TOATE produsele furnizorului (nu doar cele cu vanzari)
     const sezonInfo = multiplicatorSezon(acoperire, includeSezon);
     const items = [];
     for (const cod of codes) {
       const v = vanzPerioada[cod] || 0;
-      if (v === 0) continue; // ignor produsele fără vânzări recente
       const stocTotal = stocPerCod[cod] || 0;
       const perLoc = stocPerCodLoc[cod] || {};
       const stocDepozit = (perLoc['DEPOZIT PAPETARIE'] || 0) + (perLoc['DEPOZIT CARTE'] || 0);
+      const stocMagazine = stocTotal - stocDepozit;
       const viteza = v / perioada;
-      // Trend: vânzări recente vs lungă (multiplicare ușoară dacă crește)
       const vLong = vanzLong[cod] || v;
       const vNormaLong = vLong / (3 * perioada);
       let trendMult = 1.0;
@@ -1576,20 +1573,50 @@ async function calculeazaComanda() {
       }
       const stocTinta = viteza * acoperire * sezonInfo.mult * trendMult;
       const sugerat = Math.max(0, Math.ceil(stocTinta - stocDepozit));
+
+      // Status decisional
+      let status, statusColor, statusBg, statusIcon;
+      if (v === 0 && stocTotal === 0) {
+        status = 'INACTIV'; statusIcon = '⚪'; statusColor = '#9ca3af'; statusBg = '#f9fafb';
+      } else if (v === 0 && stocTotal > 0) {
+        status = 'STOC BLOCAT'; statusIcon = '⚫'; statusColor = '#64748b'; statusBg = '#f1f5f9';
+      } else if (v > 0 && stocTotal === 0) {
+        status = 'URGENT'; statusIcon = '🔴'; statusColor = '#b91c1c'; statusBg = '#fee2e2';
+      } else if (v > 0 && stocDepozit === 0 && stocMagazine > 0) {
+        status = 'REDISTRIBUIE'; statusIcon = '🔄'; statusColor = '#1e40af'; statusBg = '#dbeafe';
+      } else if (v > 0 && sugerat > 0) {
+        status = 'COMANDĂ FURNIZOR'; statusIcon = '🟢'; statusColor = '#15803d'; statusBg = '#dcfce7';
+      } else {
+        status = 'ACOPERIT'; statusIcon = '🟡'; statusColor = '#a16207'; statusBg = '#fef9c3';
+      }
+
       items.push({
         cod, nume: ultimPret[cod].nume, pret: ultimPret[cod].pret, data_ultim: ultimPret[cod].data,
-        vandut: v, stoc: stocTotal, stoc_depozit: stocDepozit, stoc_loc: perLoc,
+        vandut: v, stoc: stocTotal, stoc_depozit: stocDepozit, stoc_magazine: stocMagazine, stoc_loc: perLoc,
         viteza_zi: viteza, sezon_mult: sezonInfo.mult, trend_mult: trendMult,
-        stoc_tinta: stocTinta, sugerat
+        stoc_tinta: stocTinta, sugerat,
+        status, statusColor, statusBg, statusIcon
       });
     }
+    // Sortez: urgent > comanda > redistribuie > acoperit > stoc blocat > inactiv
+    const STATUS_ORDER = {'URGENT':1,'COMANDĂ FURNIZOR':2,'REDISTRIBUIE':3,'ACOPERIT':4,'STOC BLOCAT':5,'INACTIV':6};
+    items.sort((a,b) => (STATUS_ORDER[a.status]-STATUS_ORDER[b.status]) || (b.sugerat-a.sugerat));
     items.sort((a,b) => b.sugerat - a.sugerat);
     _comandaItems = items;
     _comandaFurnizor = furnNume;
 
+    // Rezumat pe status
+    const byStatus = {};
+    for (const it of items) byStatus[it.status] = (byStatus[it.status] || 0) + 1;
+    const statusSummary = ['URGENT','COMANDĂ FURNIZOR','REDISTRIBUIE','ACOPERIT','STOC BLOCAT','INACTIV']
+      .filter(s => byStatus[s])
+      .map(s => {
+        const it = items.find(x => x.status === s);
+        return `<span style="background:${it.statusBg}; color:${it.statusColor}; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:600;">${it.statusIcon} ${s}: ${byStatus[s]}</span>`;
+      }).join(' ');
     const totalSug = items.reduce((s,x) => s + x.sugerat, 0);
     const totalVal = items.reduce((s,x) => s + x.sugerat * x.pret, 0);
-    info.innerHTML = `<b>${furnNume}</b> · <b>${items.length}</b> produse cu vânzări · <b>${totalSug}</b> bucăți totale · <b style="color:var(--green);">${fmtMoney(totalVal)}</b> RON estimat · sezon ×${sezonInfo.mult.toFixed(2)} (${sezonInfo.detalii})`;
+    info.innerHTML = `<b>${furnNume}</b> · <b>${items.length}</b> produse · <b>${totalSug}</b> buc propuse · <b style="color:var(--green);">${fmtMoney(totalVal)}</b> RON · sezon ×${sezonInfo.mult.toFixed(2)}<br><div style="margin-top:6px;">${statusSummary}</div>`;
 
     // Determină locațiile care au stoc > 0 pentru CEL puțin un produs (pentru coloane dinamice)
     const locSet = new Set();
@@ -1599,6 +1626,7 @@ async function calculeazaComanda() {
 
     // Render tabel
     let html = '<div style="overflow-x:auto; max-height:70vh;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:5;">';
+    html += '<th style="padding:8px; text-align:left; background:#f8fafc; min-width:140px;">Status</th>';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc;">COD</th>';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc;">EAN</th>';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc;">Denumire</th>';
@@ -1633,7 +1661,9 @@ async function calculeazaComanda() {
         const style = q === 0 ? 'color:#cbd5e1;' : (q < 3 ? 'color:#dc2626; font-weight:600;' : '');
         locCells += `<td style="padding:5px 4px; text-align:right; font-size:11px; ${style}">${q === 0 ? '—' : fmtNum(q)}</td>`;
       }
+      const statusCell = `<td style="padding:6px; background:${it.statusBg};"><span style="color:${it.statusColor}; font-weight:700; font-size:11px;">${it.statusIcon} ${it.status}</span></td>`;
       html += `<tr style="border-top:1px solid var(--border);">
+        ${statusCell}
         <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td>
         <td style="padding:6px; font-family:monospace; font-size:11px; color:var(--sub);">${escHtml(ean)}</td>
         <td style="padding:6px;">${escHtml(it.nume||'')}</td>
