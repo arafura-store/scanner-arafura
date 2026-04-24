@@ -554,8 +554,8 @@
           <div id="pret-status" style="margin-bottom:14px;"></div>
           <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
             <select id="pret-filtru" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
-              <option value="toate">Toate produsele cu preț</option>
-              <option value="marja-neg" selected>Marjă negativă (vând în pierdere!)</option>
+              <option value="toate" selected>Toate produsele cu preț</option>
+              <option value="marja-neg">Marjă negativă (vând în pierdere!)</option>
               <option value="marja-mica">Marjă &lt; 20%</option>
               <option value="marja-mare">Marjă &gt; 80%</option>
               <option value="fara-cost">Preț setat dar fără cost achiziție</option>
@@ -2792,18 +2792,26 @@ async function loadPreturi() {
     }
     info.textContent = `${preturi.length} produse cu preț · calculez marjă…`;
 
-    // 3. Pt fiecare cod, gaseste pret ultim achizitie
+    // 3. Pt fiecare cod, gaseste pret ultim achizitie (batch mare + paginare)
     const costMap = {};
     const codes = preturi.map(p => p.cod_art);
-    for (let i = 0; i < codes.length; i += 50) {
-      const batch = codes.slice(i, i+50);
+    const BATCH = 300;
+    for (let i = 0; i < codes.length; i += BATCH) {
+      const batch = codes.slice(i, i+BATCH);
       const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
-      const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,pret_net,data_factura&order=data_factura.desc&limit=1000`, { headers: HEADERS });
-      const fact = await rf.json();
-      if (!Array.isArray(fact)) continue;
-      for (const f of fact) {
-        if (!costMap[f.cod_art]) costMap[f.cod_art] = { pret: parseFloat(f.pret_net), data: f.data_factura };
+      // Paginez pana epuizam facturile pentru batch (multi cod pot avea multe facturi)
+      let offP = 0;
+      while (true) {
+        const rf = await fetch(`${API}/facturi?cod_art=in.(${codStr})&select=cod_art,pret_net,data_factura&order=data_factura.desc&limit=1000&offset=${offP}`, { headers: HEADERS });
+        const fact = await rf.json();
+        if (!Array.isArray(fact) || !fact.length) break;
+        for (const f of fact) {
+          if (!costMap[f.cod_art]) costMap[f.cod_art] = { pret: parseFloat(f.pret_net), data: f.data_factura };
+        }
+        offP += 1000;
+        if (fact.length < 1000) break;
       }
+      if (i % 1500 === 0) info.textContent = `Marjă: ${i}/${codes.length}…`;
     }
 
     // 4. Compute marja & filter
