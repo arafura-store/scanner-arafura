@@ -1516,11 +1516,12 @@ async function calculeazaComanda() {
     const codes = Object.keys(ultimPret);
     info.textContent = `${codes.length} produse de la ${furnNume} · verific stoc + vânzări…`;
 
-    // 2. Stoc actual per cod (sumat pe toate locațiile, exclud TRANZIT)
+    // 2. Stoc actual per cod — detaliat per locație + total
     const rs = await fetch(`${API}/stocuri_snapshot?select=data_snapshot&order=data_snapshot.desc&limit=1`, { headers: HEADERS });
     const ds = await rs.json();
     const dataSnap = ds[0]?.data_snapshot;
     const stocPerCod = {};
+    const stocPerCodLoc = {}; // cod → {locatie: stoc}
     for (let i = 0; i < codes.length; i += 100) {
       const batch = codes.slice(i, i+100);
       const codStr = batch.map(c => `"${encodeURIComponent(c)}"`).join(',');
@@ -1529,6 +1530,8 @@ async function calculeazaComanda() {
       for (const s of rows) {
         if ((s.locatie||'').startsWith('TRANZIT ')) continue;
         stocPerCod[s.cod_art] = (stocPerCod[s.cod_art] || 0) + parseFloat(s.stoc||0);
+        if (!stocPerCodLoc[s.cod_art]) stocPerCodLoc[s.cod_art] = {};
+        stocPerCodLoc[s.cod_art][s.locatie] = (stocPerCodLoc[s.cod_art][s.locatie] || 0) + parseFloat(s.stoc||0);
       }
     }
 
@@ -1570,7 +1573,8 @@ async function calculeazaComanda() {
       const sugerat = Math.max(0, Math.ceil(stocTinta - stoc));
       items.push({
         cod, nume: ultimPret[cod].nume, pret: ultimPret[cod].pret, data_ultim: ultimPret[cod].data,
-        vandut: v, stoc, viteza_zi: viteza, sezon_mult: sezonInfo.mult, trend_mult: trendMult,
+        vandut: v, stoc, stoc_loc: stocPerCodLoc[cod] || {}, viteza_zi: viteza,
+        sezon_mult: sezonInfo.mult, trend_mult: trendMult,
         stoc_tinta: stocTinta, sugerat
       });
     }
@@ -1582,13 +1586,24 @@ async function calculeazaComanda() {
     const totalVal = items.reduce((s,x) => s + x.sugerat * x.pret, 0);
     info.innerHTML = `<b>${furnNume}</b> · <b>${items.length}</b> produse cu vânzări · <b>${totalSug}</b> bucăți totale · <b style="color:var(--green);">${fmtMoney(totalVal)}</b> RON estimat · sezon ×${sezonInfo.mult.toFixed(2)} (${sezonInfo.detalii})`;
 
+    // Determină locațiile care au stoc > 0 pentru CEL puțin un produs (pentru coloane dinamice)
+    const locSet = new Set();
+    for (const it of items) for (const loc of Object.keys(it.stoc_loc)) if (it.stoc_loc[loc] > 0) locSet.add(loc);
+    const LOCATII_ORDER = ['DEPOZIT PAPETARIE', 'DEPOZIT CARTE', 'MARVIMEX', 'TOMIS 3', 'MEDGIDIA', 'NAVODARI', 'POARTA 6', 'BABADAG', 'SHOWROOM'];
+    const locList = LOCATII_ORDER.filter(l => locSet.has(l)).concat([...locSet].filter(l => !LOCATII_ORDER.includes(l)));
+
     // Render tabel
-    let html = '<div style="overflow-x:auto;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:5;">';
+    let html = '<div style="overflow-x:auto; max-height:70vh;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:5;">';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc;">COD</th>';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc;">EAN</th>';
     html += '<th style="padding:8px; text-align:left; background:#f8fafc;">Denumire</th>';
     html += `<th style="padding:8px; text-align:right; background:#f8fafc;">Vândut ${perioada}z</th>`;
-    html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Stoc actual</th>';
+    // Coloane per gestiune
+    for (const loc of locList) {
+      const short = loc.replace('DEPOZIT ', 'DEP.').substring(0, 10);
+      html += `<th style="padding:6px 4px; text-align:right; background:#eff6ff; font-size:10px; min-width:50px;" title="${escHtml(loc)}">${escHtml(short)}</th>`;
+    }
+    html += '<th style="padding:8px; text-align:right; background:#dbeafe;">Total</th>';
     html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Viteză/zi</th>';
     html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Preț ultim</th>';
     html += '<th style="padding:8px; text-align:right; background:#f8fafc; color:var(--blue);">Comandă propusă</th>';
@@ -1607,12 +1622,19 @@ async function calculeazaComanda() {
       const ean = eanMap[it.cod] || '';
       const valoare = it.sugerat * it.pret;
       const trendBadge = it.trend_mult > 1.05 ? `<span title="Vânzări în creștere" style="color:var(--green); font-size:10px;">↑${it.trend_mult.toFixed(2)}</span>` : '';
+      let locCells = '';
+      for (const loc of locList) {
+        const q = it.stoc_loc[loc] || 0;
+        const style = q === 0 ? 'color:#cbd5e1;' : (q < 3 ? 'color:#dc2626; font-weight:600;' : '');
+        locCells += `<td style="padding:5px 4px; text-align:right; font-size:11px; ${style}">${q === 0 ? '—' : fmtNum(q)}</td>`;
+      }
       html += `<tr style="border-top:1px solid var(--border);">
         <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod)}</td>
         <td style="padding:6px; font-family:monospace; font-size:11px; color:var(--sub);">${escHtml(ean)}</td>
         <td style="padding:6px;">${escHtml(it.nume||'')}</td>
         <td style="padding:6px; text-align:right;">${fmtNum(it.vandut)} ${trendBadge}</td>
-        <td style="padding:6px; text-align:right; ${it.stoc===0?'color:var(--red);font-weight:700;':''}">${fmtNum(it.stoc)}</td>
+        ${locCells}
+        <td style="padding:6px; text-align:right; background:#dbeafe; font-weight:700; ${it.stoc===0?'color:var(--red);':''}">${fmtNum(it.stoc)}</td>
         <td style="padding:6px; text-align:right; color:var(--sub); font-size:11px;">${it.viteza_zi.toFixed(2)}</td>
         <td style="padding:6px; text-align:right;">${it.pret.toFixed(2)}</td>
         <td style="padding:6px; text-align:right; background:#dbeafe;">
