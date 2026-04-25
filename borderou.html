@@ -764,8 +764,19 @@ async function incarcaIstoric() {
   const card = document.getElementById('card-asteptare');
   const container = document.getElementById('istoric-asteptare');
   try {
-    // Filtru per magazin curent (dacă e selectat) — admin/depozit fără magazin vede tot
-    const magazinCurent = document.getElementById('f-magazin').value;
+    // Filtru per MAGAZIN — pentru user normal folosesc currentUser.nume (care NU se schimbă)
+    // Pentru EUGEN (admin) las dropdown.value (poate alege ce vrea sau gol = tot)
+    let magazinCurent;
+    if (currentUser && currentUser.nume === 'EUGEN') {
+      magazinCurent = document.getElementById('f-magazin').value;
+    } else if (currentUser && currentUser.nume === 'TOMIS 3') {
+      // TOMIS 3 vede TOMIS 3 + SERVICII — selectie din dropdown
+      magazinCurent = document.getElementById('f-magazin').value || 'TOMIS 3';
+    } else if (currentUser && MAGAZINE.includes(currentUser.nume)) {
+      magazinCurent = currentUser.nume; // forteza filtrul pe magazinul lor
+    } else {
+      magazinCurent = '';
+    }
     const filtruMag = magazinCurent ? `&magazin=eq.${encodeURIComponent(magazinCurent)}` : '';
     const resp = await fetch(`${API}/borderouri?or=(status.eq.trimis,status.eq.predat-sofer)${filtruMag}&order=status.desc,data.asc,trimis_la.asc`, { headers: HEADERS });
     const data = await resp.json();
