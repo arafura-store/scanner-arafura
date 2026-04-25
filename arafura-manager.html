@@ -1769,7 +1769,7 @@ async function loadVanzari() {
     const t0 = Date.now();
     const r = await fetch(`${API}/rpc/top_vanzari_cu_marja`, {
       method: 'POST',
-      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Range-Unit': 'items', 'Range': '0-9999' },
       body: JSON.stringify({ p_zile: zile, p_top: top, p_magazin: magazin })
     });
     const arr = await r.json();
