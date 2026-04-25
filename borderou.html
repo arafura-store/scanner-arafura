@@ -640,27 +640,40 @@ async function trimiteBorderou() {
   const required = [
     { id: 'f-cash-c1', label: 'Cash Z Casa 1' },
     { id: 'f-card-c1', label: 'Card Z Casa 1' },
+    { id: 'f-voucher-c1', label: 'Voucher Z Casa 1' },
     { id: 'f-cash-erp', label: 'Cash din program (ERP)' },
     { id: 'f-card-erp', label: 'Card din program (ERP)' },
+    { id: 'f-voucher-erp', label: 'Voucher din program (ERP)' },
     { id: 'f-cash-fizic', label: 'Cash fizic (numărat)' },
     { id: 'f-card-pos', label: 'POS Settlement (card total)' },
   ];
   if (e2) {
     required.push({ id: 'f-cash-c2', label: 'Cash Z Casa 2' });
     required.push({ id: 'f-card-c2', label: 'Card Z Casa 2' });
+    required.push({ id: 'f-voucher-c2', label: 'Voucher Z Casa 2' });
   }
-  const goale = required.filter(f => v(f.id) === null).map(f => f.label);
-  if (goale.length > 0) {
-    const lista = goale.map(l => '• ' + l).join('\n');
+  const goaleObj = required.filter(f => v(f.id) === null);
+  if (goaleObj.length > 0) {
+    const lista = goaleObj.map(f => '• ' + f.label).join('\n');
     const proceed = confirm(`⚠ ATENȚIE — câmpuri necompletate:\n\n${lista}\n\nVor fi salvate ca 0 (zero).\n\nAi vrut să le lași goale?\n\n[OK] = continui (vor fi 0)\n[Cancel] = mă întorc să le completez`);
     if (!proceed) {
-      // Highlight celulele goale
-      goale.forEach((_, i) => {
-        const el = document.getElementById(required.filter(f => v(f.id) === null)[i].id);
+      // Highlight celulele goale — RAMAN rosii pana sunt completate
+      goaleObj.forEach(f => {
+        const el = document.getElementById(f.id);
         if (el) {
           el.style.background = '#fee2e2';
           el.style.borderColor = '#dc2626';
-          setTimeout(() => { el.style.background = ''; el.style.borderColor = ''; }, 5000);
+          el.style.borderWidth = '2px';
+          // Listener care scoate evidentierea cand introduce o valoare
+          const handler = () => {
+            if (el.value && parseFloat(el.value) >= 0) {
+              el.style.background = '';
+              el.style.borderColor = '';
+              el.style.borderWidth = '';
+              el.removeEventListener('input', handler);
+            }
+          };
+          el.addEventListener('input', handler);
         }
       });
       return;
