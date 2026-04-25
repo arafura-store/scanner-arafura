@@ -606,6 +606,7 @@
               <option value="x99_down">.99 sub (3.42 → 2.99)</option>
               <option value="x95">.95 (ex: 3.42 → 3.95)</option>
               <option value="x90">.90 (ex: 3.42 → 3.90)</option>
+              <option value="arafura">⭐ Strategie ARAFURA (pe trepte de preț)</option>
             </select>
             <button onclick="loadVanzari()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Încarcă</button>
             <span id="van-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
@@ -1918,10 +1919,30 @@ function rotunjire(pret, mode) {
     case 'near_0.50': return Math.round(p * 2) / 2;
     case 'up_1':      return Math.ceil(p);
     case 'near_1':    return Math.round(p);
-    case 'x99':       return intPart + 0.99;       // 3.42 → 3.99, 3.95 → 3.99
-    case 'x99_down':  return Math.max(intPart - 1, 0) + 0.99; // 3.42 → 2.99
+    case 'x99':       return intPart + 0.99;
+    case 'x99_down':  return Math.max(intPart - 1, 0) + 0.99;
     case 'x95':       return intPart + 0.95;
     case 'x90':       return intPart + 0.90;
+    case 'arafura': {
+      // Strategie ARAFURA pe trepte de preț:
+      // < 4 RON: dacă decimal ≤ 0.5 → X.49, dacă > 0.5 → X.99
+      // 4-10 RON: floor + .99 (ex: 4.30 → 4.99)
+      // 10-30: floor + 1.99 (ex: 12.30 → 13.99)
+      // 30-50: floor + 2.99
+      // 50-70: floor + 3.99
+      // 70-100: floor + 4.99
+      // > 100: floor + 5.99
+      if (p < 4) {
+        const dec = p - intPart;
+        return intPart + (dec <= 0.5 ? 0.49 : 0.99);
+      }
+      if (p < 10)  return intPart + 0.99;
+      if (p < 30)  return intPart + 1 + 0.99;
+      if (p < 50)  return intPart + 2 + 0.99;
+      if (p < 70)  return intPart + 3 + 0.99;
+      if (p < 100) return intPart + 4 + 0.99;
+      return intPart + 5 + 0.99;
+    }
     default:          return p;
   }
 }
