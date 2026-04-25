@@ -448,9 +448,10 @@ function logout() {
 function onMagazinChange() {
   const mag = document.getElementById('f-magazin').value;
   const gridZone = document.getElementById('grid-zone');
-  // Pentru admin: reîncarcă lista "în așteptare" când schimbă magazinul
-  if (currentUser && currentUser.nume === 'EUGEN' && typeof incarcaIstoric === 'function') {
-    incarcaIstoric();
+  // Pentru admin: reîncarcă listele când schimbă magazinul
+  if (currentUser && currentUser.nume === 'EUGEN') {
+    if (typeof incarcaIstoric === 'function') incarcaIstoric();
+    if (typeof incarcaDispozitiiTeren === 'function') incarcaDispozitiiTeren();
   }
   if (!mag) { gridZone.style.display = 'none'; document.getElementById('btn-submit').disabled = true; return; }
 
@@ -952,9 +953,16 @@ async function incarcaDispozitiiTeren() {
   const container = document.getElementById('lista-teren');
   if (!container) return;
   try {
-    // Filtru per utilizator (magazin) — EUGEN vede toate, magazinele doar pe ale lor
-    const filtruUser = (currentUser && currentUser.nume !== 'EUGEN')
-      ? `&utilizator=eq.${encodeURIComponent(currentUser.nume)}` : '';
+    // Filtru per utilizator (magazin):
+    //  - Magazin user: doar dispozitiile lor (utilizator = currentUser.nume)
+    //  - EUGEN admin: filtreaza dupa magazinul selectat in dropdown (sau toate daca gol)
+    let filtruUser = '';
+    if (currentUser && currentUser.nume !== 'EUGEN') {
+      filtruUser = `&utilizator=eq.${encodeURIComponent(currentUser.nume)}`;
+    } else if (currentUser && currentUser.nume === 'EUGEN') {
+      const sel = document.getElementById('f-magazin')?.value;
+      if (sel) filtruUser = `&utilizator=eq.${encodeURIComponent(sel)}`;
+    }
     const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN*${filtruUser}&order=completat_la.desc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
