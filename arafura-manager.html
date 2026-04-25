@@ -231,6 +231,7 @@
       <div class="menu-item" data-page="transferuri" ><span class="ico">🚚</span><span class="label">Transferuri</span></div>
       <div class="menu-item" data-page="distributie" ><span class="ico">📦</span><span class="label">Distribuție recepție</span></div>
       <div class="menu-item" data-page="capital"     ><span class="ico">💰</span><span class="label">Capital blocat</span></div>
+      <div class="menu-item" data-page="scadentar"   ><span class="ico">📅</span><span class="label">Scadentar</span></div>
     </div>
 
     <div class="menu-section">
@@ -691,6 +692,31 @@
         </div>
       </div>
 
+      <!-- SCADENTAR -->
+      <div class="page" id="page-scadentar">
+        <div class="card">
+          <h2>📅 Scadentar plăți furnizori</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:12px;">Lista facturilor neplătite + bilete la ordin. Importă export TeamApps pentru actualizare.</p>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center;">
+            <button onclick="incarcaScadentarFisier()" class="btn primary" style="padding:10px 16px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">📤 Încarcă SCADENTAR.xlsx</button>
+            <select id="sc-filtru" onchange="renderScadentar()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="toate" selected>Toate</option>
+              <option value="restante">⚠ Doar restante (zile întârziere > 0)</option>
+              <option value="urgent">🔴 Urgent (>30 zile întârziere)</option>
+              <option value="critic">🚨 Critic (>180 zile)</option>
+              <option value="viitoare-7">📆 Următoarele 7 zile</option>
+              <option value="viitoare-30">📆 Următoarele 30 zile</option>
+            </select>
+            <select id="sc-grup" onchange="renderScadentar()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="">Sortat după scadență</option>
+              <option value="furnizor">Grupat pe furnizor</option>
+            </select>
+            <span id="sc-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="sc-results"><div class="placeholder">Apasă "Încarcă SCADENTAR.xlsx" pentru a importa fișierul</div></div>
+        </div>
+      </div>
+
       <!-- REFRESH -->
       <div class="page" id="page-refresh">
         <div class="card">
@@ -733,14 +759,24 @@ function enterApp(user) {
   document.getElementById('screen-app').style.display = 'flex';
   document.getElementById('user-nume').textContent = currentUser.nume;
   document.getElementById('user-avatar').textContent = (currentUser.nume[0] || '?').toUpperCase();
+
+  // Filtrare meniu pe baza permisiunilor
+  // Daca user are doar acces_scadentar (nu acces_erp), arata DOAR scadentar
+  if (!user.acces_erp && user.acces_scadentar) {
+    document.querySelectorAll('.menu-item').forEach(item => {
+      const page = item.getAttribute('data-page');
+      item.style.display = (page === 'scadentar') ? '' : 'none';
+    });
+    // Auto-navigare la scadentar
+    setTimeout(() => document.querySelector('[data-page="scadentar"]')?.click(), 100);
+    return;
+  }
+  // User cu acces_erp vede tot
+  document.querySelectorAll('.menu-item').forEach(item => item.style.display = '');
   loadDashboard();
-  // Auto-navighează la Distribuție dacă URL conține dist_data
   if (new URLSearchParams(window.location.search).has('dist_data') ||
       window.location.hash === '#distributie') {
-    setTimeout(() => {
-      const item = document.querySelector('[data-page="distributie"]');
-      if (item) item.click();
-    }, 300);
+    setTimeout(() => document.querySelector('[data-page="distributie"]')?.click(), 300);
   }
 }
 
@@ -750,7 +786,7 @@ async function onLoginPin() {
   if (pin.length < 4) return;
   const err = document.getElementById('login-err');
   try {
-    const r = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&acces_erp=eq.true&select=id,nume,pin`, { headers: HEADERS });
+    const r = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&activ=eq.true&or=(acces_erp.eq.true,acces_scadentar.eq.true)&select=id,nume,pin,acces_erp,acces_scadentar`, { headers: HEADERS });
     const data = await r.json();
     if (!Array.isArray(data) || data.length === 0) {
       err.textContent = 'PIN incorect sau fără acces ERP';
@@ -1524,6 +1560,184 @@ async function loadStagnat() {
     // afișez toate
     res.innerHTML = html;
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+// ── SCADENTAR ──
+let _scadentarData = [];
+function incarcaScadentarFisier() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx';
+  input.onchange = async () => {
+    const f = input.files[0];
+    if (!f) return;
+    await procesareScadentarFisier(await f.arrayBuffer(), f.name);
+  };
+  input.click();
+}
+
+async function procesareScadentarFisier(buffer, fileName) {
+  const info = document.getElementById('sc-info');
+  const res = document.getElementById('sc-results');
+  info.textContent = `Procesez ${fileName}…`;
+  try {
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { range: 2, defval: '' });
+    if (!rows.length) { info.textContent = 'Fișier gol'; return; }
+
+    const items = [];
+    for (const r of rows) {
+      const cont = String(r['Cont Furnizor'] || '').trim();
+      const numeCont = String(r['Nume Cont Furnizor'] || '').trim();
+      if (!cont || !numeCont) continue;
+
+      const tip = cont.startsWith('40111.') ? 'Factura' : (cont.startsWith('403.') ? 'BO/CEC' : 'Alt');
+      // Numele furnizorului (înainte de '-')
+      const numeFurn = numeCont.split('-')[0].trim();
+
+      const dataDoc = r['Data Document'] ? new Date(r['Data Document']) : null;
+      const dataScad = r['Data Scadenta'] ? new Date(r['Data Scadenta']) : null;
+      const sumaRest = parseFloat(r['Suma Restanta (lei)'] || 0);
+      if (sumaRest <= 0.01) continue; // ignor cu rest = 0
+
+      // Calcul zile: pozitiv = întârziere, negativ = viitoare
+      let zileIntarz = 0;
+      if (dataScad) {
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        const scadCopy = new Date(dataScad);
+        scadCopy.setHours(0,0,0,0);
+        zileIntarz = Math.floor((today - scadCopy) / 86400000);
+      }
+
+      items.push({
+        tip,
+        cont,
+        nume_furnizor: numeFurn,
+        nume_cont: numeCont,
+        nr_factura: String(r['Nr Factura'] || '').trim(),
+        nr_doc_plata: String(r['Nr Doc. Plata'] || '').trim(),
+        data_document: dataDoc,
+        data_scadenta: dataScad,
+        zile_intarziere: zileIntarz,
+        suma_doc: parseFloat(r['Suma Doc (lei)'] || 0),
+        suma_platita: parseFloat(r['Suma Platita (lei)'] || 0),
+        suma_restanta: sumaRest
+      });
+    }
+
+    _scadentarData = items;
+    info.textContent = `✅ ${items.length} înregistrări active din ${fileName}`;
+    renderScadentar();
+  } catch(e) {
+    info.textContent = '';
+    res.innerHTML = '<div class="placeholder">Eroare: ' + escHtml(e.message) + '</div>';
+    console.error(e);
+  }
+}
+
+function renderScadentar() {
+  if (!_scadentarData.length) return;
+  const filtru = document.getElementById('sc-filtru').value;
+  const grup = document.getElementById('sc-grup').value;
+  let items = [..._scadentarData];
+
+  // Filtrare
+  if (filtru === 'restante') items = items.filter(x => x.zile_intarziere > 0);
+  else if (filtru === 'urgent') items = items.filter(x => x.zile_intarziere > 30);
+  else if (filtru === 'critic') items = items.filter(x => x.zile_intarziere > 180);
+  else if (filtru === 'viitoare-7') items = items.filter(x => x.zile_intarziere <= 0 && x.zile_intarziere >= -7);
+  else if (filtru === 'viitoare-30') items = items.filter(x => x.zile_intarziere <= 0 && x.zile_intarziere >= -30);
+
+  if (!items.length) {
+    document.getElementById('sc-results').innerHTML = '<div class="placeholder">Niciun rezultat pentru filtrul selectat</div>';
+    return;
+  }
+
+  // Sortare
+  items.sort((a,b) => b.zile_intarziere - a.zile_intarziere);
+
+  // Total
+  const totalRest = items.reduce((s,x) => s + x.suma_restanta, 0);
+  const restantTotalRest = items.filter(x => x.zile_intarziere > 0).reduce((s,x) => s + x.suma_restanta, 0);
+  const viitorTotalRest = items.filter(x => x.zile_intarziere <= 0).reduce((s,x) => s + x.suma_restanta, 0);
+
+  let html = `<div style="background:#fef3c7; border:1px solid #fcd34d; padding:12px 16px; border-radius:8px; margin-bottom:14px; font-size:13px;">
+    📊 <b>${items.length}</b> înregistrări · Total restant: <b style="color:var(--red);">${fmtMoney(totalRest)}</b> RON
+    ${restantTotalRest > 0 ? ` · Restante: <b style="color:var(--red);">${fmtMoney(restantTotalRest)}</b> RON` : ''}
+    ${viitorTotalRest > 0 ? ` · Viitoare: <b style="color:var(--green);">${fmtMoney(viitorTotalRest)}</b> RON` : ''}
+  </div>`;
+
+  if (grup === 'furnizor') {
+    // Grupare pe furnizor
+    const groups = {};
+    for (const it of items) {
+      if (!groups[it.nume_furnizor]) groups[it.nume_furnizor] = [];
+      groups[it.nume_furnizor].push(it);
+    }
+    const furnSorted = Object.keys(groups).sort((a,b) => {
+      const sa = groups[a].reduce((s,x) => s + x.suma_restanta, 0);
+      const sb = groups[b].reduce((s,x) => s + x.suma_restanta, 0);
+      return sb - sa;
+    });
+    for (const furn of furnSorted) {
+      const its = groups[furn];
+      const totalF = its.reduce((s,x) => s + x.suma_restanta, 0);
+      html += `<div style="margin-bottom:14px;">
+        <div style="background:var(--navy); color:white; padding:10px 14px; border-radius:6px 6px 0 0; font-weight:700;">📦 ${escHtml(furn)} — ${its.length} doc · ${fmtMoney(totalF)} RON</div>
+        <table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;">
+          <th style="padding:6px; text-align:left;">Tip</th>
+          <th style="padding:6px; text-align:left;">Nr Doc</th>
+          <th style="padding:6px; text-align:left;">Data Doc</th>
+          <th style="padding:6px; text-align:left;">Scadență</th>
+          <th style="padding:6px; text-align:right;">Zile</th>
+          <th style="padding:6px; text-align:right;">Sumă restantă</th>
+        </tr></thead><tbody>`;
+      for (const it of its) html += renderScRand(it);
+      html += '</tbody></table></div>';
+    }
+  } else {
+    // Sortare simplă pe scadență
+    html += `<table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0;">
+      <th style="padding:8px; text-align:left;">Tip</th>
+      <th style="padding:8px; text-align:left;">Furnizor</th>
+      <th style="padding:8px; text-align:left;">Nr Doc</th>
+      <th style="padding:8px; text-align:left;">Data Doc</th>
+      <th style="padding:8px; text-align:left;">Scadență</th>
+      <th style="padding:8px; text-align:right;">Zile</th>
+      <th style="padding:8px; text-align:right;">Sumă restantă</th>
+    </tr></thead><tbody>`;
+    for (const it of items) html += renderScRand(it, true);
+    html += '</tbody></table>';
+  }
+  document.getElementById('sc-results').innerHTML = html;
+}
+
+function renderScRand(it, includFurnizor) {
+  const z = it.zile_intarziere;
+  let zileColor = '#9ca3af', zileText = z;
+  if (z > 180) { zileColor = '#dc2626'; zileText = `🚨 ${z}`; }
+  else if (z > 30) { zileColor = '#ea580c'; zileText = `🔴 ${z}`; }
+  else if (z > 0) { zileColor = '#ca8a04'; zileText = `⚠ ${z}`; }
+  else if (z >= -7) { zileColor = '#16a34a'; zileText = `📆 ${z}`; }
+  else { zileColor = '#9ca3af'; zileText = z; }
+
+  const tipBadge = it.tip === 'Factura' ? '<span style="background:#dbeafe; color:#1e40af; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600;">📄 FACT</span>' : '<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600;">📝 BO</span>';
+  const furnCol = includFurnizor ? `<td style="padding:6px;">${escHtml(it.nume_furnizor)}</td>` : '';
+  const dDoc = it.data_document ? it.data_document.toLocaleDateString('ro-RO') : '—';
+  const dScad = it.data_scadenta ? it.data_scadenta.toLocaleDateString('ro-RO') : '—';
+  const nrDoc = it.nr_factura || it.nr_doc_plata || '—';
+
+  return `<tr style="border-top:1px solid var(--border);">
+    <td style="padding:6px;">${tipBadge}</td>
+    ${furnCol}
+    <td style="padding:6px; font-family:monospace; font-size:11px;">${escHtml(nrDoc)}</td>
+    <td style="padding:6px; font-size:11px;">${dDoc}</td>
+    <td style="padding:6px; font-size:11px; font-weight:600;">${dScad}</td>
+    <td style="padding:6px; text-align:right; font-weight:700; color:${zileColor};">${zileText}</td>
+    <td style="padding:6px; text-align:right; font-weight:800; color:var(--red);">${fmtMoney(it.suma_restanta)}</td>
+  </tr>`;
 }
 
 // ── CAPITAL BLOCAT ──
@@ -3250,7 +3464,7 @@ async function loadDuplicate() {
 // ── NAVIGATION ──
 const titles = {
   dashboard:'🏠 Dashboard', cautare:'🔍 Căutare produs',
-  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri', distributie:'📦 Distribuție recepție', capital:'💰 Capital blocat',
+  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri', distributie:'📦 Distribuție recepție', capital:'💰 Capital blocat', scadentar:'📅 Scadentar',
   achizitii:'🛒 Comenzi sugerate', vanzari:'💸 Vânzări & Marjă', preturi:'💰 Prețuri',
   magazine:'🏪 Per Magazin', furnizori:'🏭 Per Furnizor', familii:'📚 Per Familie',
   duplicate:'⚠️ Coduri duplicate', refresh:'🔄 Refresh date'
