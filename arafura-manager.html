@@ -530,14 +530,37 @@
       <!-- VANZARI -->
       <div class="page" id="page-vanzari">
         <div class="card">
-          <h2>💸 Vânzări — Top produse după volum</h2>
+          <h2>💸 Vânzări — Top produse cu marjă</h2>
           <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
             <select id="van-zile" onchange="loadVanzari()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
               <option value="7">Ultimele 7 zile</option>
               <option value="30" selected>30 zile</option>
+              <option value="60">60 zile</option>
               <option value="90">90 zile</option>
               <option value="180">6 luni</option>
               <option value="365">1 an</option>
+            </select>
+            <select id="van-mag" onchange="loadVanzari()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="">Toate magazinele</option>
+              <option value="MARVIMEX">MARVIMEX</option>
+              <option value="TOMIS 3">TOMIS 3</option>
+              <option value="MEDGIDIA">MEDGIDIA</option>
+              <option value="NAVODARI">NAVODARI</option>
+              <option value="POARTA 6">POARTA 6</option>
+              <option value="BABADAG">BABADAG</option>
+              <option value="SHOWROOM">SHOWROOM</option>
+            </select>
+            <select id="van-sort" onchange="renderVanzari()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="cant" selected>Sortare: cantitate</option>
+              <option value="venit">Sortare: venit</option>
+              <option value="marja_ron">Sortare: marjă RON</option>
+              <option value="marja_pct">Sortare: marjă %</option>
+            </select>
+            <select id="van-top" onchange="loadVanzari()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="100">Top 100</option>
+              <option value="200" selected>Top 200</option>
+              <option value="500">Top 500</option>
+              <option value="2000">Top 2000</option>
             </select>
             <button onclick="loadVanzari()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Încarcă</button>
             <span id="van-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
@@ -1730,36 +1753,83 @@ function renderAchizitii() { /* deprecated */ }
 function filterAchizitii() { /* deprecated */ }
 
 // ── VANZARI ──
+let _vanzariData = [];
 async function loadVanzari() {
   const zile = parseInt(document.getElementById('van-zile').value) || 30;
+  const top = parseInt(document.getElementById('van-top').value) || 200;
+  const magazin = document.getElementById('van-mag').value || null;
   const info = document.getElementById('van-info');
   const res = document.getElementById('van-results');
-  info.textContent = 'caut…';
+  info.textContent = 'analizez…';
   res.innerHTML = '<div class="placeholder">se încarcă…</div>';
   try {
-    const sinceDate = new Date(Date.now() - zile*86400000).toISOString().slice(0,10);
-    // Aggregate sales per cod_art via PostgREST
-    const r = await fetch(`${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri.sum()&limit=10000`, { headers: HEADERS });
+    const t0 = Date.now();
+    const r = await fetch(`${API}/rpc/top_vanzari_cu_marja`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_zile: zile, p_top: top, p_magazin: magazin })
+    });
     const arr = await r.json();
-    arr.sort((a,b) => (parseFloat(b.sum_iesiri ?? b.iesiri?.sum ?? b.sum) || 0) - (parseFloat(a.sum_iesiri ?? a.iesiri?.sum ?? a.sum) || 0));
-    const top = arr.slice(0, 100);
-    const codStr = top.map(t => `"${t.cod_art}"`).join(',');
-    const rp = await fetch(`${API}/produse?cod_art=in.(${codStr})&select=cod_art,nume_art,furnizor`, { headers: HEADERS });
-    const prods = await rp.json();
-    const pmap = Object.fromEntries(prods.map(p => [p.cod_art, p]));
-    let totalBuc = 0;
-    for (const t of arr) totalBuc += parseFloat(t.sum_iesiri ?? t.iesiri?.sum ?? t.sum) || 0;
-    info.textContent = `${arr.length} produse vândute · ${fmtNum(totalBuc)} buc total`;
-    let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc;"><th style="padding:8px; text-align:left;">#</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Vândut</th></tr></thead><tbody>';
-    let i = 1;
-    for (const t of top) {
-      const buc = parseFloat(t.sum_iesiri ?? t.iesiri?.sum ?? t.sum) || 0;
-      const p = pmap[t.cod_art] || {};
-      html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(t.cod_art)}'); document.querySelector('[data-page=cautare]').click();"><td style="padding:8px; color:var(--sub); font-weight:700;">${i++}</td><td style="padding:8px; font-family:monospace; color:var(--blue);">${escHtml(t.cod_art)}</td><td style="padding:8px;">${escHtml(p.nume_art||'')}</td><td style="padding:8px; color:var(--sub); font-size:12px;">${escHtml(p.furnizor||'')}</td><td style="padding:8px; text-align:right; font-weight:800; color:var(--green);">${fmtNum(buc)}</td></tr>`;
+    if (!Array.isArray(arr)) {
+      res.innerHTML = '<div class="placeholder">Eroare RPC: ' + JSON.stringify(arr).slice(0,200) + '</div>';
+      info.textContent = '';
+      return;
     }
-    html += '</tbody></table>';
-    res.innerHTML = html;
+    _vanzariData = arr;
+    const dur = ((Date.now() - t0)/1000).toFixed(1);
+    const totalBuc = arr.reduce((s,x) => s + parseFloat(x.cantitate_vanduta||0), 0);
+    const totalVenit = arr.reduce((s,x) => s + parseFloat(x.venit_total||0), 0);
+    const totalMarja = arr.reduce((s,x) => s + parseFloat(x.marja_ron||0), 0);
+    const marjaPctTotal = totalVenit > 0 ? ((totalMarja / totalVenit) * 100) : 0;
+    info.innerHTML = `<b>${arr.length}</b> produse · <b>${fmtNum(totalBuc)}</b> buc · venit <b style="color:var(--green);">${fmtMoney(totalVenit)}</b> RON · marjă <b style="color:var(--blue);">${fmtMoney(totalMarja)}</b> RON (${marjaPctTotal.toFixed(1)}%) · ${dur}s`;
+    renderVanzari();
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+function renderVanzari() {
+  if (!_vanzariData.length) return;
+  const sortBy = document.getElementById('van-sort').value || 'cant';
+  const sorted = [..._vanzariData].sort((a,b) => {
+    const va = parseFloat(a[sortBy === 'cant' ? 'cantitate_vanduta' : sortBy]) || 0;
+    const vb = parseFloat(b[sortBy === 'cant' ? 'cantitate_vanduta' : sortBy]) || 0;
+    return vb - va;
+  });
+  let html = '<div style="overflow-x:auto;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:3;">';
+  html += '<th style="padding:8px; text-align:left; background:#f8fafc;">#</th>';
+  html += '<th style="padding:8px; text-align:left; background:#f8fafc;">COD</th>';
+  html += '<th style="padding:8px; text-align:left; background:#f8fafc;">Nume</th>';
+  html += '<th style="padding:8px; text-align:left; background:#f8fafc;">Furnizor</th>';
+  html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Vândut buc</th>';
+  html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Preț unit</th>';
+  html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Cost unit</th>';
+  html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Venit RON</th>';
+  html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Marjă RON</th>';
+  html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Marjă %</th>';
+  html += '</tr></thead><tbody>';
+  let i = 1;
+  for (const t of sorted) {
+    const cant = parseFloat(t.cantitate_vanduta) || 0;
+    const venit = parseFloat(t.venit_total) || 0;
+    const marjaRon = parseFloat(t.marja_ron) || 0;
+    const marjaPct = t.marja_pct !== null ? parseFloat(t.marja_pct) : null;
+    const pretUnit = parseFloat(t.pret_unit) || 0;
+    const costUnit = parseFloat(t.cost_unit) || 0;
+    const marjaColor = marjaRon < 0 ? 'var(--red)' : (marjaPct !== null && marjaPct < 20 ? 'var(--orange)' : 'var(--green)');
+    html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(t.cod_art)}'); document.querySelector('[data-page=cautare]').click();">
+      <td style="padding:6px; color:var(--sub); font-weight:700;">${i++}</td>
+      <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(t.cod_art)}</td>
+      <td style="padding:6px;">${escHtml(t.nume_art||'')}</td>
+      <td style="padding:6px; color:var(--sub); font-size:11px;">${escHtml(t.furnizor||'')}</td>
+      <td style="padding:6px; text-align:right; font-weight:700;">${fmtNum(cant)}</td>
+      <td style="padding:6px; text-align:right; font-size:11px;">${pretUnit > 0 ? pretUnit.toFixed(2) : '—'}</td>
+      <td style="padding:6px; text-align:right; font-size:11px;">${costUnit > 0 ? costUnit.toFixed(2) : '—'}</td>
+      <td style="padding:6px; text-align:right; font-weight:700; color:var(--green);">${fmtMoney(venit)}</td>
+      <td style="padding:6px; text-align:right; font-weight:700; color:${marjaColor};">${fmtMoney(marjaRon)}</td>
+      <td style="padding:6px; text-align:right; font-weight:700; color:${marjaColor};">${marjaPct !== null ? marjaPct.toFixed(1) + '%' : '—'}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  document.getElementById('van-results').innerHTML = html;
 }
 
 // ── TRANSFERURI ──
