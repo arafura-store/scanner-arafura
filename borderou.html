@@ -448,6 +448,10 @@ function logout() {
 function onMagazinChange() {
   const mag = document.getElementById('f-magazin').value;
   const gridZone = document.getElementById('grid-zone');
+  // Pentru admin: reîncarcă lista "în așteptare" când schimbă magazinul
+  if (currentUser && currentUser.nume === 'EUGEN' && typeof incarcaIstoric === 'function') {
+    incarcaIstoric();
+  }
   if (!mag) { gridZone.style.display = 'none'; document.getElementById('btn-submit').disabled = true; return; }
 
   const e2 = MAGAZINE_2_CASE.includes(mag);
