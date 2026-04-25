@@ -556,11 +556,13 @@ async function incarcaIstoric() {
       return;
     }
 
-    // Grupeaza pe data confirmarii (aproximativ pe deconturi)
+    // Grupeaza pe deconturi (prag 5 min, sliding window — comparat cu ULTIMUL din grup)
     const deconturi = [];
     let currentGroup = null;
     for (const d of data) {
-      if (!currentGroup || Math.abs(new Date(d.created_at) - new Date(currentGroup.items[0].created_at)) > 60000) {
+      const dCreated = new Date(d.created_at);
+      const ultim = currentGroup ? new Date(currentGroup.items[currentGroup.items.length - 1].created_at) : null;
+      if (!currentGroup || Math.abs(dCreated - ultim) > 300000) {
         if (deconturi.length >= 5) break;
         currentGroup = { items: [d], total: 0 };
         deconturi.push(currentGroup);
