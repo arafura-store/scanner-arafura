@@ -730,9 +730,17 @@ async function trimiteBorderou() {
     }
 
     showToast('✓ Borderou trimis la birou', 'ok');
-    // Reset form
-    document.getElementById('f-magazin').value = '';
+    // Reset form — pastrez magazinul pentru user normal (Eugen poate sa-l schimbe)
+    const sel = document.getElementById('f-magazin');
+    if (currentUser && currentUser.nume !== 'EUGEN') {
+      // Pastrez magazinul curent (e auto-blocat per PIN)
+      // sel.value rămâne neschimbat
+    } else {
+      sel.value = '';
+    }
     document.getElementById('f-obs').value = '';
+    // Resetez doar inputurile numerice (nu magazinul)
+    document.querySelectorAll('#card-borderou input[type=number]').forEach(el => el.value = '');
     onMagazinChange();
     await incarcaIstoric();
   } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
