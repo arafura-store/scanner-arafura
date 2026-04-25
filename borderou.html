@@ -988,24 +988,28 @@ async function incarcaDispozitiiTeren() {
       const isIntrareAmanet = tipBaza === 'DI AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
+      // Safety: butoanele sunt active DOAR daca user curent = creator (sau e EUGEN admin)
+      const userPoateActiona = currentUser && (currentUser.nume === 'EUGEN' || d.utilizator === currentUser.nume);
+      const btnDisabled = userPoateActiona ? '' : 'opacity:0.4; cursor:not-allowed;';
+      const btnTitle = userPoateActiona ? '' : `title="Doar ${d.utilizator || 'creatorul'} poate acționa pe această dispoziție"`;
+      const onclickGuard = userPoateActiona ? '' : 'event.stopPropagation(); event.preventDefault(); showToast(\'Nu poți acționa pe dispoziția altui magazin\',\'err\'); return false;';
+
       let actiuni;
       if (tipBaza === 'DP AMANET') {
-        // bani amanet → birou. Magazin predă, birou confirmă.
         if (!estePredat) {
-          actiuni = `<button type="button" onclick="predaTeren(${d.id})" style="flex:1; padding:10px; background:var(--blue); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">🚚 Predă banii la șofer</button>
-                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+          actiuni = `<button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `predaTeren(${d.id})` : ''}" ${btnTitle} style="flex:1; padding:10px; background:var(--blue); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">🚚 Predă banii la șofer</button>
+                     <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează</button>`;
         } else {
           actiuni = `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă confirmare la birou</div>
-                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+                     <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează</button>`;
         }
       } else {
-        // DI — bani birou → amanet. Birou predă, magazin confirmă.
         if (!estePredat) {
           actiuni = `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă predarea la șofer (birou)</div>
-                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+                     <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează</button>`;
         } else {
-          actiuni = `<button type="button" onclick="confirmaTeren(${d.id})" style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">✓ Confirmă (banii au ajuns)</button>
-                     <button type="button" onclick="anuleazaTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>`;
+          actiuni = `<button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `confirmaTeren(${d.id})` : ''}" ${btnTitle} style="flex:1; padding:10px; background:var(--green); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">✓ Confirmă (banii au ajuns)</button>
+                     <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează</button>`;
         }
       }
       const cardStyle = estePredat
