@@ -421,6 +421,7 @@
           <select id="f-tip-select" onchange="setTipFromDropdown(this.value)" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px; font-size:14px; background:white;">
             <option value="">— Sau alt tip specific —</option>
             <optgroup label="↓ PLĂȚI (ieșiri)">
+              <option value="FURNIZOR">FURNIZOR</option>
               <option value="COMBUSTIBIL">COMBUSTIBIL</option>
               <option value="MATERIALE">MATERIALE</option>
               <option value="SALARIU">SALARIU</option>
@@ -953,7 +954,7 @@ async function deschideAdaugaBeneficiar(numeSugerat) {
   }
 }
 
-const TIPURI_IESIRE = ['COMBUSTIBIL','MATERIALE','SALARIU','UTILITATI','CHIRII','TRANSPORT','REPARATII','ASIGURARI','TAXE','SERVICII','PROTOCOL','IMPRUMUT','REGLARE CASA-','ALTE PLATI'];
+const TIPURI_IESIRE = ['FURNIZOR','COMBUSTIBIL','MATERIALE','SALARIU','UTILITATI','CHIRII','TRANSPORT','REPARATII','ASIGURARI','TAXE','SERVICII','PROTOCOL','IMPRUMUT','REGLARE CASA-','ALTE PLATI'];
 const TIPURI_INTRARE = ['CHIRIE INCASATA','VANZARI','IMPRUMUT INCASAT','DIVIDENDE','SPONSORIZARI','REGLARE CASA+','ALTE INCASARI'];
 
 function updateTipSelect(directie) {
@@ -1021,7 +1022,7 @@ function tipDirection(tip) {
     'CHIRIE INCASATA', 'VANZARI', 'IMPRUMUT INCASAT', 'DIVIDENDE', 'SPONSORIZARI', 'REGLARE CASA+', 'ALTE INCASARI'
   ];
   const tipuriIesire = [
-    'PLATA',
+    'PLATA', 'FURNIZOR',
     'COMBUSTIBIL', 'MATERIALE', 'SALARIU', 'UTILITATI', 'CHIRII', 'TRANSPORT',
     'REPARATII', 'ASIGURARI', 'TAXE', 'SERVICII', 'PROTOCOL', 'IMPRUMUT', 'REGLARE CASA-', 'ALTE PLATI'
   ];
