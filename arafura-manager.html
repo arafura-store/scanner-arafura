@@ -594,6 +594,19 @@
               <option value="1000">Top 1000 produse</option>
               <option value="2000">Top 2000 produse</option>
             </select>
+            <select id="van-rotunjire" onchange="renderVanzari()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="" selected>Fără simulare rotunjire</option>
+              <option value="up_0.10">↑ La 0.10 sus (3.42 → 3.50)</option>
+              <option value="near_0.10">≈ La 0.10 cel mai apropiat</option>
+              <option value="up_0.50">↑ La 0.50 sus</option>
+              <option value="near_0.50">≈ La 0.50 cel mai apropiat</option>
+              <option value="up_1">↑ La leu întreg sus (3.42 → 4)</option>
+              <option value="near_1">≈ La leu întreg apropiat</option>
+              <option value="x99">.99 (ex: 3.42 → 3.99)</option>
+              <option value="x99_down">.99 sub (3.42 → 2.99)</option>
+              <option value="x95">.95 (ex: 3.42 → 3.95)</option>
+              <option value="x90">.90 (ex: 3.42 → 3.90)</option>
+            </select>
             <button onclick="loadVanzari()" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">🔍 Încarcă</button>
             <span id="van-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
           </div>
@@ -1894,14 +1907,65 @@ async function loadVanzari() {
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
 
+function rotunjire(pret, mode) {
+  if (!mode || pret <= 0) return pret;
+  const p = pret;
+  const intPart = Math.floor(p);
+  switch(mode) {
+    case 'up_0.10':   return Math.ceil(p * 10) / 10;
+    case 'near_0.10': return Math.round(p * 10) / 10;
+    case 'up_0.50':   return Math.ceil(p * 2) / 2;
+    case 'near_0.50': return Math.round(p * 2) / 2;
+    case 'up_1':      return Math.ceil(p);
+    case 'near_1':    return Math.round(p);
+    case 'x99':       return intPart + 0.99;       // 3.42 → 3.99, 3.95 → 3.99
+    case 'x99_down':  return Math.max(intPart - 1, 0) + 0.99; // 3.42 → 2.99
+    case 'x95':       return intPart + 0.95;
+    case 'x90':       return intPart + 0.90;
+    default:          return p;
+  }
+}
+
 function renderVanzari() {
   if (!_vanzariData.length) return;
   const sortBy = document.getElementById('van-sort').value || 'cant';
-  const sorted = [..._vanzariData].sort((a,b) => {
+  const rotMode = document.getElementById('van-rotunjire').value || '';
+  // Recalc cu rotunjire dacă e cazul
+  const data = _vanzariData.map(t => {
+    const cant = parseFloat(t.cantitate_vanduta) || 0;
+    const pretUnit = parseFloat(t.pret_unit) || 0;
+    const costUnit = parseFloat(t.cost_unit) || 0;
+    const pretNou = rotMode ? rotunjire(pretUnit, rotMode) : pretUnit;
+    const venitOriginal = cant * pretUnit;
+    const venitNou = cant * pretNou;
+    const marjaNouaRon = cant * (pretNou - costUnit);
+    const marjaNouaPct = pretNou > 0 && costUnit > 0 ? ((pretNou - costUnit) / costUnit * 100) : null;
+    return { ...t, _venitNou: venitNou, _venitOriginal: venitOriginal,
+      _diff: venitNou - venitOriginal, _pretNou: pretNou,
+      _marjaNouaRon: marjaNouaRon, _marjaNouaPct: marjaNouaPct };
+  });
+
+  const sorted = [...data].sort((a,b) => {
     const va = parseFloat(a[sortBy === 'cant' ? 'cantitate_vanduta' : sortBy]) || 0;
     const vb = parseFloat(b[sortBy === 'cant' ? 'cantitate_vanduta' : sortBy]) || 0;
     return vb - va;
   });
+
+  // Summary cu impact rotunjire
+  if (rotMode) {
+    const totalOrig = data.reduce((s,x) => s + x._venitOriginal, 0);
+    const totalNou = data.reduce((s,x) => s + x._venitNou, 0);
+    const diff = totalNou - totalOrig;
+    const diffPct = totalOrig > 0 ? (diff / totalOrig * 100) : 0;
+    const color = diff >= 0 ? 'var(--green)' : 'var(--red)';
+    const banner = `<div style="background:#fef3c7; border:1px solid #fcd34d; padding:10px 14px; border-radius:8px; margin-bottom:10px; font-size:13px;">
+      🔄 <b>SIMULARE ROTUNJIRE</b>: venit original ${fmtMoney(totalOrig)} → venit nou <b style="color:${color};">${fmtMoney(totalNou)}</b> (diff: <b style="color:${color};">${diff >= 0 ? '+' : ''}${fmtMoney(diff)}</b> = ${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(2)}%)
+    </div>`;
+    document.getElementById('van-results').innerHTML = banner;
+  } else {
+    document.getElementById('van-results').innerHTML = '';
+  }
+
   let html = '<div style="overflow-x:auto;"><table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0; z-index:3;">';
   html += '<th style="padding:8px; text-align:left; background:#f8fafc;">#</th>';
   html += '<th style="padding:8px; text-align:left; background:#f8fafc;">COD</th>';
@@ -1909,20 +1973,29 @@ function renderVanzari() {
   html += '<th style="padding:8px; text-align:left; background:#f8fafc;">Furnizor</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Vândut buc</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Preț unit</th>';
+  if (rotMode) html += '<th style="padding:8px; text-align:right; background:#fef3c7;">Preț nou</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Cost unit</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Venit RON</th>';
+  if (rotMode) html += '<th style="padding:8px; text-align:right; background:#fef3c7;">Diff venit</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Marjă RON</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Marjă %</th>';
   html += '</tr></thead><tbody>';
   let i = 1;
   for (const t of sorted) {
     const cant = parseFloat(t.cantitate_vanduta) || 0;
-    const venit = parseFloat(t.venit_total) || 0;
-    const marjaRon = parseFloat(t.marja_ron) || 0;
-    const marjaPct = t.marja_pct !== null ? parseFloat(t.marja_pct) : null;
     const pretUnit = parseFloat(t.pret_unit) || 0;
     const costUnit = parseFloat(t.cost_unit) || 0;
+    const venit = rotMode ? t._venitNou : (parseFloat(t.venit_total) || 0);
+    const marjaRon = rotMode ? t._marjaNouaRon : (parseFloat(t.marja_ron) || 0);
+    const marjaPct = rotMode ? t._marjaNouaPct : (t.marja_pct !== null ? parseFloat(t.marja_pct) : null);
     const marjaColor = marjaRon < 0 ? 'var(--red)' : (marjaPct !== null && marjaPct < 20 ? 'var(--orange)' : 'var(--green)');
+    let pretNouCol = '', diffCol = '';
+    if (rotMode) {
+      const diffPretRow = t._diff;
+      const diffColor = diffPretRow >= 0 ? 'var(--green)' : 'var(--red)';
+      pretNouCol = `<td style="padding:6px; text-align:right; background:#fffbeb; font-weight:700; color:var(--orange);">${t._pretNou.toFixed(2)}</td>`;
+      diffCol = `<td style="padding:6px; text-align:right; background:#fffbeb; font-weight:700; color:${diffColor};">${diffPretRow >= 0 ? '+' : ''}${fmtMoney(diffPretRow)}</td>`;
+    }
     html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(t.cod_art)}'); document.querySelector('[data-page=cautare]').click();">
       <td style="padding:6px; color:var(--sub); font-weight:700;">${i++}</td>
       <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(t.cod_art)}</td>
@@ -1930,14 +2003,16 @@ function renderVanzari() {
       <td style="padding:6px; color:var(--sub); font-size:11px;">${escHtml(t.furnizor||'')}</td>
       <td style="padding:6px; text-align:right; font-weight:700;">${fmtNum(cant)}</td>
       <td style="padding:6px; text-align:right; font-size:11px;">${pretUnit > 0 ? pretUnit.toFixed(2) : '—'}</td>
+      ${pretNouCol}
       <td style="padding:6px; text-align:right; font-size:11px;">${costUnit > 0 ? costUnit.toFixed(2) : '—'}</td>
       <td style="padding:6px; text-align:right; font-weight:700; color:var(--green);">${fmtMoney(venit)}</td>
+      ${diffCol}
       <td style="padding:6px; text-align:right; font-weight:700; color:${marjaColor};">${fmtMoney(marjaRon)}</td>
       <td style="padding:6px; text-align:right; font-weight:700; color:${marjaColor};">${marjaPct !== null ? marjaPct.toFixed(1) + '%' : '—'}</td>
     </tr>`;
   }
   html += '</tbody></table></div>';
-  document.getElementById('van-results').innerHTML = html;
+  document.getElementById('van-results').innerHTML += html;
 }
 
 // ── TRANSFERURI ──
