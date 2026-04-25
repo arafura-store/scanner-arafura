@@ -1951,15 +1951,29 @@ function renderVanzari() {
     return vb - va;
   });
 
-  // Summary cu impact rotunjire
+  // Summary cu impact rotunjire — venit + marja, ACTUAL vs SIMULAT
   if (rotMode) {
-    const totalOrig = data.reduce((s,x) => s + x._venitOriginal, 0);
-    const totalNou = data.reduce((s,x) => s + x._venitNou, 0);
-    const diff = totalNou - totalOrig;
-    const diffPct = totalOrig > 0 ? (diff / totalOrig * 100) : 0;
-    const color = diff >= 0 ? 'var(--green)' : 'var(--red)';
-    const banner = `<div style="background:#fef3c7; border:1px solid #fcd34d; padding:10px 14px; border-radius:8px; margin-bottom:10px; font-size:13px;">
-      🔄 <b>SIMULARE ROTUNJIRE</b>: venit original ${fmtMoney(totalOrig)} → venit nou <b style="color:${color};">${fmtMoney(totalNou)}</b> (diff: <b style="color:${color};">${diff >= 0 ? '+' : ''}${fmtMoney(diff)}</b> = ${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(2)}%)
+    const venitOrig = data.reduce((s,x) => s + x._venitOriginal, 0);
+    const venitNou = data.reduce((s,x) => s + x._venitNou, 0);
+    const diffVenit = venitNou - venitOrig;
+    const diffVenitPct = venitOrig > 0 ? (diffVenit / venitOrig * 100) : 0;
+    const colVenit = diffVenit >= 0 ? '#16a34a' : '#dc2626';
+
+    const marjaOrig = data.reduce((s,x) => s + (parseFloat(x.marja_ron) || 0), 0);
+    const marjaNoua = data.reduce((s,x) => s + x._marjaNouaRon, 0);
+    const diffMarja = marjaNoua - marjaOrig;
+    const diffMarjaPct = marjaOrig > 0 ? (diffMarja / marjaOrig * 100) : 0;
+    const colMarja = diffMarja >= 0 ? '#16a34a' : '#dc2626';
+
+    const banner = `<div style="background:#fef3c7; border:1px solid #fcd34d; padding:14px 18px; border-radius:8px; margin-bottom:12px; font-size:13px;">
+      🔄 <b style="font-size:14px;">SIMULARE ROTUNJIRE</b>
+      <table style="width:100%; margin-top:8px; font-size:13px; border-collapse:collapse;">
+        <thead><tr style="background:#fffbeb;"><th style="padding:6px; text-align:left;"></th><th style="padding:6px; text-align:right;">ACUM (real)</th><th style="padding:6px; text-align:right;">DUPĂ rotunjire</th><th style="padding:6px; text-align:right;">DIFERENȚA</th></tr></thead>
+        <tbody>
+          <tr style="border-top:1px solid #fde68a;"><td style="padding:6px;"><b>Venit total</b></td><td style="padding:6px; text-align:right;">${fmtMoney(venitOrig)} RON</td><td style="padding:6px; text-align:right; font-weight:700;">${fmtMoney(venitNou)} RON</td><td style="padding:6px; text-align:right; font-weight:800; color:${colVenit};">${diffVenit >= 0 ? '+' : ''}${fmtMoney(diffVenit)} RON (${diffVenitPct >= 0 ? '+' : ''}${diffVenitPct.toFixed(2)}%)</td></tr>
+          <tr style="border-top:1px solid #fde68a;"><td style="padding:6px;"><b>Marjă totală</b></td><td style="padding:6px; text-align:right;">${fmtMoney(marjaOrig)} RON</td><td style="padding:6px; text-align:right; font-weight:700;">${fmtMoney(marjaNoua)} RON</td><td style="padding:6px; text-align:right; font-weight:800; color:${colMarja};">${diffMarja >= 0 ? '+' : ''}${fmtMoney(diffMarja)} RON (${diffMarjaPct >= 0 ? '+' : ''}${diffMarjaPct.toFixed(2)}%)</td></tr>
+        </tbody>
+      </table>
     </div>`;
     document.getElementById('van-results').innerHTML = banner;
   } else {
@@ -1978,6 +1992,7 @@ function renderVanzari() {
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Venit RON</th>';
   if (rotMode) html += '<th style="padding:8px; text-align:right; background:#fef3c7;">Diff venit</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Marjă RON</th>';
+  if (rotMode) html += '<th style="padding:8px; text-align:right; background:#fef3c7;">Diff marjă</th>';
   html += '<th style="padding:8px; text-align:right; background:#f8fafc;">Marjă %</th>';
   html += '</tr></thead><tbody>';
   let i = 1;
@@ -1989,12 +2004,16 @@ function renderVanzari() {
     const marjaRon = rotMode ? t._marjaNouaRon : (parseFloat(t.marja_ron) || 0);
     const marjaPct = rotMode ? t._marjaNouaPct : (t.marja_pct !== null ? parseFloat(t.marja_pct) : null);
     const marjaColor = marjaRon < 0 ? 'var(--red)' : (marjaPct !== null && marjaPct < 20 ? 'var(--orange)' : 'var(--green)');
-    let pretNouCol = '', diffCol = '';
+    let pretNouCol = '', diffCol = '', diffMarjaCol = '';
     if (rotMode) {
       const diffPretRow = t._diff;
-      const diffColor = diffPretRow >= 0 ? 'var(--green)' : 'var(--red)';
+      const colorVenit = diffPretRow >= 0 ? 'var(--green)' : 'var(--red)';
+      const marjaOriginalRow = parseFloat(t.marja_ron) || 0;
+      const diffMarjaRow = t._marjaNouaRon - marjaOriginalRow;
+      const colorMarja = diffMarjaRow >= 0 ? 'var(--green)' : 'var(--red)';
       pretNouCol = `<td style="padding:6px; text-align:right; background:#fffbeb; font-weight:700; color:var(--orange);">${t._pretNou.toFixed(2)}</td>`;
-      diffCol = `<td style="padding:6px; text-align:right; background:#fffbeb; font-weight:700; color:${diffColor};">${diffPretRow >= 0 ? '+' : ''}${fmtMoney(diffPretRow)}</td>`;
+      diffCol = `<td style="padding:6px; text-align:right; background:#fffbeb; font-weight:700; color:${colorVenit};">${diffPretRow >= 0 ? '+' : ''}${fmtMoney(diffPretRow)}</td>`;
+      diffMarjaCol = `<td style="padding:6px; text-align:right; background:#fffbeb; font-weight:700; color:${colorMarja};">${diffMarjaRow >= 0 ? '+' : ''}${fmtMoney(diffMarjaRow)}</td>`;
     }
     html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(t.cod_art)}'); document.querySelector('[data-page=cautare]').click();">
       <td style="padding:6px; color:var(--sub); font-weight:700;">${i++}</td>
@@ -2008,6 +2027,7 @@ function renderVanzari() {
       <td style="padding:6px; text-align:right; font-weight:700; color:var(--green);">${fmtMoney(venit)}</td>
       ${diffCol}
       <td style="padding:6px; text-align:right; font-weight:700; color:${marjaColor};">${fmtMoney(marjaRon)}</td>
+      ${diffMarjaCol}
       <td style="padding:6px; text-align:right; font-weight:700; color:${marjaColor};">${marjaPct !== null ? marjaPct.toFixed(1) + '%' : '—'}</td>
     </tr>`;
   }
