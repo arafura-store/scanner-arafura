@@ -1934,7 +1934,8 @@ function rotunjire(pret, mode) {
       // > 100: floor + 5.99
       if (p < 4) {
         const dec = p - intPart;
-        return intPart + (dec <= 0.5 ? 0.49 : 0.99);
+        // decimal < 0.5 → .49 ; decimal >= 0.5 → .99 (urcăm la 0.5)
+        return intPart + (dec < 0.5 ? 0.49 : 0.99);
       }
       if (p < 10)  return intPart + 0.99;
       if (p < 30)  return intPart + 1 + 0.99;
