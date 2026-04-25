@@ -230,6 +230,7 @@
       <div class="menu-item" data-page="negativ"     ><span class="ico">🔻</span><span class="label">Stoc negativ</span></div>
       <div class="menu-item" data-page="transferuri" ><span class="ico">🚚</span><span class="label">Transferuri</span></div>
       <div class="menu-item" data-page="distributie" ><span class="ico">📦</span><span class="label">Distribuție recepție</span></div>
+      <div class="menu-item" data-page="capital"     ><span class="ico">💰</span><span class="label">Capital blocat</span></div>
     </div>
 
     <div class="menu-section">
@@ -482,6 +483,34 @@
           </div>
           <div id="dist-info" style="font-size:13px; color:var(--sub); margin-bottom:8px;"></div>
           <div id="dist-results"><div class="placeholder">Introdu lista de produse și apasă Calculează.</div></div>
+        </div>
+      </div>
+
+      <!-- CAPITAL BLOCAT -->
+      <div class="page" id="page-capital">
+        <div class="card">
+          <h2>💰 Capital blocat în stoc stagnant</h2>
+          <p style="color:var(--sub); font-size:13px; margin-bottom:14px;">Identifică produsele/furnizorii unde ai bani blocați în marfă care nu rulează.</p>
+          <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+            <select id="cap-zile" onchange="loadCapitalBlocat()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="60">Fără vânzare > 60 zile</option>
+              <option value="90" selected>> 90 zile (3 luni)</option>
+              <option value="180">> 180 zile (6 luni)</option>
+              <option value="365">> 1 an</option>
+            </select>
+            <select id="cap-top" onchange="loadCapitalBlocat()" style="padding:8px 12px; border:1px solid var(--border); border-radius:8px;">
+              <option value="50">Top 50</option>
+              <option value="100" selected>Top 100</option>
+              <option value="150">Top 150</option>
+              <option value="200">Top 200</option>
+              <option value="250">Top 250</option>
+              <option value="300">Top 300</option>
+            </select>
+            <button onclick="setCapitalView('produse')" id="cap-btn-produse" class="btn primary" style="padding:8px 14px; border-radius:8px; border:none; background:var(--blue); color:white; cursor:pointer; font-weight:600;">📦 Per produs</button>
+            <button onclick="setCapitalView('furnizori')" id="cap-btn-furnizori" class="btn" style="padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:white; cursor:pointer; font-weight:600;">🏭 Per furnizor</button>
+            <span id="cap-info" style="align-self:center; color:var(--sub); font-size:13px;"></span>
+          </div>
+          <div id="cap-results"><div class="placeholder">Selectează filtrele și apasă tab-ul dorit</div></div>
         </div>
       </div>
 
@@ -1478,6 +1507,82 @@ async function loadStagnat() {
     }
     html += '</tbody></table>';
     // afișez toate
+    res.innerHTML = html;
+  } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
+}
+
+// ── CAPITAL BLOCAT ──
+let _capView = 'produse';
+function setCapitalView(v) {
+  _capView = v;
+  document.getElementById('cap-btn-produse').className = 'btn ' + (v === 'produse' ? 'primary' : '');
+  document.getElementById('cap-btn-produse').style.background = v === 'produse' ? 'var(--blue)' : 'white';
+  document.getElementById('cap-btn-produse').style.color = v === 'produse' ? 'white' : '';
+  document.getElementById('cap-btn-furnizori').className = 'btn ' + (v === 'furnizori' ? 'primary' : '');
+  document.getElementById('cap-btn-furnizori').style.background = v === 'furnizori' ? 'var(--blue)' : 'white';
+  document.getElementById('cap-btn-furnizori').style.color = v === 'furnizori' ? 'white' : '';
+  loadCapitalBlocat();
+}
+async function loadCapitalBlocat() {
+  const zile = parseInt(document.getElementById('cap-zile').value) || 90;
+  const top = parseInt(document.getElementById('cap-top').value) || 100;
+  const info = document.getElementById('cap-info');
+  const res = document.getElementById('cap-results');
+  info.textContent = 'analizez…';
+  res.innerHTML = '<div class="placeholder">se încarcă…</div>';
+  try {
+    const t0 = Date.now();
+    const fnName = _capView === 'produse' ? 'top_capital_blocat' : 'capital_blocat_per_furnizor';
+    const r = await fetch(`${API}/rpc/${fnName}`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Range': '0-9999' },
+      body: JSON.stringify({ p_zile_fara_vz: zile, p_top: top })
+    });
+    const arr = await r.json();
+    if (!Array.isArray(arr)) {
+      res.innerHTML = '<div class="placeholder">Eroare: ' + JSON.stringify(arr).slice(0,200) + '</div>';
+      info.textContent = '';
+      return;
+    }
+    const dur = ((Date.now() - t0)/1000).toFixed(1);
+    const totalVal = arr.reduce((s,x) => s + parseFloat(x.valoare_blocata || x.valoare_totala || 0), 0);
+    info.innerHTML = `<b>${arr.length}</b> ${_capView} · valoare totală blocată: <b style="color:var(--red);">${fmtMoney(totalVal)}</b> RON · ${dur}s`;
+    let html = '';
+    if (_capView === 'produse') {
+      html = '<table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0;"><th style="padding:8px; text-align:left;">#</th><th style="padding:8px; text-align:left;">COD</th><th style="padding:8px; text-align:left;">Nume</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Stoc</th><th style="padding:8px; text-align:right;">Valoare blocată</th><th style="padding:8px; text-align:right;">Zile fără vânzare</th></tr></thead><tbody>';
+      let i = 1;
+      for (const it of arr) {
+        const stoc = parseFloat(it.stoc_total) || 0;
+        const val = parseFloat(it.valoare_blocata) || 0;
+        const zile_v = parseInt(it.zile_fara_vanzare) || 0;
+        const zileColor = zile_v > 365 ? 'var(--red)' : (zile_v > 180 ? 'var(--orange)' : 'var(--sub)');
+        html += `<tr style="border-top:1px solid var(--border); cursor:pointer;" onclick="loadProdusDetail('${escHtml(it.cod_art)}'); document.querySelector('[data-page=cautare]').click();">
+          <td style="padding:6px; color:var(--sub); font-weight:700;">${i++}</td>
+          <td style="padding:6px; font-family:monospace; color:var(--blue);">${escHtml(it.cod_art)}</td>
+          <td style="padding:6px;">${escHtml(it.nume_art||'')}</td>
+          <td style="padding:6px; color:var(--sub); font-size:11px;">${escHtml(it.furnizor||'—')}</td>
+          <td style="padding:6px; text-align:right; font-weight:700;">${fmtNum(stoc)}</td>
+          <td style="padding:6px; text-align:right; font-weight:800; color:var(--red);">${fmtMoney(val)}</td>
+          <td style="padding:6px; text-align:right; color:${zileColor}; font-weight:600;">${zile_v >= 999 ? '∞' : zile_v}</td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+    } else {
+      html = '<table style="width:100%; font-size:13px; border-collapse:collapse;"><thead><tr style="background:#f8fafc; position:sticky; top:0;"><th style="padding:8px; text-align:left;">#</th><th style="padding:8px; text-align:left;">Furnizor</th><th style="padding:8px; text-align:right;">Produse stagnate</th><th style="padding:8px; text-align:right;">Stoc bucăți</th><th style="padding:8px; text-align:right;">Valoare blocată</th></tr></thead><tbody>';
+      let i = 1;
+      for (const it of arr) {
+        const val = parseFloat(it.valoare_totala) || 0;
+        const stoc = parseFloat(it.stoc_total) || 0;
+        html += `<tr style="border-top:1px solid var(--border);">
+          <td style="padding:8px; color:var(--sub); font-weight:700;">${i++}</td>
+          <td style="padding:8px; font-weight:600;">${escHtml(it.furnizor||'')}</td>
+          <td style="padding:8px; text-align:right;">${it.n_produse}</td>
+          <td style="padding:8px; text-align:right;">${fmtNum(stoc)}</td>
+          <td style="padding:8px; text-align:right; font-weight:800; color:var(--red);">${fmtMoney(val)}</td>
+        </tr>`;
+      }
+      html += '</tbody></table>';
+    }
     res.innerHTML = html;
   } catch(e) { info.textContent = ''; res.innerHTML = '<div class="placeholder">Eroare: ' + e.message + '</div>'; }
 }
@@ -3027,7 +3132,7 @@ async function loadDuplicate() {
 // ── NAVIGATION ──
 const titles = {
   dashboard:'🏠 Dashboard', cautare:'🔍 Căutare produs',
-  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri', distributie:'📦 Distribuție recepție',
+  lipsuri:'📉 Lipsuri / Stoc mic', stagnat:'📦 Stagnat', negativ:'🔻 Stoc negativ', transferuri:'🚚 Transferuri', distributie:'📦 Distribuție recepție', capital:'💰 Capital blocat',
   achizitii:'🛒 Comenzi sugerate', vanzari:'💸 Vânzări & Marjă', preturi:'💰 Prețuri',
   magazine:'🏪 Per Magazin', furnizori:'🏭 Per Furnizor', familii:'📚 Per Familie',
   duplicate:'⚠️ Coduri duplicate', refresh:'🔄 Refresh date'
@@ -3054,6 +3159,7 @@ document.querySelectorAll('.menu-item').forEach(item => {
       // page preturi: no preload — user clicks Analizează
       if (page === 'negativ')    loadNegativ();
       if (page === 'distributie') initDistFolder();
+      if (page === 'capital')    loadCapitalBlocat();
       // page transferuri: no preload — user clicks button
     }
   });
