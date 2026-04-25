@@ -825,11 +825,15 @@ const TYPE_LABEL = {
   'familii':              'Familii produse'
 };
 function parseFilenamePerioada(fn) {
-  // Extrage data de sfarsit din nume. Accepta: "01.04.2026 - 21.04.2026", "2026.04.14 - 2026.04.20"
+  // Extrage data de sfarsit din nume. Accepta:
+  // "01.04.2026 - 21.04.2026", "2026.04.14 - 2026.04.20", "24.04.2026.xlsx"
   let m = fn.match(/(\d{2})\.(\d{2})\.(\d{4})\s*-\s*(\d{1,2})\.\s*(\d{2})\.(\d{4})/);
   if (m) return `${m[6]}-${m[5]}-${m[4].padStart(2,'0')}`;
   m = fn.match(/(\d{4})\.(\d{2})\.(\d{2})\s*-\s*(\d{4})\.(\d{2})\.(\d{2})/);
   if (m) return `${m[4]}-${m[5]}-${m[6]}`;
+  // Single date DD.MM.YYYY (ex: 24.04.2026.xlsx)
+  m = fn.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
   return null;
 }
 async function loadUltimaActualizare() {
