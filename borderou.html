@@ -740,6 +740,32 @@ let _asteptareBorderouri = [];
 let _asteptareCheltuieli = [];
 let _angajati = [];
 
+async function stergeBorderou(id, magazin, data) {
+  if (!currentUser || currentUser.nume !== 'EUGEN') {
+    showToast('Doar EUGEN poate șterge', 'err'); return;
+  }
+  if (!confirm(`Ștergi DEFINITIV borderoul:\n\n${magazin} · ${data} (#${id})\n\nVor fi șterse:\n• borderoul\n• entry-urile PENDING MAGAZIN asociate (cash Z)\n• cheltuielile borderou asociate\n\nAcțiunea NU poate fi anulată!`)) return;
+  try {
+    // 1. Sterg din caiet entry-urile asociate (cash + cheltuieli)
+    const r1 = await fetch(`${API}/caiet?or=(observatii.like.borderou %23${id}*,observatii.like.cheltuiala borderou %23${id}*)`, {
+      method: 'DELETE',
+      headers: { ...HEADERS, 'Prefer': 'count=exact' }
+    });
+    const stCaiet = r1.headers.get('Content-Range') || '?';
+    // 2. Sterg borderoul
+    const r2 = await fetch(`${API}/borderouri?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: HEADERS
+    });
+    if (r2.ok) {
+      showToast(`✓ Sters: borderou #${id} + ${stCaiet.split('/').pop()} entry caiet`, 'ok');
+      await incarcaIstoric();
+    } else {
+      showToast('Eroare ștergere: ' + await r2.text(), 'err');
+    }
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
 async function incarcaAngajati() {
   try {
     const resp = await fetch(`${API}/angajati?select=nume&activ=eq.true&nume=neq.BARABULEA%20MADALINA&order=nume.asc`, { headers: HEADERS });
@@ -822,10 +848,16 @@ async function incarcaIstoric() {
       const badgeStatus = estePredat
         ? '<span style="background:#6366f1; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">🚚 PREDAT — așteaptă birou</span>'
         : '';
+      const btnSterge = (currentUser && currentUser.nume === 'EUGEN')
+        ? `<button onclick="event.stopPropagation(); stergeBorderou(${b.id}, '${escHtml(b.magazin)}', '${dt}')" style="background:var(--red); color:white; border:none; border-radius:5px; padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer; margin-left:8px;" title="Șterge borderoul + entry-urile asociate">🗑</button>`
+        : '';
       html += `<div style="${cardStyle}">
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:6px;">
           <div><b>${b.magazin}</b> · ${dt} <span style="font-size:11px; color:var(--sub);">(${trimis} de ${b.utilizator||'?'})</span>${badgeStatus}</div>
-          <div style="font-weight:800; color:var(--green);">${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-weight:800; color:var(--green);">${suma.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</span>
+            ${btnSterge}
+          </div>
         </div>`;
       if (chAle.length > 0) {
         html += '<div style="margin-top:6px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px;">';
