@@ -1581,9 +1581,9 @@ async function procesareScadentarFisier(buffer, fileName) {
   const res = document.getElementById('sc-results');
   info.textContent = `Procesez ${fileName}…`;
   try {
-    const wb = XLSX.read(buffer, { type: 'array' });
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { range: 2, defval: '' });
+    const rows = XLSX.utils.sheet_to_json(ws, { range: 2, defval: '', raw: false });
     if (!rows.length) { info.textContent = 'Fișier gol'; return; }
 
     const items = [];
@@ -1596,8 +1596,19 @@ async function procesareScadentarFisier(buffer, fileName) {
       // Numele furnizorului (înainte de '-')
       const numeFurn = numeCont.split('-')[0].trim();
 
-      const dataDoc = r['Data Document'] ? new Date(r['Data Document']) : null;
-      const dataScad = r['Data Scadenta'] ? new Date(r['Data Scadenta']) : null;
+      // Helper robust pentru date Excel (Date object SAU string SAU number serial)
+      const parseDate = v => {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v;
+        if (typeof v === 'number') {
+          // Serial Excel (zile de la 1900-01-01) cu corectie
+          return new Date((v - 25569) * 86400000);
+        }
+        const d = new Date(String(v));
+        return isNaN(d) ? null : d;
+      };
+      const dataDoc = parseDate(r['Data Document']);
+      const dataScad = parseDate(r['Data Scadenta']);
       const sumaRest = parseFloat(r['Suma Restanta (lei)'] || 0);
       if (sumaRest <= 0.01) continue; // ignor cu rest = 0
 
