@@ -955,8 +955,16 @@ async function salveazaCheltuiala() {
     if (!confirm(`Suma ${suma.toFixed(2)} depășește disponibilul (${disponibil.toFixed(2)} RON). Continui oricum?`)) return;
   }
 
-  // Link la cel mai vechi borderou trimis
-  const bTarget = _asteptareBorderouri[0];
+  // Link la cel mai vechi borderou trimis — DOAR borderou care apartine magazinului curent
+  const magazinFilter = (currentUser && currentUser.nume !== 'EUGEN' && MAGAZINE.includes(currentUser.nume))
+    ? currentUser.nume : (document.getElementById('f-magazin').value || null);
+  const bTarget = magazinFilter
+    ? _asteptareBorderouri.find(b => b.magazin === magazinFilter)
+    : _asteptareBorderouri[0];
+  if (!bTarget) {
+    showToast(`Nu există borderou în așteptare pentru ${magazinFilter || 'magazinul curent'}`, 'err');
+    return;
+  }
 
   try {
     const resp = await fetch(`${API}/caiet`, {
@@ -1197,7 +1205,17 @@ async function salveazaIncasareExtra() {
   if (suma <= 0) { showToast('Sumă invalidă', 'err'); return; }
   if (!obs) { showToast('Completează cine a plătit', 'err'); return; }
 
-  const bTarget = _asteptareBorderouri.find(b => b.status === 'trimis') || _asteptareBorderouri[0];
+  // bTarget — DOAR borderou pentru magazinul curent
+  const magazinFilter = (currentUser && currentUser.nume !== 'EUGEN' && MAGAZINE.includes(currentUser.nume))
+    ? currentUser.nume : (document.getElementById('f-magazin').value || null);
+  const bTarget = magazinFilter
+    ? (_asteptareBorderouri.filter(b => b.magazin === magazinFilter).find(b => b.status === 'trimis')
+       || _asteptareBorderouri.find(b => b.magazin === magazinFilter))
+    : (_asteptareBorderouri.find(b => b.status === 'trimis') || _asteptareBorderouri[0]);
+  if (!bTarget) {
+    showToast(`Nu există borderou în așteptare pentru ${magazinFilter || 'magazinul curent'}`, 'err');
+    return;
+  }
 
   try {
     const resp = await fetch(`${API}/caiet`, {
