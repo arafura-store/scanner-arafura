@@ -84,6 +84,22 @@
     }
     .btn-submit:disabled { background: #cbd5e1; cursor: not-allowed; }
 
+    .reminder-trimite {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      color: white; padding: 18px 20px; border-radius: 12px;
+      font-size: 19px; font-weight: 800; text-align: center;
+      margin-bottom: 14px; letter-spacing: 0.5px;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+      animation: pulseReminder 1.6s ease-in-out infinite;
+      border: 3px solid #fca5a5;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+      display: none;
+    }
+    @keyframes pulseReminder {
+      0%, 100% { transform: scale(1); box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35); }
+      50%      { transform: scale(1.03); box-shadow: 0 6px 22px rgba(220, 38, 38, 0.65); }
+    }
+
     .diff-box {
       background: #fff7ed; border-left: 3px solid var(--orange); padding: 10px 14px;
       border-radius: 8px; font-size: 13px; margin-bottom: 12px;
@@ -206,6 +222,7 @@
         </div>
       </div>
 
+      <div id="reminder-trimite" class="reminder-trimite">⚠️ NU UITA SĂ ÎNCHIZI BORDEROUL !!! ⚠️</div>
       <button class="btn-submit" id="btn-submit" onclick="trimiteBorderou()" disabled>Închide borderou</button>
     </div>
 
@@ -571,6 +588,15 @@ function recalculeaza() {
 
   const probleme = diffs.filter(d => d.filled && Math.abs(d.val) > PRAG);
   const verificate = diffs.filter(d => d.filled && Math.abs(d.val) <= PRAG);
+
+  // Reminder MARE: dacă utilizatorul a început să completeze ceva, reaminteste-i sa trimita
+  const reminder = document.getElementById('reminder-trimite');
+  if (reminder) {
+    const ceva = cashTotalZ > 0 || cardTotalZ > 0 || voucherZ > 0 ||
+                 cashErp > 0 || cardErp > 0 || voucherErp > 0 ||
+                 cashFizic > 0 || cardPos > 0;
+    reminder.style.display = ceva ? 'block' : 'none';
+  }
 
   const dz = document.getElementById('diff-zone');
   if (cashTotalZ === 0 && cardTotalZ === 0 && voucherZ === 0 && voucherErp === 0) { dz.innerHTML = ''; return; }
