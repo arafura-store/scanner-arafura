@@ -1318,7 +1318,11 @@ async function verificaBorderouLipsa() {
   try {
     const ieri = new Date();
     ieri.setDate(ieri.getDate() - 1);
-    const ieriStr = ieri.toISOString().slice(0, 10);
+    // IMPORTANT: folosim data LOCALA, nu toISOString() care converteste in UTC si poate sari o zi
+    const yyyy = ieri.getFullYear();
+    const mm = String(ieri.getMonth() + 1).padStart(2, '0');
+    const dd = String(ieri.getDate()).padStart(2, '0');
+    const ieriStr = `${yyyy}-${mm}-${dd}`;
     const ieriRO = ieri.toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
 
     const url = `${window.SUPABASE_URL}/rest/v1/borderouri?magazin=eq.${encodeURIComponent(storeName)}&data=eq.${ieriStr}&status=in.(trimis,predat-sofer,confirmat)&select=id&limit=1`;
