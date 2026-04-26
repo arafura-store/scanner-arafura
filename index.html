@@ -914,12 +914,12 @@ async function initStore() {
 
   document.getElementById('header-sub').textContent = storeName;
 
-  // Admin: arata dropdown rapid pentru schimbare magazin si pre-selecteaza magazinul curent
+  // Admin: arata dropdown rapid pentru schimbare magazin (placeholder ramane vizibil)
   if (isAdmin) {
     const sw = document.getElementById('admin-magazin-switch');
     const sel = document.getElementById('admin-select-magazin');
     if (sw) sw.style.display = 'block';
-    if (sel) sel.value = storeName;
+    if (sel) sel.value = '';
   }
 
   // Verifica daca dispozitivul e autorizat
