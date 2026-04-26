@@ -779,6 +779,8 @@ function checkDeviceCode(event) {
 setInterval(() => {
   if (!currentUser) return;
   if (document.hidden) return;
+  // NU refresha lista cand utilizatorul e in mod editare
+  if (editData || document.querySelector('.edit-row')) return;
   incarcaSold();
   incarcaOperatiuni();
   verificaDeconturi();
@@ -2222,7 +2224,19 @@ async function salveazaEdit(id) {
     });
     if (resp.ok) {
       showToast('Modificare salvată!');
+      editData = null; // ies din modul edit
       await Promise.all([incarcaSold(), incarcaOperatiuni()]);
+      // Scroll la rândul editat + highlight scurt
+      setTimeout(() => {
+        const r = document.getElementById(`row-${id}`);
+        if (r) {
+          r.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const bgOriginal = r.style.background;
+          r.style.background = '#fef9c3';
+          r.style.transition = 'background 1.5s ease';
+          setTimeout(() => { r.style.background = bgOriginal; }, 1800);
+        }
+      }, 100);
     } else {
       showToast('Eroare la salvare');
     }
