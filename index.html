@@ -641,6 +641,20 @@
     <div class="header-logo" id="header-logo">ARAFURA</div>
     <div class="header-sub" id="header-sub">Căutare produse</div>
   </div>
+  <div id="admin-magazin-switch" style="display:none; width:100%; max-width:280px;">
+    <select id="admin-select-magazin" onchange="adminSchimbaMagazin(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; border:2px solid #fbbf24; background:#fef3c7; color:#92400e; font-weight:700; font-size:14px; cursor:pointer;">
+      <option value="">⚙️ ADMIN — schimbă magazin</option>
+      <option value="DEPOZIT PAPETARIE">Depozit Papetărie</option>
+      <option value="MARVIMEX">Marvimex</option>
+      <option value="TOMIS 3">Tomis 3</option>
+      <option value="MEDGIDIA">Medgidia</option>
+      <option value="NAVODARI">Năvodari</option>
+      <option value="POARTA 6">Poarta 6</option>
+      <option value="BABADAG">Babadag</option>
+      <option value="SHOWROOM">Showroom</option>
+      <option value="SERVICII">Servicii</option>
+    </select>
+  </div>
   <button class="header-btn-search" id="btn-new-search" onclick="goToSearch()">🔍 Caută alt produs</button>
 </div>
 
@@ -900,6 +914,14 @@ async function initStore() {
 
   document.getElementById('header-sub').textContent = storeName;
 
+  // Admin: arata dropdown rapid pentru schimbare magazin si pre-selecteaza magazinul curent
+  if (isAdmin) {
+    const sw = document.getElementById('admin-magazin-switch');
+    const sel = document.getElementById('admin-select-magazin');
+    if (sw) sw.style.display = 'block';
+    if (sel) sel.value = storeName;
+  }
+
   // Verifica daca dispozitivul e autorizat
   if (isAdmin) {
     deviceAutorizat = true;
@@ -925,6 +947,12 @@ function updateHomeButtons() {
   if (homeButtons) {
     homeButtons.style.display = deviceAutorizat ? 'flex' : 'none';
   }
+}
+
+function adminSchimbaMagazin(mag) {
+  if (!mag || mag === storeName) return;
+  localStorage.setItem('arafura_magazin', mag);
+  location.reload();
 }
 
 async function saveStore() {
