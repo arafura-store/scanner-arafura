@@ -312,6 +312,9 @@
     }
     .btn-edit:hover { color: var(--blue); }
     .btn-del:hover { color: var(--red); }
+    /* Rand corectat de Ela — fundal portocaliu vizibil pe toate celulele */
+    .row-corectat, .row-corectat td { background: #fed7aa !important; }
+    .row-corectat td:first-child { border-left: 3px solid #ea580c !important; }
     .edit-row input, .edit-row select {
       padding: 6px 8px; border: 1px solid var(--blue); border-radius: 6px;
       font-size: 13px; width: 100%;
@@ -1589,7 +1592,8 @@ function renderOperatiuni() {
     const migratFrom = isMigrat ? migratMatch[1] : '';
 
     let rowStyle = '';
-    if (isCorectat) rowStyle = 'background:#fed7aa; border-left:3px solid #ea580c;'; // PORTOCALIU pentru corecții
+    let rowClass = '';
+    if (isCorectat) { rowStyle = 'background:#fed7aa !important;'; rowClass = 'row-corectat'; }
     else if (isPending) rowStyle = 'opacity:0.45; background:#fffef0;';
     else if (isConfirmat) rowStyle = 'opacity:0.7; background:#f0fdf4;';
     else if (isMigrat) rowStyle = 'background:#fefcf5;';
@@ -1623,7 +1627,7 @@ function renderOperatiuni() {
     const completatDeHTML = confBy
       ? `<div style="font-size:11px; color:#aaa;">${d.utilizator}</div><div style="font-size:10px; color:var(--green); font-weight:600; margin-top:2px;">✓ Confirmat de ${confBy}</div>`
       : `<div style="font-size:11px; color:#aaa;">${d.utilizator}</div>`;
-    html += `<tr id="row-${d.id}" style="${rowStyle}">
+    html += `<tr id="row-${d.id}" class="${rowClass}" style="${rowStyle}">
       <td style="white-space:nowrap; font-size:12px; color:#555; text-align:center;">${dtCompletat}</td>
       <td style="font-weight:600; white-space:nowrap; text-align:center;">${dtChitanta}</td>
       <td style="text-align:center;"><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span>${migratBadge}</td>
