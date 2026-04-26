@@ -184,6 +184,8 @@
             <select id="f-tip" onchange="onTipChange()" style="padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
               <option value="">— Alege tipul —</option>
               <optgroup label="↓ Cheltuieli">
+                <option value="FURNIZOR">FURNIZOR</option>
+                <option value="DIURNA">DIURNA</option>
                 <option value="COMBUSTIBIL">COMBUSTIBIL</option>
                 <option value="MATERIALE">MATERIALE</option>
                 <option value="TRANSPORT">TRANSPORT</option>
@@ -268,7 +270,7 @@ let beneficiariCunoscuti = [];
 let beneficiariCategorii = {};
 
 // Tipuri cu direcție (pentru convertire în caiet)
-const TIPURI_IESIRE = ['COMBUSTIBIL','MATERIALE','TRANSPORT','SERVICII','REPARATII','PROTOCOL','UTILITATI','TAXE','ASIGURARI','ALTE PLATI'];
+const TIPURI_IESIRE = ['FURNIZOR','DIURNA','COMBUSTIBIL','MATERIALE','TRANSPORT','SERVICII','REPARATII','PROTOCOL','UTILITATI','TAXE','ASIGURARI','ALTE PLATI'];
 const TIPURI_INTRARE = ['ALTE INCASARI'];
 
 async function incarcaBeneficiari() {
