@@ -89,6 +89,37 @@
     }
     .header button:hover { background: rgba(255,255,255,.2); }
 
+    /* INFO BANNER — Borderouri lipsa (admin only) */
+    .info-borderouri-lipsa {
+      max-width: 1400px;
+      margin: 16px auto 0;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, #fff7ed, #ffedd5);
+      border-left: 4px solid var(--orange);
+      border-radius: 10px;
+      display: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,.04);
+    }
+    .info-borderouri-lipsa .ibl-title {
+      font-size: 13px; font-weight: 700; color: var(--orange);
+      letter-spacing: .3px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .info-borderouri-lipsa .ibl-list {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .info-borderouri-lipsa .ibl-chip {
+      background: white; border: 1px solid #fed7aa;
+      padding: 6px 12px; border-radius: 8px; font-size: 13px;
+      display: inline-flex; align-items: center; gap: 8px;
+      color: #7c2d12;
+    }
+    .info-borderouri-lipsa .ibl-chip strong { color: var(--navy); font-weight: 700; }
+    .info-borderouri-lipsa .ibl-chip .ibl-date {
+      background: #fed7aa; color: #7c2d12; font-weight: 700;
+      padding: 2px 8px; border-radius: 5px; font-size: 12px;
+    }
+
     /* MAIN LAYOUT */
     .main-layout {
       max-width: 1400px; margin: 20px auto 0; padding: 0 16px;
@@ -397,6 +428,11 @@
 
 <!-- MAIN -->
 <div id="screen-main" style="display:none;">
+
+  <div class="info-borderouri-lipsa" id="info-borderouri-lipsa">
+    <div class="ibl-title">ℹ️ Borderouri lipsă</div>
+    <div class="ibl-list" id="ibl-list"></div>
+  </div>
 
   <div class="main-layout">
     <!-- LEFT: formulare -->
@@ -723,6 +759,69 @@ async function completeLogin(user) {
   }, 100);
 
   await Promise.all([incarcaSold(), incarcaOperatiuni(), incarcaSugestii(), verificaDeconturi(), verificaBorderouri(), verificaDispozitiiTeren()]);
+  verificaBorderouriLipsa();
+}
+
+// Info card: magazinele care nu au trimis borderou pentru ultimele 2 zile (ieri + alaltaieri)
+// Disponibil doar pentru EUGEN. Apare doar daca exista lipsuri.
+async function verificaBorderouriLipsa() {
+  const card = document.getElementById('info-borderouri-lipsa');
+  const list = document.getElementById('ibl-list');
+  if (!card || !list) return;
+  card.style.display = 'none';
+  list.innerHTML = '';
+
+  if (!currentUser || currentUser.nume !== 'EUGEN') return;
+
+  const MAGAZINE_ACTIVE = ['POARTA 6', 'MARVIMEX', 'TOMIS 3', 'SERVICII', 'MEDGIDIA', 'NAVODARI', 'BABADAG'];
+
+  // Calculeaza ultimele 2 zile (ieri + alaltaieri) folosind data LOCALA
+  const fmt = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+  const fmtRO = (d) => d.toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit'});
+  const today = new Date();
+  const ieri = new Date(today); ieri.setDate(today.getDate() - 1);
+  const alaltaieri = new Date(today); alaltaieri.setDate(today.getDate() - 2);
+  const datesCheck = [
+    { iso: fmt(ieri),       ro: fmtRO(ieri) },
+    { iso: fmt(alaltaieri), ro: fmtRO(alaltaieri) }
+  ];
+  const dataMin = fmt(alaltaieri);
+
+  try {
+    const url = `${API}/borderouri?magazin=in.(${MAGAZINE_ACTIVE.map(m => `"${encodeURIComponent(m)}"`).join(',')})&data=gte.${dataMin}&status=in.(trimis,predat-sofer,confirmat)&select=magazin,data`;
+    const resp = await fetch(url, { headers: HEADERS });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+
+    // Set: "MAGAZIN|YYYY-MM-DD" pentru lookup rapid
+    const trimise = new Set(data.map(b => `${b.magazin}|${b.data}`));
+
+    // Determina lipsuri per (magazin, data)
+    const lipsuri = [];
+    for (const mag of MAGAZINE_ACTIVE) {
+      for (const d of datesCheck) {
+        if (!trimise.has(`${mag}|${d.iso}`)) {
+          lipsuri.push({ magazin: mag, data: d.iso, dataRO: d.ro });
+        }
+      }
+    }
+
+    if (lipsuri.length === 0) return;
+
+    // Sortare: cele mai recente lipsuri primele (ieri inainte de alaltaieri); apoi alfabetic pe magazin
+    lipsuri.sort((a, b) => b.data.localeCompare(a.data) || a.magazin.localeCompare(b.magazin));
+
+    list.innerHTML = lipsuri.map(l =>
+      `<span class="ibl-chip"><strong>${l.magazin}</strong><span class="ibl-date">${l.dataRO}</span></span>`
+    ).join('');
+    card.style.display = 'block';
+  } catch {}
 }
 
 function logout() {
@@ -790,6 +889,14 @@ setInterval(() => {
   verificaBorderouri();
   verificaDispozitiiTeren();
 }, 30000);
+
+// Re-verifica info card borderouri lipsa la 2 min si la visibility change (pentru EUGEN)
+setInterval(() => {
+  if (currentUser && !document.hidden) verificaBorderouriLipsa();
+}, 2 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentUser) verificaBorderouriLipsa();
+});
 
 async function incarcaSold() {
   try {

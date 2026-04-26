@@ -1,6 +1,6 @@
 // ── SERVICE WORKER — Scanner Produse ARAFURA ──────────────────────
 // Versiune cache — schimba acest string la fiecare deploy pentru a forta update
-const CACHE_VERSION = 'arafura-scanner-v88';
+const CACHE_VERSION = 'arafura-scanner-v89';
 const ASSETS = [
   './',
   './index.html',
