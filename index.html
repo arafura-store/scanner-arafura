@@ -429,6 +429,28 @@
       width: 100%;
       max-width: 400px;
     }
+    .warn-borderou-lipsa {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      color: white;
+      padding: 18px 22px;
+      border-radius: 14px;
+      font-size: 17px;
+      font-weight: 800;
+      text-align: center;
+      width: 100%;
+      max-width: 400px;
+      letter-spacing: 0.4px;
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4);
+      animation: pulseWarn 1.6s ease-in-out infinite;
+      border: 3px solid #fca5a5;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      display: none;
+      line-height: 1.4;
+    }
+    @keyframes pulseWarn {
+      0%, 100% { transform: scale(1); box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4); }
+      50%      { transform: scale(1.025); box-shadow: 0 6px 22px rgba(220, 38, 38, 0.7); }
+    }
     .pontaj-buttons {
       display: flex;
       flex-direction: column;
@@ -720,6 +742,7 @@
     <div class="search-subtitle" id="pontaj-magazin"></div>
   </div>
   <div class="pontaj-status" id="pontaj-status"></div>
+  <div class="warn-borderou-lipsa" id="warn-borderou-lipsa"></div>
   <div class="pontaj-buttons">
     <button class="btn-pontaj btn-intrare" id="btn-intrare" onclick="pontareIntrare()">
       ✅ Am venit
@@ -1235,6 +1258,7 @@ async function onPinInput() {
     showScreen('pontaj-actiuni');
     document.getElementById('pin-input').value = '';
     document.getElementById('concediu-nume').textContent = pontajAngajat.nume;
+    verificaBorderouLipsa();
 
   } catch (e) {
     showToast('Eroare conexiune');
@@ -1245,6 +1269,34 @@ async function onPinInput() {
 
 function formatOra(iso) {
   return new Date(iso).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+}
+
+// Verifica daca magazinul (PILOT: doar POARTA 6) a trimis borderou pentru ziua de IERI
+// Daca lipseste -> banner rosu pulsant pe ecranul de pontaj
+async function verificaBorderouLipsa() {
+  const banner = document.getElementById('warn-borderou-lipsa');
+  if (!banner) return;
+  banner.style.display = 'none';
+
+  const MAGAZINE_ACTIVE = ['POARTA 6']; // pilot - extindem dupa testare
+  if (!MAGAZINE_ACTIVE.includes(storeName)) return;
+
+  try {
+    const ieri = new Date();
+    ieri.setDate(ieri.getDate() - 1);
+    const ieriStr = ieri.toISOString().slice(0, 10);
+    const ieriRO = ieri.toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
+
+    const url = `${window.SUPABASE_URL}/rest/v1/borderouri?magazin=eq.${encodeURIComponent(storeName)}&data=eq.${ieriStr}&status=in.(trimis,predat-sofer,confirmat)&select=id&limit=1`;
+    const resp = await fetch(url, { headers: HEADERS });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (Array.isArray(data) && data.length === 0) {
+      banner.innerHTML = `⚠️ ATENȚIE!<br>Pentru ${storeName} <strong>NU a fost trimis borderoul</strong> de ieri (${ieriRO}).<br>Te rog deschide pagina <strong>BORDEROU</strong> și completează-l acum!`;
+      banner.style.display = 'block';
+    }
+  } catch {}
 }
 
 function calcTotalOre(records) {
