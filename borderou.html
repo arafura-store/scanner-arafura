@@ -955,12 +955,15 @@ async function salveazaCheltuiala() {
     if (!confirm(`Suma ${suma.toFixed(2)} depășește disponibilul (${disponibil.toFixed(2)} RON). Continui oricum?`)) return;
   }
 
-  // Link la cel mai vechi borderou trimis — DOAR borderou care apartine magazinului curent
+  // Link la borderoul CEL MAI RECENT al magazinului curent (nu cel mai vechi)
   const magazinFilter = (currentUser && currentUser.nume !== 'EUGEN' && MAGAZINE.includes(currentUser.nume))
     ? currentUser.nume : (document.getElementById('f-magazin').value || null);
-  const bTarget = magazinFilter
-    ? _asteptareBorderouri.find(b => b.magazin === magazinFilter)
-    : _asteptareBorderouri[0];
+  const candidate = magazinFilter
+    ? _asteptareBorderouri.filter(b => b.magazin === magazinFilter)
+    : _asteptareBorderouri;
+  // Sortez DESCENDENT după data → primul = cel mai recent
+  candidate.sort((a, b) => new Date(b.data) - new Date(a.data));
+  const bTarget = candidate[0];
   if (!bTarget) {
     showToast(`Nu există borderou în așteptare pentru ${magazinFilter || 'magazinul curent'}`, 'err');
     return;
@@ -1205,13 +1208,14 @@ async function salveazaIncasareExtra() {
   if (suma <= 0) { showToast('Sumă invalidă', 'err'); return; }
   if (!obs) { showToast('Completează cine a plătit', 'err'); return; }
 
-  // bTarget — DOAR borderou pentru magazinul curent
+  // bTarget — borderoul CEL MAI RECENT al magazinului curent
   const magazinFilter = (currentUser && currentUser.nume !== 'EUGEN' && MAGAZINE.includes(currentUser.nume))
     ? currentUser.nume : (document.getElementById('f-magazin').value || null);
-  const bTarget = magazinFilter
-    ? (_asteptareBorderouri.filter(b => b.magazin === magazinFilter).find(b => b.status === 'trimis')
-       || _asteptareBorderouri.find(b => b.magazin === magazinFilter))
-    : (_asteptareBorderouri.find(b => b.status === 'trimis') || _asteptareBorderouri[0]);
+  const cand = magazinFilter
+    ? _asteptareBorderouri.filter(b => b.magazin === magazinFilter)
+    : _asteptareBorderouri;
+  cand.sort((a, b) => new Date(b.data) - new Date(a.data));
+  const bTarget = cand.find(b => b.status === 'trimis') || cand[0];
   if (!bTarget) {
     showToast(`Nu există borderou în așteptare pentru ${magazinFilter || 'magazinul curent'}`, 'err');
     return;
