@@ -694,6 +694,7 @@
 
 <!-- ══ SCREEN 1: SEARCH ══ -->
 <div class="screen active" id="screen-search">
+  <div class="warn-borderou-lipsa" id="warn-borderou-lipsa-home"></div>
   <div class="search-icon">🔍</div>
   <div>
     <div class="search-title">Caută produs</div>
@@ -940,6 +941,9 @@ async function initStore() {
 
   // Ascunde/arata butoanele de condica si sesizari
   updateHomeButtons();
+
+  // Verifica borderou lipsa pe ziua de ieri (pilot POARTA 6, MARVIMEX)
+  verificaBorderouLipsa();
 }
 
 function updateHomeButtons() {
@@ -1300,15 +1304,16 @@ function formatOra(iso) {
   return new Date(iso).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
 }
 
-// Verifica daca magazinul (PILOT: doar POARTA 6) a trimis borderou pentru ziua de IERI
-// Daca lipseste -> banner rosu pulsant pe ecranul de pontaj
+// Verifica daca magazinul (PILOT: POARTA 6 + MARVIMEX) a trimis borderou pentru ziua de IERI
+// Daca lipseste -> banner rosu pulsant pe ecranul de pontaj SI pe ecranul principal de search
 async function verificaBorderouLipsa() {
-  const banner = document.getElementById('warn-borderou-lipsa');
-  if (!banner) return;
-  banner.style.display = 'none';
+  const bannerPontaj = document.getElementById('warn-borderou-lipsa');
+  const bannerHome = document.getElementById('warn-borderou-lipsa-home');
+  if (bannerPontaj) bannerPontaj.style.display = 'none';
+  if (bannerHome) bannerHome.style.display = 'none';
 
   const MAGAZINE_ACTIVE = ['POARTA 6', 'MARVIMEX']; // pilot - extindem dupa testare
-  if (!MAGAZINE_ACTIVE.includes(storeName)) return;
+  if (!storeName || !MAGAZINE_ACTIVE.includes(storeName)) return;
 
   try {
     const ieri = new Date();
@@ -1322,8 +1327,9 @@ async function verificaBorderouLipsa() {
     const data = await resp.json();
 
     if (Array.isArray(data) && data.length === 0) {
-      banner.innerHTML = `⚠️ ATENȚIE!<br>Pentru ${storeName} <strong>NU a fost trimis borderoul</strong> de ieri (${ieriRO}).<br>Te rog deschide pagina <strong>BORDEROU</strong> și completează-l acum!`;
-      banner.style.display = 'block';
+      const html = `⚠️ ATENȚIE!<br>Pentru ${storeName} <strong>NU a fost trimis borderoul</strong> de ieri (${ieriRO}).<br>Te rog deschide pagina <strong>BORDEROU</strong> și completează-l acum!`;
+      if (bannerPontaj) { bannerPontaj.innerHTML = html; bannerPontaj.style.display = 'block'; }
+      if (bannerHome)   { bannerHome.innerHTML = html;   bannerHome.style.display = 'block'; }
     }
   } catch {}
 }
