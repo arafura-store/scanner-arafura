@@ -1578,15 +1578,19 @@ function renderOperatiuni() {
     const nrChip = d.nr_dispozitie ? `<strong style="color:#7c3aed;">[${d.nr_dispozitie}]</strong> ` : '';
     const obsFinal = (firmaChip + nrChip + escHtml(d.observatii || '')).trim() || '';
     const isAdmin = currentUser && currentUser.nume === 'EUGEN';
+    const isElaIstoric = currentUser && currentUser.nume === 'ELA' && d.utilizator === 'ISTORIC' && d.data >= '2024-04-17';
+    const poateEdita = isAdmin || isElaIstoric;
     const isPending = d.tip && d.tip.includes('PENDING');
     const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
+    const isCorectat = d.corectat_de && d.corectat_de.length > 0;
     // Detectează rând migrat (observatii începe cu [CUVANT])
     const migratMatch = (d.observatii || '').match(/^\[([A-ZĂÎÂȘȚ ]+)\]/);
     const isMigrat = !!migratMatch;
     const migratFrom = isMigrat ? migratMatch[1] : '';
 
     let rowStyle = '';
-    if (isPending) rowStyle = 'opacity:0.45; background:#fffef0;';
+    if (isCorectat) rowStyle = 'background:#fed7aa; border-left:3px solid #ea580c;'; // PORTOCALIU pentru corecții
+    else if (isPending) rowStyle = 'opacity:0.45; background:#fffef0;';
     else if (isConfirmat) rowStyle = 'opacity:0.7; background:#f0fdf4;';
     else if (isMigrat) rowStyle = 'background:#fefcf5;';
 
@@ -1628,7 +1632,7 @@ function renderOperatiuni() {
       <td class="td-center" style="padding-left:30px;">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
       <td style="color:#888; font-size:12px; max-width:260px; padding-left:40px; text-align:center;">${obsDisplay}</td>
       <td style="text-align:center;">${completatDeHTML}</td>
-      <td style="white-space:nowrap; text-align:center;">${isAdmin ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button><button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>` : ''}</td>
+      <td style="white-space:nowrap; text-align:center;">${poateEdita ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button>${isAdmin ? `<button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>${isCorectat ? `<button class="btn-del" style="color:var(--green);" onclick="marcheazaVerificat(${d.id})" title="Verificat — șterge marcajul">✓</button>` : ''}` : ''}` : ''}</td>
     </tr>`;
   }
 
@@ -2188,17 +2192,19 @@ async function editOperatiune(id) {
 
     const row = document.getElementById(`row-${id}`);
     row.className = 'edit-row';
+    // ELA NU poate modifica sumele (intrare/iesire) — readonly cu fundal gri
+    const sumeRO = (currentUser && currentUser.nume === 'ELA') ? 'readonly style="background:#e5e7eb; cursor:not-allowed;" title="Doar EUGEN poate modifica sumele"' : '';
     row.innerHTML = `
       <td colspan="2"><input type="date" id="edit-data" value="${d.data}"></td>
       <td><input type="text" id="edit-tip" value="${escHtml(d.tip)}"></td>
       <td><input type="text" id="edit-beneficiar" value="${escHtml(d.beneficiar)}"></td>
-      <td><input type="number" step="0.01" id="edit-intrare" value="${d.intrare || ''}" placeholder="0"></td>
-      <td><input type="number" step="0.01" id="edit-iesire" value="${d.iesire || ''}" placeholder="0"></td>
+      <td><input type="number" step="0.01" id="edit-intrare" value="${d.intrare || ''}" placeholder="0" ${sumeRO}></td>
+      <td><input type="number" step="0.01" id="edit-iesire" value="${d.iesire || ''}" placeholder="0" ${sumeRO}></td>
       <td><input type="text" id="edit-obs" value="${escHtml(d.observatii || '')}"></td>
       <td></td>
       <td style="white-space:nowrap;">
         <button class="btn-save-edit" onclick="salveazaEdit(${id})">Salvează</button>
-        <button class="btn-cancel-edit" onclick="incarcaOperatiuni()">Anulează</button>
+        <button class="btn-cancel-edit" onclick="editData = null; incarcaOperatiuni();">Anulează</button>
       </td>`;
   } catch(e) {
     showToast('Eroare');
@@ -2209,18 +2215,36 @@ async function salveazaEdit(id) {
   const data = document.getElementById('edit-data').value;
   const tip = document.getElementById('edit-tip').value.trim().toUpperCase();
   const beneficiar = document.getElementById('edit-beneficiar').value.trim().toUpperCase();
-  const intrare = parseFloat(document.getElementById('edit-intrare').value) || 0;
-  const iesire = parseFloat(document.getElementById('edit-iesire').value) || 0;
+  let intrare = parseFloat(document.getElementById('edit-intrare').value) || 0;
+  let iesire = parseFloat(document.getElementById('edit-iesire').value) || 0;
   const obs = document.getElementById('edit-obs').value.trim();
 
   if (!data || !tip || !beneficiar) { showToast('Completează câmpurile obligatorii'); return; }
   if (dataInViitor(data)) { showToast('⚠ Data e în viitor! Modificare respinsă.'); return; }
 
+  // Pentru ELA: forțez sumele neschimbate (din editData original)
+  const isEla = currentUser && currentUser.nume === 'ELA';
+  if (isEla && editData) {
+    intrare = parseFloat(editData.intrare) || 0;
+    iesire = parseFloat(editData.iesire) || 0;
+  }
+
+  // Daca editorul nu e Eugen, salvez tracking (cine a corectat + valori vechi)
+  const updates = { data, tip, beneficiar, intrare, iesire, observatii: obs };
+  if (!isEugen() && editData) {
+    updates.corectat_de = currentUser.nume;
+    updates.corectat_la = new Date().toISOString();
+    updates.corectat_inainte = {
+      data: editData.data, tip: editData.tip, beneficiar: editData.beneficiar,
+      intrare: editData.intrare, iesire: editData.iesire, observatii: editData.observatii
+    };
+  }
+
   try {
     const resp = await fetch(`${API}/caiet?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ data, tip, beneficiar, intrare, iesire, observatii: obs })
+      body: JSON.stringify(updates)
     });
     if (resp.ok) {
       showToast('Modificare salvată!');
@@ -2243,6 +2267,23 @@ async function salveazaEdit(id) {
   } catch(e) {
     showToast('Eroare: ' + e.message);
   }
+}
+
+function isEugen() {
+  return currentUser && currentUser.nume === 'EUGEN';
+}
+
+async function marcheazaVerificat(id) {
+  if (!isEugen()) { showToast('Doar EUGEN'); return; }
+  try {
+    await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ corectat_de: null, corectat_la: null, corectat_inainte: null })
+    });
+    showToast('✓ Verificat — marcaj șters');
+    await incarcaOperatiuni();
+  } catch (e) { showToast('Eroare'); }
 }
 
 async function stergeOperatiune(id) {
