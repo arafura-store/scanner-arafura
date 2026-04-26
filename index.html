@@ -1285,7 +1285,8 @@ async function onPinInput() {
     updatePontajStatus();
     showScreen('pontaj-actiuni');
     document.getElementById('pin-input').value = '';
-    document.getElementById('concediu-nume').textContent = pontajAngajat.nume;
+    const elConcediuNume = document.getElementById('concediu-nume');
+    if (elConcediuNume) elConcediuNume.textContent = pontajAngajat.nume;
     verificaBorderouLipsa();
 
   } catch (e) {
