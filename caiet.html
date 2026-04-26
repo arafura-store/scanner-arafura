@@ -771,7 +771,8 @@ async function verificaBorderouriLipsa() {
   card.style.display = 'none';
   list.innerHTML = '';
 
-  if (!currentUser || currentUser.nume !== 'EUGEN') return;
+  const OFFICE = ['EUGEN', 'LIVIA', 'ELA'];
+  if (!currentUser || !OFFICE.includes((currentUser.nume || '').toUpperCase())) return;
 
   const MAGAZINE_ACTIVE = ['POARTA 6', 'MARVIMEX', 'TOMIS 3', 'SERVICII', 'MEDGIDIA', 'NAVODARI', 'BABADAG'];
 
