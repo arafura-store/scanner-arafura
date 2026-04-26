@@ -1929,6 +1929,14 @@ function getProductIcon(name) {
 // Init magazin la incarcare
 initStore();
 
+// Re-verifica banner borderou lipsa cand pagina devine vizibila (dupa ce userul revine de pe alta pagina)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) verificaBorderouLipsa();
+});
+
+// Re-verifica si periodic (la fiecare 2 minute) ca sa dispara cand cineva trimite borderoul
+setInterval(verificaBorderouLipsa, 2 * 60 * 1000);
+
 // Long press pe logo (3 sec) = resetare magazin
 let logoTimer = null;
 const logo = document.getElementById('header-logo');
