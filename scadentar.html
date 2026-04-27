@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scadențar — ARAFURA</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1e40af">
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    :root {
+      --indigo: #3730a3; --indigo-dark: #312e81; --indigo-light: #e0e7ff;
+      --blue: #1e40af; --blue-light: #dbeafe;
+      --green: #15803d; --green-light: #d1fae5;
+      --red: #b91c1c; --red-light: #fee2e2;
+      --orange: #c2410c; --orange-light: #ffedd5;
+      --amber: #d97706; --amber-light: #fef3c7;
+      --navy: #0f172a; --text: #1e293b; --sub: #64748b;
+      --bg: #f1f5f9; --card: #ffffff; --border: #e2e8f0;
+      --radius: 12px;
+    }
+    body {
+      font-family: 'Segoe UI', -apple-system, system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100dvh;
+    }
+    .header {
+      background: linear-gradient(135deg, var(--indigo) 0%, var(--indigo-dark) 100%);
+      color: white; padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(55,48,163,.3);
+      position: sticky; top: 0; z-index: 100; gap: 16px;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; min-width: 0; flex-wrap: wrap; }
+    .header h1 { font-size: 20px; font-weight: 800; letter-spacing: .3px; white-space: nowrap; }
+    .header-user {
+      font-size: 12px; opacity: .9; background: rgba(255,255,255,.12);
+      padding: 4px 12px; border-radius: 14px; border: 1px solid rgba(255,255,255,.18);
+      white-space: nowrap; font-weight: 600;
+    }
+    .header-meta {
+      font-size: 12px; opacity: .85; padding: 4px 10px;
+      background: rgba(255,255,255,.08); border-radius: 8px;
+      white-space: nowrap;
+    }
+    .header button {
+      padding: 8px 16px; font-size: 13px; font-weight: 600;
+      border: none; border-radius: 8px; cursor: pointer;
+      background: rgba(255,255,255,.18); color: white;
+      border: 1px solid rgba(255,255,255,.25);
+    }
+    .header button:hover { background: rgba(255,255,255,.28); }
+
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background: var(--text); color: white; padding: 14px 22px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; z-index: 1000; opacity: 0;
+      transition: all .3s; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+      max-width: 90%; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.ok { background: var(--green); }
+    .toast.err { background: var(--red); }
+
+    /* ───────── LOGIN ───────── */
+    .login-screen {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 60px 24px; gap: 20px; min-height: 80vh;
+    }
+    .login-screen .icon { font-size: 72px; }
+    .login-screen h2 { font-size: 26px; font-weight: 800; color: var(--indigo); }
+    .login-screen p { color: var(--sub); text-align: center; }
+    .login-screen input {
+      width: 220px; padding: 18px; font-size: 32px; text-align: center;
+      letter-spacing: 12px; border: 2px solid var(--border); border-radius: var(--radius);
+      font-weight: 700;
+    }
+    .login-screen input:focus { border-color: var(--indigo); outline: none; }
+
+    /* ───────── MAIN ───────── */
+    .main {
+      max-width: 1280px; margin: 20px auto;
+      padding: 0 16px; display: flex; flex-direction: column; gap: 18px;
+    }
+
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      padding: 18px 22px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    }
+    .card h2 {
+      font-size: 17px; font-weight: 800; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    /* ───────── UPLOAD ───────── */
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: 12px;
+      padding: 30px 20px; text-align: center; cursor: pointer;
+      transition: all .2s; background: #fafbfc;
+    }
+    .upload-zone:hover { border-color: var(--indigo); background: var(--indigo-light); }
+    .upload-zone.dragover { border-color: var(--indigo); background: var(--indigo-light); transform: scale(1.01); }
+    .upload-zone .icon { font-size: 42px; margin-bottom: 10px; }
+    .upload-zone .label { font-weight: 700; color: var(--indigo); font-size: 15px; }
+    .upload-zone .sub { font-size: 12px; color: var(--sub); margin-top: 4px; }
+
+    /* ───────── BO ALERT ───────── */
+    .bo-alert-card {
+      background: linear-gradient(135deg, #fef2f2, #fee2e2);
+      border-left: 5px solid var(--red);
+    }
+    .bo-alert-card h2 { color: var(--red); }
+    .bo-alarm-row {
+      background: white; border-radius: 10px; padding: 12px 14px;
+      margin-bottom: 8px; display: grid;
+      grid-template-columns: 90px 1fr 130px;
+      gap: 12px; align-items: center;
+      box-shadow: 0 1px 3px rgba(220,38,38,.15);
+      border-left: 3px solid var(--red);
+    }
+    .bo-alarm-row.urgent {
+      animation: pulseUrgent 2s ease-in-out infinite;
+      background: #fff7ed;
+      border-left: 3px solid #ea580c;
+    }
+    @keyframes pulseUrgent {
+      0%, 100% { box-shadow: 0 1px 3px rgba(234,88,12,.2); }
+      50%      { box-shadow: 0 4px 14px rgba(234,88,12,.55); }
+    }
+    .bo-alarm-row .scad { font-weight: 800; color: var(--red); font-size: 14px; }
+    .bo-alarm-row .scad small { display:block; color: var(--sub); font-weight: 500; font-size: 11px; }
+    .bo-alarm-row .furn { font-weight: 700; }
+    .bo-alarm-row .furn small { display:block; color: var(--sub); font-weight: 500; font-size: 11px; }
+    .bo-alarm-row .suma { text-align: right; font-weight: 800; font-size: 18px; color: var(--red); font-variant-numeric: tabular-nums; }
+
+    /* ───────── BO LIST ───────── */
+    table.bo-table, table.furn-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    table.bo-table th, table.bo-table td,
+    table.furn-table th, table.furn-table td {
+      padding: 8px 10px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    table.bo-table th, table.furn-table th {
+      background: #f8fafc; font-weight: 700; color: var(--sub);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+      position: sticky; top: 0;
+    }
+    table.bo-table tr:hover td, table.furn-table tr:hover td { background: #fafbfc; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 5px;
+      font-size: 11px; font-weight: 700;
+    }
+    .badge-red { background: var(--red-light); color: var(--red); }
+    .badge-amber { background: var(--amber-light); color: var(--amber); }
+    .badge-green { background: var(--green-light); color: var(--green); }
+    .badge-gray { background: #f1f5f9; color: var(--sub); }
+    .badge-blue { background: var(--blue-light); color: var(--blue); }
+
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px; margin-bottom: 12px;
+    }
+    .kpi {
+      padding: 10px 14px; background: #f8fafc; border-radius: 10px;
+      border-left: 3px solid var(--indigo);
+    }
+    .kpi .lbl { font-size: 11px; color: var(--sub); text-transform: uppercase; letter-spacing: .3px; font-weight: 700; }
+    .kpi .val { font-size: 22px; font-weight: 800; color: var(--navy); margin-top: 2px; }
+
+    .empty-state { padding: 24px; text-align: center; color: var(--sub); font-size: 14px; }
+    .placeholder { padding: 30px; text-align: center; color: var(--sub); font-size: 14px; font-style: italic; }
+    .toolbar {
+      display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;
+    }
+    .toolbar input, .toolbar select {
+      padding: 8px 12px; font-size: 14px; border: 1px solid var(--border);
+      border-radius: 8px; background: white;
+    }
+    .toolbar input:focus, .toolbar select:focus { border-color: var(--indigo); outline: none; }
+
+    @media (max-width: 600px) {
+      .header h1 { font-size: 16px; }
+      .bo-alarm-row { grid-template-columns: 1fr; gap: 4px; }
+      .bo-alarm-row .suma { text-align: left; }
+      .card { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>📊 ARAFURA — Scadențar</h1>
+    <span class="header-user" id="header-user"></span>
+    <span class="header-meta" id="header-meta" style="display:none;"></span>
+  </div>
+  <button id="btn-logout" onclick="logout()" style="display:none;">Ieși</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ─── LOGIN ─── -->
+<div id="screen-login" class="login-screen">
+  <div class="icon">🔐</div>
+  <h2>Autentificare</h2>
+  <p>Introdu PIN-ul tău (4 cifre)</p>
+  <input type="password" id="login-pin" inputmode="numeric" maxlength="4" placeholder="****" autocomplete="off" oninput="onLoginPin()">
+</div>
+
+<!-- ─── MAIN ─── -->
+<div id="screen-main" class="main" style="display:none;">
+
+  <!-- 📤 UPLOAD -->
+  <div class="card">
+    <h2>📤 Încarcă fișier scadențar</h2>
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <div class="icon">📁</div>
+      <div class="label">Trage fișierul aici sau click pentru a alege</div>
+      <div class="sub">Format acceptat: SCADENTAR.xlsx (export TeamApps)</div>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx" style="display:none;" onchange="onFileChosen(this)">
+    <div id="upload-info" style="margin-top:10px; font-size:13px; color:var(--sub); display:none;"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- DE AICI ÎNCEP SECȚIUNILE DINAMICE (vor fi populate la upload) -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+
+  <!-- 🚨 SECȚIUNEA 1: BO ALARMĂ (scadență ≤ 2 zile) -->
+  <div class="card bo-alert-card" id="card-bo-alarm" style="display:none;">
+    <h2>🚨 BO — alarmă (scadență în următoarele 2 zile)</h2>
+    <div id="bo-alarm-list"></div>
+  </div>
+
+  <!-- 💼 SECȚIUNEA 2: BO COMPLET -->
+  <div class="card" id="card-bo-all" style="display:none;">
+    <h2>💼 BO emise — toate</h2>
+    <div class="kpi-row" id="bo-kpi"></div>
+    <div class="toolbar">
+      <input type="search" id="bo-search" placeholder="🔍 Caută furnizor, nr. doc..." oninput="renderBOAll()" style="flex:1; min-width:200px;">
+      <select id="bo-filter-status" onchange="renderBOAll()">
+        <option value="toate">Toate</option>
+        <option value="urgent">⚠ Următoarele 2 zile</option>
+        <option value="saptamana">📅 Săptămâna asta (7 zile)</option>
+        <option value="luna">📅 Luna asta (30 zile)</option>
+        <option value="restant">🔴 Restante</option>
+      </select>
+      <span id="bo-count" style="font-size:12px; color:var(--sub); margin-left:auto;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="bo-table" id="bo-table">
+        <thead>
+          <tr>
+            <th>Scadență</th>
+            <th>Furnizor</th>
+            <th>Nr. doc</th>
+            <th>Data emiterii</th>
+            <th class="num">Suma restantă</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="bo-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 🏢 SECȚIUNEA 3: TOP FURNIZORI -->
+  <div class="card" id="card-top-furnizori" style="display:none;">
+    <h2>🏢 Top furnizori — datorii cumulate</h2>
+    <div class="kpi-row" id="furn-kpi"></div>
+    <div class="toolbar">
+      <input type="search" id="furn-search" placeholder="🔍 Caută furnizor..." oninput="renderTopFurnizori()" style="flex:1; min-width:200px;">
+      <select id="furn-filter" onchange="renderTopFurnizori()">
+        <option value="30">Top 30</option>
+        <option value="50">Top 50</option>
+        <option value="0">Toți</option>
+      </select>
+      <select id="furn-cat" onchange="renderTopFurnizori()">
+        <option value="">Toate categoriile</option>
+        <option value="bo">Doar cu BO</option>
+        <option value="real">Fără provizioane (nesosite)</option>
+      </select>
+      <span id="furn-count" style="font-size:12px; color:var(--sub); margin-left:auto;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="furn-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Furnizor</th>
+            <th class="num">Total restant</th>
+            <th class="num">Facturi reale</th>
+            <th class="num">Provizioane</th>
+            <th class="num">BO</th>
+            <th class="num">Buc</th>
+            <th class="num">Cea mai veche</th>
+          </tr>
+        </thead>
+        <tbody id="furn-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════ -->
+  <!-- ZONĂ EXTENSIBILĂ — adaugi noi secțiuni aici (azi/maine, restante reale, etc.) -->
+  <!-- ═══════════════════════════════════════════════════════════ -->
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════
+// CONFIG & SESSION
+// ════════════════════════════════════════════════════════════════════
+const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
+const API = window.SUPABASE_URL + '/rest/v1';
+const SESSION_KEY = 'scadentar_session';
+const STORE_KEY = 'scadentar_data'; // pastrez ultimul fișier parsat in localStorage (browser)
+
+let currentUser = null;
+let parsedRows = []; // toate rândurile normalizate dupa upload
+let dataExportInfo = null; // { fileName, dataExport (Date), parsedAt }
+
+function saveSession(user) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ user, expires: Date.now() + 8*60*60*1000 }));
+}
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const { user, expires } = JSON.parse(raw);
+    if (!user || !expires || Date.now() > expires) { localStorage.removeItem(SESSION_KEY); return null; }
+    return user;
+  } catch { return null; }
+}
+function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+// ════════════════════════════════════════════════════════════════════
+// UTIL
+// ════════════════════════════════════════════════════════════════════
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+function escHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtRON(n) {
+  return (n||0).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtData(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('ro-RO', { day:'2-digit', month:'2-digit', year:'numeric' });
+}
+function fmtDataShort(d) {
+  if (!d) return '—';
+  return d.toLocaleDateString('ro-RO', { day:'2-digit', month:'2-digit' });
+}
+function todayMidnight() {
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// LOGIN
+// ════════════════════════════════════════════════════════════════════
+async function onLoginPin() {
+  const pin = document.getElementById('login-pin').value;
+  if (pin.length < 4) return;
+  try {
+    const resp = await fetch(`${API}/caiet_utilizatori?pin=eq.${pin}&select=id,nume,acces_erp,acces_caiet,acces_scadentar`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect', 'err');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    const user = data[0];
+    if (!user.acces_scadentar) {
+      showToast('Nu ai acces la Scadențar', 'err');
+      document.getElementById('login-pin').value = '';
+      return;
+    }
+    saveSession(user);
+    await completeLogin(user);
+  } catch {
+    showToast('Eroare conexiune', 'err');
+  }
+}
+
+async function completeLogin(user) {
+  currentUser = user;
+  document.getElementById('header-user').textContent = user.nume;
+  document.getElementById('btn-logout').style.display = '';
+  document.getElementById('screen-login').style.display = 'none';
+  document.getElementById('screen-main').style.display = '';
+  document.getElementById('login-pin').value = '';
+  // Restaurez datele ultimului upload (per browser) — comod sa nu reincarc fisierul de fiecare data
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      // Re-hidrata Date-urile
+      parsedRows = (obj.rows || []).map(r => ({
+        ...r,
+        data_document: r.data_document ? new Date(r.data_document) : null,
+        data_scadenta: r.data_scadenta ? new Date(r.data_scadenta) : null
+      }));
+      dataExportInfo = obj.info ? {
+        ...obj.info,
+        dataExport: obj.info.dataExport ? new Date(obj.info.dataExport) : null,
+        parsedAt: obj.info.parsedAt ? new Date(obj.info.parsedAt) : null
+      } : null;
+      if (parsedRows.length) renderToate();
+    }
+  } catch {}
+}
+
+function logout() {
+  if (!confirm('Te deloghezi?')) return;
+  clearSession();
+  currentUser = null;
+  document.getElementById('header-user').textContent = '';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('screen-main').style.display = 'none';
+  document.getElementById('screen-login').style.display = '';
+}
+
+// ════════════════════════════════════════════════════════════════════
+// UPLOAD & PARSE
+// ════════════════════════════════════════════════════════════════════
+const uploadZone = document.getElementById('upload-zone');
+['dragenter','dragover'].forEach(ev => uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.classList.add('dragover'); }));
+['dragleave','drop'].forEach(ev => uploadZone.addEventListener(ev, e => { e.preventDefault(); uploadZone.classList.remove('dragover'); }));
+uploadZone.addEventListener('drop', async e => {
+  const f = e.dataTransfer.files[0];
+  if (!f) return;
+  if (!f.name.toLowerCase().endsWith('.xlsx')) { showToast('Fișier invalid (acceptat doar .xlsx)', 'err'); return; }
+  await procesareFisier(await f.arrayBuffer(), f.name);
+});
+
+async function onFileChosen(input) {
+  const f = input.files[0];
+  if (!f) return;
+  await procesareFisier(await f.arrayBuffer(), f.name);
+  input.value = ''; // reset
+}
+
+async function procesareFisier(buffer, fileName) {
+  const info = document.getElementById('upload-info');
+  info.style.display = '';
+  info.textContent = `Procesez ${fileName}…`;
+  try {
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    // Header e pe randul 3 (range:2 = skip primele 2)
+    const rows = XLSX.utils.sheet_to_json(ws, { range: 2, defval: '' });
+    if (!rows.length) { info.textContent = '⚠ Fișier gol'; return; }
+
+    // Extrage data exportului din randul 2 (text)
+    let dataExport = null;
+    try {
+      const r2 = ws['A2'];
+      if (r2 && r2.v) {
+        const m = String(r2.v).match(/Data\s*=\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (m) dataExport = new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+      }
+    } catch {}
+
+    const parseDate = v => {
+      if (!v) return null;
+      if (v instanceof Date) return isNaN(v) ? null : v;
+      if (typeof v === 'number') return new Date((v - 25569) * 86400000);
+      const d = new Date(String(v));
+      return isNaN(d) ? null : d;
+    };
+    const parseSuma = v => {
+      if (v === null || v === undefined || v === '') return 0;
+      if (typeof v === 'number') return v;
+      const s = String(v).replace(/\./g, '').replace(',', '.');
+      return parseFloat(s) || 0;
+    };
+
+    const items = [];
+    for (const r of rows) {
+      const cont = String(r['Cont Furnizor'] || '').trim();
+      const numeCont = String(r['Nume Cont Furnizor'] || '').trim();
+      if (!cont || !numeCont) continue;
+      const sumaRest = parseSuma(r['Suma Restanta (lei)']);
+      if (sumaRest <= 0.01) continue;
+
+      // Detectie tip dupa SUFFIX-ul din numele cont (mai sigur decat dupa prefix)
+      const lc = numeCont.toLowerCase();
+      let tip = 'FACTURA';
+      if (lc.includes('bilete la ordin')) tip = 'BO';
+      else if (lc.includes('nesosite')) tip = 'FACT_NESOSITA';
+      else if (lc.includes('avansuri')) tip = 'AVANS';
+      else if (lc.includes('debitori')) tip = 'DEBITORI';
+
+      const numeFurn = numeCont.split('-')[0].trim();
+      const dataDoc = parseDate(r['Data Document']);
+      const dataScad = parseDate(r['Data Scadenta']);
+
+      let zileIntarz = 0;
+      if (dataScad) {
+        const today = todayMidnight();
+        const sc = new Date(dataScad); sc.setHours(0,0,0,0);
+        zileIntarz = Math.floor((today - sc) / 86400000);
+      }
+
+      items.push({
+        tip, cont,
+        nume_furnizor: numeFurn,
+        nume_cont: numeCont,
+        nr_factura: String(r['Nr Factura'] || '').trim(),
+        nr_doc_plata: String(r['Nr Doc. Plata'] || '').trim(),
+        data_document: dataDoc,
+        data_scadenta: dataScad,
+        zile_intarz: zileIntarz,
+        suma_doc: parseSuma(r['Suma Doc (lei)']),
+        suma_platita: parseSuma(r['Suma Platita (lei)']),
+        suma_restanta: sumaRest
+      });
+    }
+
+    parsedRows = items;
+    dataExportInfo = { fileName, dataExport, parsedAt: new Date() };
+
+    // Salveaza in localStorage (max ~3MB ar trebui sa incapa, fisierul e ~70KB parsat)
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        info: dataExportInfo,
+        rows: parsedRows
+      }));
+    } catch (e) { /* probabil quota — ignor */ }
+
+    info.textContent = `✓ ${fileName}: ${items.length} rânduri valide. Export: ${dataExport ? fmtData(dataExport) : '?'}`;
+    showToast(`✓ Importat ${items.length} rânduri`, 'ok');
+    renderToate();
+
+  } catch (e) {
+    info.textContent = '⚠ Eroare la procesare: ' + e.message;
+    showToast('Eroare la import: ' + e.message, 'err');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// RENDER ORCHESTRATOR
+// Aici adaugi noi secțiuni — fiecare cu propriul render()
+// ════════════════════════════════════════════════════════════════════
+function renderToate() {
+  // Header meta cu data exportului
+  const meta = document.getElementById('header-meta');
+  if (dataExportInfo && dataExportInfo.dataExport) {
+    meta.style.display = '';
+    meta.textContent = `📅 Export: ${fmtData(dataExportInfo.dataExport)}`;
+  }
+  renderBOAlarm();
+  renderBOAll();
+  renderTopFurnizori();
+  // [aici adaugi: renderPlatiAzi(), renderRestanteRecente(), etc.]
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SECȚIUNEA 1: BO ALARMĂ
+// ════════════════════════════════════════════════════════════════════
+function renderBOAlarm() {
+  const card = document.getElementById('card-bo-alarm');
+  const list = document.getElementById('bo-alarm-list');
+  const today = todayMidnight();
+  const peste2 = new Date(today); peste2.setDate(today.getDate() + 2);
+
+  const bos = parsedRows
+    .filter(r => r.tip === 'BO' && r.data_scadenta)
+    .filter(r => {
+      const sc = new Date(r.data_scadenta); sc.setHours(0,0,0,0);
+      return sc >= today && sc <= peste2;
+    })
+    .sort((a,b) => a.data_scadenta - b.data_scadenta);
+
+  if (bos.length === 0) {
+    card.style.display = parsedRows.length ? '' : 'none';
+    list.innerHTML = '<div class="empty-state" style="color:var(--green);">✓ Niciun BO scadent în următoarele 2 zile</div>';
+    return;
+  }
+
+  card.style.display = '';
+  let total = 0;
+  list.innerHTML = bos.map(b => {
+    total += b.suma_restanta;
+    const sc = new Date(b.data_scadenta); sc.setHours(0,0,0,0);
+    const zile = Math.floor((sc - today) / 86400000);
+    const ziLabel = zile === 0 ? 'AZI' : (zile === 1 ? 'MÂINE' : (zile === 2 ? 'POIMÂINE' : `+${zile}z`));
+    const urgent = zile <= 1 ? ' urgent' : '';
+    return `<div class="bo-alarm-row${urgent}">
+      <div class="scad">${ziLabel}<small>${fmtDataShort(b.data_scadenta)}</small></div>
+      <div class="furn">${escHtml(b.nume_furnizor)}<small>BO #${escHtml(b.nr_doc_plata||'?')}</small></div>
+      <div class="suma">${fmtRON(b.suma_restanta)} RON</div>
+    </div>`;
+  }).join('') + `<div style="margin-top:10px; padding:10px 14px; background:white; border-radius:8px; font-weight:700; display:flex; justify-content:space-between;">
+    <span>Total cash necesar pentru următoarele 2 zile:</span>
+    <span style="color:var(--red); font-size:18px;">${fmtRON(total)} RON</span>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SECȚIUNEA 2: BO COMPLET
+// ════════════════════════════════════════════════════════════════════
+function renderBOAll() {
+  const card = document.getElementById('card-bo-all');
+  const tbody = document.getElementById('bo-tbody');
+  const kpiRow = document.getElementById('bo-kpi');
+  const counter = document.getElementById('bo-count');
+  const today = todayMidnight();
+
+  const allBO = parsedRows.filter(r => r.tip === 'BO');
+  if (allBO.length === 0) {
+    card.style.display = parsedRows.length ? '' : 'none';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Niciun BO în fișier</td></tr>';
+    kpiRow.innerHTML = '';
+    return;
+  }
+  card.style.display = '';
+
+  // KPI sumar
+  const totalBO = allBO.reduce((s,b) => s + b.suma_restanta, 0);
+  const restante = allBO.filter(b => b.zile_intarz > 0);
+  const totalRestant = restante.reduce((s,b) => s + b.suma_restanta, 0);
+  const peste2 = new Date(today); peste2.setDate(today.getDate() + 2);
+  const urgent = allBO.filter(b => b.data_scadenta && b.data_scadenta <= peste2 && b.data_scadenta >= today);
+  const totalUrgent = urgent.reduce((s,b) => s + b.suma_restanta, 0);
+
+  kpiRow.innerHTML = `
+    <div class="kpi"><div class="lbl">Total BO restant</div><div class="val">${fmtRON(totalBO)}</div></div>
+    <div class="kpi" style="border-left-color:var(--red);"><div class="lbl">Următoarele 2 zile</div><div class="val">${fmtRON(totalUrgent)}</div></div>
+    <div class="kpi" style="border-left-color:var(--amber);"><div class="lbl">Restante</div><div class="val">${fmtRON(totalRestant)}</div></div>
+    <div class="kpi"><div class="lbl">Număr BO</div><div class="val">${allBO.length}</div></div>
+  `;
+
+  // Filter
+  const q = (document.getElementById('bo-search').value || '').toLowerCase().trim();
+  const filt = document.getElementById('bo-filter-status').value;
+  let data = allBO;
+  if (q) data = data.filter(b => (b.nume_furnizor + ' ' + b.nr_doc_plata + ' ' + b.nr_factura).toLowerCase().includes(q));
+
+  if (filt !== 'toate') {
+    if (filt === 'urgent') data = data.filter(b => b.data_scadenta && b.data_scadenta >= today && b.data_scadenta <= peste2);
+    else if (filt === 'saptamana') {
+      const peste7 = new Date(today); peste7.setDate(today.getDate() + 7);
+      data = data.filter(b => b.data_scadenta && b.data_scadenta >= today && b.data_scadenta <= peste7);
+    }
+    else if (filt === 'luna') {
+      const peste30 = new Date(today); peste30.setDate(today.getDate() + 30);
+      data = data.filter(b => b.data_scadenta && b.data_scadenta >= today && b.data_scadenta <= peste30);
+    }
+    else if (filt === 'restant') data = data.filter(b => b.zile_intarz > 0);
+  }
+
+  data.sort((a,b) => (a.data_scadenta||0) - (b.data_scadenta||0));
+  counter.textContent = `${data.length} / ${allBO.length} BO`;
+
+  tbody.innerHTML = data.map(b => {
+    let badge = '';
+    if (b.zile_intarz > 0) badge = `<span class="badge badge-red">⚠ Restant ${b.zile_intarz}z</span>`;
+    else if (b.data_scadenta && b.data_scadenta <= peste2) badge = `<span class="badge badge-amber">🚨 Următoarele 2z</span>`;
+    else {
+      const peste7 = new Date(today); peste7.setDate(today.getDate() + 7);
+      if (b.data_scadenta && b.data_scadenta <= peste7) badge = `<span class="badge badge-blue">📅 Săptămâna asta</span>`;
+      else badge = `<span class="badge badge-gray">Viitor</span>`;
+    }
+    return `<tr>
+      <td><b>${fmtData(b.data_scadenta)}</b></td>
+      <td>${escHtml(b.nume_furnizor)}</td>
+      <td>${escHtml(b.nr_doc_plata)}</td>
+      <td>${fmtData(b.data_document)}</td>
+      <td class="num"><b>${fmtRON(b.suma_restanta)}</b></td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SECȚIUNEA 3: TOP FURNIZORI
+// ════════════════════════════════════════════════════════════════════
+function renderTopFurnizori() {
+  const card = document.getElementById('card-top-furnizori');
+  const tbody = document.getElementById('furn-tbody');
+  const kpiRow = document.getElementById('furn-kpi');
+  const counter = document.getElementById('furn-count');
+
+  if (parsedRows.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  // Agregare per furnizor
+  const map = new Map();
+  for (const r of parsedRows) {
+    const key = r.nume_furnizor;
+    let d = map.get(key);
+    if (!d) {
+      d = { nume: key, total: 0, fact: 0, fact_neaj: 0, bo: 0, alt: 0, buc: 0, vechi: 0 };
+      map.set(key, d);
+    }
+    d.total += r.suma_restanta;
+    d.buc += 1;
+    if (r.tip === 'BO') d.bo += r.suma_restanta;
+    else if (r.tip === 'FACT_NESOSITA') d.fact_neaj += r.suma_restanta;
+    else if (r.tip === 'FACTURA') d.fact += r.suma_restanta;
+    else d.alt += r.suma_restanta;
+    if (r.zile_intarz > d.vechi) d.vechi = r.zile_intarz;
+  }
+  let toate = [...map.values()].sort((a,b) => b.total - a.total);
+  const totalGlobal = toate.reduce((s,d) => s + d.total, 0);
+
+  // KPI
+  const top10 = toate.slice(0, 10).reduce((s,d) => s + d.total, 0);
+  kpiRow.innerHTML = `
+    <div class="kpi"><div class="lbl">Total datorii</div><div class="val">${fmtRON(totalGlobal)}</div></div>
+    <div class="kpi" style="border-left-color:var(--amber);"><div class="lbl">Top 10 = </div><div class="val">${fmtRON(top10)} <span style="font-size:14px; color:var(--sub);">(${(top10/totalGlobal*100).toFixed(0)}%)</span></div></div>
+    <div class="kpi"><div class="lbl">Furnizori</div><div class="val">${toate.length}</div></div>
+  `;
+
+  // Filter
+  const q = (document.getElementById('furn-search').value || '').toLowerCase().trim();
+  const limit = parseInt(document.getElementById('furn-filter').value) || 0;
+  const cat = document.getElementById('furn-cat').value;
+
+  let data = toate;
+  if (q) data = data.filter(d => d.nume.toLowerCase().includes(q));
+  if (cat === 'bo') data = data.filter(d => d.bo > 0);
+  else if (cat === 'real') data = data.map(d => ({...d, total: d.total - d.fact_neaj})).filter(d => d.total > 0).sort((a,b) => b.total - a.total);
+
+  const view = limit > 0 ? data.slice(0, limit) : data;
+  counter.textContent = `${view.length} / ${data.length} furnizori`;
+
+  tbody.innerHTML = view.map((d, i) => {
+    const vechi = d.vechi > 0 ? `<span class="badge ${d.vechi > 365 ? 'badge-gray' : (d.vechi > 90 ? 'badge-amber' : 'badge-red')}">${d.vechi}z</span>` : '<span class="badge badge-green">OK</span>';
+    return `<tr>
+      <td>${i+1}</td>
+      <td><b>${escHtml(d.nume)}</b></td>
+      <td class="num"><b>${fmtRON(d.total)}</b></td>
+      <td class="num">${d.fact > 0 ? fmtRON(d.fact) : '—'}</td>
+      <td class="num" style="color:var(--sub);">${d.fact_neaj > 0 ? fmtRON(d.fact_neaj) : '—'}</td>
+      <td class="num">${d.bo > 0 ? `<span style="color:var(--red); font-weight:700;">${fmtRON(d.bo)}</span>` : '—'}</td>
+      <td class="num">${d.buc}</td>
+      <td class="num">${vechi}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// AUTO-RESTORE SESSION
+// ════════════════════════════════════════════════════════════════════
+(async function init() {
+  const u = loadSession();
+  if (u && u.acces_scadentar) {
+    await completeLogin(u);
+  }
+})();
+
+// SW
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+
+</body>
+</html>
