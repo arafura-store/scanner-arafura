@@ -1678,6 +1678,19 @@ function renderOperatiuni() {
   if (fDir === 'in') data = data.filter(d => parseFloat(d.intrare || 0) > 0);
   if (fDir === 'out') data = data.filter(d => parseFloat(d.iesire || 0) > 0);
 
+  // Sortare: PENDING-urile sus (cele mai noi primele) -> apoi randurile confirmate in ordine cronologica desc
+  // (un rand confirmat se duce automat la pozitia lui naturala dupa completat_la)
+  data = data.slice().sort((a, b) => {
+    const aPending = (a.tip || '').includes('PENDING');
+    const bPending = (b.tip || '').includes('PENDING');
+    if (aPending !== bPending) return aPending ? -1 : 1;
+    // ambele aceeași clasă (pending sau nu) — ordine după completat_la desc, fallback created_at, apoi id
+    const aKey = a.completat_la || a.created_at || '';
+    const bKey = b.completat_la || b.created_at || '';
+    if (aKey !== bKey) return bKey.localeCompare(aKey);
+    return (b.id || 0) - (a.id || 0);
+  });
+
   // Sumar
   let totalIn = 0, totalOut = 0;
   for (const d of data) {
