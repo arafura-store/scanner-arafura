@@ -687,6 +687,33 @@ async function trimiteBorderou() {
   const magazin = document.getElementById('f-magazin').value;
   if (!data || !magazin) { showToast('Completează data și magazinul', 'err'); return; }
 
+  // VERIFICARE 1: data borderoului != azi -> intreaba daca e corecta (data LOCALA, nu UTC)
+  const _now = new Date();
+  const todayLocal = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+  if (data !== todayLocal) {
+    const dataRO = new Date(data + 'T00:00:00').toLocaleDateString('ro-RO', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'});
+    if (!confirm(`⚠ ATENȚIE!\n\nData borderoului este:\n${dataRO}\n\nNU este ziua de azi.\nEști sigur că data e corectă?`)) return;
+  }
+
+  // VERIFICARE 2: exista deja borderou trimis pentru acelasi magazin + aceeasi data?
+  try {
+    const respDup = await fetch(`${API}/borderouri?magazin=eq.${encodeURIComponent(magazin)}&data=eq.${data}&status=in.(trimis,predat-sofer,confirmat)&select=id,trimis_la,cash_fizic,cash_z_c1,cash_z_c2,utilizator&order=trimis_la.asc`, { headers: HEADERS });
+    if (respDup.ok) {
+      const existing = await respDup.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        const dataRO = new Date(data + 'T00:00:00').toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
+        const lista = existing.map(b => {
+          const cashF = parseFloat(b.cash_fizic||0);
+          const cashZ = parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0);
+          const cashShow = cashF > 0 ? cashF : cashZ;
+          const tr = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {hour:'2-digit', minute:'2-digit'}) : '?';
+          return `  • #${b.id} · cash ${cashShow.toFixed(2)} RON (trimis la ${tr} de ${b.utilizator||'?'})`;
+        }).join('\n');
+        if (!confirm(`⚠ DUBLU BORDEROU?\n\nExistă DEJA borderou(ri) pentru ${magazin} pe data ${dataRO}:\n\n${lista}\n\nTrimiți ÎNCĂ UNUL?\n\n[OK] = trimit (motiv real, ex: schimb separat)\n[Cancel] = anulez`)) return;
+      }
+    }
+  } catch {}
+
   const e2 = MAGAZINE_2_CASE.includes(magazin);
   const v = (id) => {
     const el = document.getElementById(id);
