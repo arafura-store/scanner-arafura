@@ -295,7 +295,7 @@
 const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${window.SUPABASE_KEY}` };
 const API = window.SUPABASE_URL + '/rest/v1';
 
-const MAGAZINE_PERMISE = ['KOGALNICEANU', 'POPORULUI', 'CUMPANA'];
+const MAGAZINE_PERMISE = ['POPORULUI', 'CUMPANA'];
 
 // ──────────────────────────────────────────────────────────
 // SESSION (8h localStorage)
@@ -362,7 +362,7 @@ async function onLoginPin() {
     }
     const user = data[0];
     if (!MAGAZINE_PERMISE.includes(user.nume)) {
-      showToast('Această pagină e doar pentru KOGĂLNICEANU, POPORULUI, CUMPĂNA', 'err');
+      showToast('Această pagină e doar pentru POPORULUI și CUMPĂNA', 'err');
       document.getElementById('login-pin').value = '';
       return;
     }

@@ -195,6 +195,26 @@
 <div id="screen-main" style="display:none;">
   <div class="container">
 
+    <!-- CONDICĂ (vizibil DOAR pentru KOGALNICEANU — au pagina lor unică) -->
+    <div class="card" id="card-condica" style="display:none;">
+      <h3 style="color:#1e40af; display:flex; align-items:center; gap:8px;">👋 Condică / Pontaj angajat</h3>
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+        <label style="font-size:13px; font-weight:700; color:var(--sub); min-width:110px;">PIN angajat</label>
+        <input type="password" id="pontaj-pin" inputmode="numeric" maxlength="4" placeholder="****" oninput="onPontajPin()"
+               style="flex:1; min-width:160px; padding:14px; font-size:22px; text-align:center; letter-spacing:8px; border:2px solid var(--border); border-radius:8px; font-weight:700;">
+      </div>
+      <div id="pontaj-info" style="display:none; padding:14px; background:#dbeafe; border-radius:10px; margin-bottom:12px;">
+        <div id="pontaj-salut" style="font-weight:700; color:var(--navy); margin-bottom:4px; font-size:15px;"></div>
+        <div id="pontaj-status" style="font-size:13px; color:var(--sub); white-space:pre-line;"></div>
+      </div>
+      <div id="pontaj-buttons" style="display:none; gap:10px; flex-wrap:wrap;">
+        <button id="btn-pontaj-in" onclick="pontareIntrare()"
+                style="flex:1; min-width:140px; padding:14px; font-size:15px; font-weight:700; background:var(--green); color:white; border:none; border-radius:10px; cursor:pointer;">✅ Am venit</button>
+        <button id="btn-pontaj-out" onclick="pontareIesire()"
+                style="flex:1; min-width:140px; padding:14px; font-size:15px; font-weight:700; background:var(--red); color:white; border:none; border-radius:10px; cursor:pointer;">🚪 Am plecat</button>
+      </div>
+    </div>
+
     <!-- Form borderou nou -->
     <div class="card">
       <h3>📋 Borderou nou</h3>
@@ -449,6 +469,9 @@ async function completeLogin(user) {
     sel.value = lista[0];
     if (typeof onMagazinChange === 'function') onMagazinChange();
   }
+  // KOGALNICEANU are pagina unica: afiseaza cardul de condica integrat
+  const cardCondica = document.getElementById('card-condica');
+  if (cardCondica) cardCondica.style.display = (user.nume === 'KOGALNICEANU') ? '' : 'none';
   await Promise.all([incarcaIstoric(), incarcaAngajati(), incarcaDispozitiiTeren()]);
 }
 
@@ -1339,6 +1362,115 @@ setInterval(() => {
   incarcaIstoric();
   incarcaDispozitiiTeren();
 }, 30000);
+
+// ──────────────────────────────────────────────────────────
+// PONTAJ (folosit doar pentru KOGALNICEANU - card integrat)
+// ──────────────────────────────────────────────────────────
+let pontajAngajat = null;
+let pontajRecords = [];
+let pontajUltimul = null;
+
+function _todayISOLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function _fmtOra(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('ro-RO', {hour:'2-digit', minute:'2-digit'});
+}
+
+async function onPontajPin() {
+  const pin = document.getElementById('pontaj-pin').value;
+  if (pin.length < 4) return;
+  try {
+    const resp = await fetch(`${API}/angajati?pin=eq.${pin}&activ=eq.true&select=id,nume`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      showToast('PIN incorect', 'err');
+      document.getElementById('pontaj-pin').value = '';
+      return;
+    }
+    pontajAngajat = data[0];
+    await refreshPontajCurent();
+    document.getElementById('pontaj-info').style.display = 'block';
+    document.getElementById('pontaj-buttons').style.display = 'flex';
+    document.getElementById('pontaj-pin').value = '';
+  } catch {
+    showToast('Eroare conexiune', 'err');
+  }
+}
+
+async function refreshPontajCurent() {
+  if (!pontajAngajat) return;
+  const today = _todayISOLocal();
+  const respP = await fetch(`${API}/pontaj?angajat_id=eq.${pontajAngajat.id}&data=eq.${today}&select=*&order=created_at.asc`, { headers: HEADERS });
+  const pontaje = await respP.json();
+  pontajRecords = Array.isArray(pontaje) ? pontaje : [];
+  pontajUltimul = pontajRecords.length > 0 ? pontajRecords[pontajRecords.length - 1] : null;
+  const now = new Date();
+  const azi = now.toLocaleDateString('ro-RO', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  const esteWeekend = (now.getDay() === 0 || now.getDay() === 6);
+  document.getElementById('pontaj-salut').innerHTML =
+    `Bună, ${escHtml(pontajAngajat.nume)}!` +
+    (esteWeekend ? '<span style="background:var(--orange,#ea580c); color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; margin-left:8px;">⭐ WEEKEND</span>' : '');
+
+  let status = `${azi}\n`;
+  const btnIn = document.getElementById('btn-pontaj-in');
+  const btnOut = document.getElementById('btn-pontaj-out');
+  if (pontajRecords.length === 0) {
+    status += '⏳ Nu te-ai pontat azi';
+    btnIn.disabled = false;
+    btnOut.disabled = true;
+  } else {
+    for (const r of pontajRecords) {
+      if (r.ora_intrare && r.ora_iesire) status += `✅ ${_fmtOra(r.ora_intrare)} → ${_fmtOra(r.ora_iesire)}\n`;
+      else if (r.ora_intrare) status += `▶ Intrat la ${_fmtOra(r.ora_intrare)} (încă în magazin)\n`;
+    }
+    if (pontajUltimul && pontajUltimul.ora_intrare && !pontajUltimul.ora_iesire) {
+      btnIn.disabled = true;
+      btnOut.disabled = false;
+    } else {
+      btnIn.disabled = false;
+      btnOut.disabled = true;
+    }
+  }
+  document.getElementById('pontaj-status').textContent = status.trim();
+}
+
+async function pontareIntrare() {
+  if (!pontajAngajat) return;
+  try {
+    const resp = await fetch(`${API}/pontaj`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        angajat_id: pontajAngajat.id,
+        angajat_nume: pontajAngajat.nume,
+        magazin: currentUser ? currentUser.nume : null,
+        data: _todayISOLocal(),
+        ora_intrare: new Date().toISOString(),
+        weekend: (new Date().getDay() === 0 || new Date().getDay() === 6)
+      })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✅ Intrare înregistrată', 'ok');
+    await refreshPontajCurent();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
+async function pontareIesire() {
+  if (!pontajAngajat || !pontajUltimul) return;
+  try {
+    const resp = await fetch(`${API}/pontaj?id=eq.${pontajUltimul.id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ ora_iesire: new Date().toISOString() })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('🚪 Ieșire înregistrată', 'ok');
+    await refreshPontajCurent();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
 </script>
 
 </body>
