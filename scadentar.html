@@ -232,15 +232,15 @@
   <!-- DE AICI ÎNCEP SECȚIUNILE DINAMICE (vor fi populate la upload) -->
   <!-- ═══════════════════════════════════════════════════════════ -->
 
-  <!-- 🚨 SECȚIUNEA 1: BO ALARMĂ (scadență ≤ 2 zile) -->
+  <!-- 🚨 SECȚIUNEA 1: BO + CEC ALARMĂ (scadență ≤ 2 zile) -->
   <div class="card bo-alert-card" id="card-bo-alarm" style="display:none;">
-    <h2>🚨 BO — alarmă (scadență în următoarele 2 zile)</h2>
+    <h2>🚨 BO / CEC — alarmă (scadență în următoarele 2 zile)</h2>
     <div id="bo-alarm-list"></div>
   </div>
 
-  <!-- 💼 SECȚIUNEA 2: BO COMPLET -->
+  <!-- 💼 SECȚIUNEA 2: BO + CEC COMPLET -->
   <div class="card" id="card-bo-all" style="display:none;">
-    <h2>💼 BO emise — toate</h2>
+    <h2>💼 BO + CEC emise — toate</h2>
     <div class="kpi-row" id="bo-kpi"></div>
     <div class="toolbar">
       <input type="search" id="bo-search" placeholder="🔍 Caută furnizor, nr. doc..." oninput="renderBOAll()" style="flex:1; min-width:200px;">
@@ -257,6 +257,7 @@
       <table class="bo-table" id="bo-table">
         <thead>
           <tr>
+            <th>Tip</th>
             <th>Scadență</th>
             <th>Furnizor</th>
             <th>Nr. doc</th>
@@ -270,9 +271,12 @@
     </div>
   </div>
 
-  <!-- 🏢 SECȚIUNEA 3: TOP FURNIZORI -->
+  <!-- 🏢 SECȚIUNEA 3: TOP FURNIZORI cu DATORII REALE (exclude provizioane) -->
   <div class="card" id="card-top-furnizori" style="display:none;">
-    <h2>🏢 Top furnizori — datorii cumulate</h2>
+    <h2>🏢 Top furnizori — datorii REALE (facturi + BO + CEC)</h2>
+    <div style="font-size:12px; color:var(--sub); margin-bottom:10px; padding:8px 12px; background:#f8fafc; border-radius:8px;">
+      ℹ Această listă <strong>NU include provizioanele</strong> (facturi nesosite). Provizioanele sunt separat în cardul de mai jos.
+    </div>
     <div class="kpi-row" id="furn-kpi"></div>
     <div class="toolbar">
       <input type="search" id="furn-search" placeholder="🔍 Caută furnizor..." oninput="renderTopFurnizori()" style="flex:1; min-width:200px;">
@@ -280,11 +284,6 @@
         <option value="30">Top 30</option>
         <option value="50">Top 50</option>
         <option value="0">Toți</option>
-      </select>
-      <select id="furn-cat" onchange="renderTopFurnizori()">
-        <option value="">Toate categoriile</option>
-        <option value="bo">Doar cu BO</option>
-        <option value="real">Fără provizioane (nesosite)</option>
       </select>
       <span id="furn-count" style="font-size:12px; color:var(--sub); margin-left:auto;"></span>
     </div>
@@ -294,15 +293,46 @@
           <tr>
             <th>#</th>
             <th>Furnizor</th>
-            <th class="num">Total restant</th>
-            <th class="num">Facturi reale</th>
-            <th class="num">Provizioane</th>
-            <th class="num">BO</th>
+            <th class="num">Total real</th>
+            <th class="num">Facturi</th>
+            <th class="num">BO + CEC</th>
             <th class="num">Buc</th>
             <th class="num">Cea mai veche</th>
           </tr>
         </thead>
         <tbody id="furn-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 📋 SECȚIUNEA 4 (NOUĂ): TOP FURNIZORI cu PROVIZIOANE (facturi nesosite) -->
+  <div class="card" id="card-furn-provizioane" style="display:none; border-left:4px solid var(--amber);">
+    <h2>📋 Furnizori cu provizioane (facturi nesosite — contabilitate)</h2>
+    <div style="font-size:12px; color:var(--sub); margin-bottom:10px; padding:8px 12px; background:#fffbeb; border-radius:8px;">
+      ℹ Aceste sume <strong>NU sunt datorii reale de plată</strong> — sunt înregistrări „factura nesosită" (provizioane). Multe sunt vechi (>1 an) și ar trebui curățate la sursă în TeamApps.
+    </div>
+    <div class="kpi-row" id="prov-kpi"></div>
+    <div class="toolbar">
+      <input type="search" id="prov-search" placeholder="🔍 Caută furnizor..." oninput="renderProvizioane()" style="flex:1; min-width:200px;">
+      <select id="prov-filter" onchange="renderProvizioane()">
+        <option value="30">Top 30</option>
+        <option value="50">Top 50</option>
+        <option value="0">Toți</option>
+      </select>
+      <span id="prov-count" style="font-size:12px; color:var(--sub); margin-left:auto;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="furn-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Furnizor</th>
+            <th class="num">Total provizioane</th>
+            <th class="num">Buc facturi nesosite</th>
+            <th class="num">Cea mai veche</th>
+          </tr>
+        </thead>
+        <tbody id="prov-tbody"></tbody>
       </table>
     </div>
   </div>
@@ -501,6 +531,7 @@ async function procesareFisier(buffer, fileName) {
       const lc = numeCont.toLowerCase();
       let tip = 'FACTURA';
       if (lc.includes('bilete la ordin')) tip = 'BO';
+      else if (lc.includes('cec')) tip = 'CEC';
       else if (lc.includes('nesosite')) tip = 'FACT_NESOSITA';
       else if (lc.includes('avansuri')) tip = 'AVANS';
       else if (lc.includes('debitori')) tip = 'DEBITORI';
@@ -566,8 +597,12 @@ function renderToate() {
   renderBOAlarm();
   renderBOAll();
   renderTopFurnizori();
+  renderProvizioane();
   // [aici adaugi: renderPlatiAzi(), renderRestanteRecente(), etc.]
 }
+
+// Helper: e BO sau CEC
+function isBOorCEC(r) { return r.tip === 'BO' || r.tip === 'CEC'; }
 
 // ════════════════════════════════════════════════════════════════════
 // SECȚIUNEA 1: BO ALARMĂ
@@ -579,7 +614,7 @@ function renderBOAlarm() {
   const peste2 = new Date(today); peste2.setDate(today.getDate() + 2);
 
   const bos = parsedRows
-    .filter(r => r.tip === 'BO' && r.data_scadenta)
+    .filter(r => isBOorCEC(r) && r.data_scadenta)
     .filter(r => {
       const sc = new Date(r.data_scadenta); sc.setHours(0,0,0,0);
       return sc >= today && sc <= peste2;
@@ -588,7 +623,7 @@ function renderBOAlarm() {
 
   if (bos.length === 0) {
     card.style.display = parsedRows.length ? '' : 'none';
-    list.innerHTML = '<div class="empty-state" style="color:var(--green);">✓ Niciun BO scadent în următoarele 2 zile</div>';
+    list.innerHTML = '<div class="empty-state" style="color:var(--green);">✓ Niciun BO/CEC scadent în următoarele 2 zile</div>';
     return;
   }
 
@@ -602,7 +637,7 @@ function renderBOAlarm() {
     const urgent = zile <= 1 ? ' urgent' : '';
     return `<div class="bo-alarm-row${urgent}">
       <div class="scad">${ziLabel}<small>${fmtDataShort(b.data_scadenta)}</small></div>
-      <div class="furn">${escHtml(b.nume_furnizor)}<small>BO #${escHtml(b.nr_doc_plata||'?')}</small></div>
+      <div class="furn">${escHtml(b.nume_furnizor)}<small>${b.tip} #${escHtml(b.nr_doc_plata||'?')}</small></div>
       <div class="suma">${fmtRON(b.suma_restanta)} RON</div>
     </div>`;
   }).join('') + `<div style="margin-top:10px; padding:10px 14px; background:white; border-radius:8px; font-weight:700; display:flex; justify-content:space-between;">
@@ -621,10 +656,10 @@ function renderBOAll() {
   const counter = document.getElementById('bo-count');
   const today = todayMidnight();
 
-  const allBO = parsedRows.filter(r => r.tip === 'BO');
+  const allBO = parsedRows.filter(isBOorCEC);
   if (allBO.length === 0) {
     card.style.display = parsedRows.length ? '' : 'none';
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Niciun BO în fișier</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Niciun BO/CEC în fișier</td></tr>';
     kpiRow.innerHTML = '';
     return;
   }
@@ -637,12 +672,14 @@ function renderBOAll() {
   const peste2 = new Date(today); peste2.setDate(today.getDate() + 2);
   const urgent = allBO.filter(b => b.data_scadenta && b.data_scadenta <= peste2 && b.data_scadenta >= today);
   const totalUrgent = urgent.reduce((s,b) => s + b.suma_restanta, 0);
+  const nrBO = allBO.filter(b => b.tip === 'BO').length;
+  const nrCEC = allBO.filter(b => b.tip === 'CEC').length;
 
   kpiRow.innerHTML = `
-    <div class="kpi"><div class="lbl">Total BO restant</div><div class="val">${fmtRON(totalBO)}</div></div>
+    <div class="kpi"><div class="lbl">Total restant</div><div class="val">${fmtRON(totalBO)}</div></div>
     <div class="kpi" style="border-left-color:var(--red);"><div class="lbl">Următoarele 2 zile</div><div class="val">${fmtRON(totalUrgent)}</div></div>
     <div class="kpi" style="border-left-color:var(--amber);"><div class="lbl">Restante</div><div class="val">${fmtRON(totalRestant)}</div></div>
-    <div class="kpi"><div class="lbl">Număr BO</div><div class="val">${allBO.length}</div></div>
+    <div class="kpi"><div class="lbl">Număr</div><div class="val">${nrBO} BO${nrCEC ? ' + ' + nrCEC + ' CEC' : ''}</div></div>
   `;
 
   // Filter
@@ -676,7 +713,11 @@ function renderBOAll() {
       if (b.data_scadenta && b.data_scadenta <= peste7) badge = `<span class="badge badge-blue">📅 Săptămâna asta</span>`;
       else badge = `<span class="badge badge-gray">Viitor</span>`;
     }
+    const tipBadge = b.tip === 'CEC'
+      ? '<span class="badge badge-blue">CEC</span>'
+      : '<span class="badge badge-gray">BO</span>';
     return `<tr>
+      <td>${tipBadge}</td>
       <td><b>${fmtData(b.data_scadenta)}</b></td>
       <td>${escHtml(b.nume_furnizor)}</td>
       <td>${escHtml(b.nr_doc_plata)}</td>
@@ -688,7 +729,7 @@ function renderBOAll() {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// SECȚIUNEA 3: TOP FURNIZORI
+// SECȚIUNEA 3: TOP FURNIZORI cu DATORII REALE (exclude provizioane)
 // ════════════════════════════════════════════════════════════════════
 function renderTopFurnizori() {
   const card = document.getElementById('card-top-furnizori');
@@ -702,19 +743,19 @@ function renderTopFurnizori() {
   }
   card.style.display = '';
 
-  // Agregare per furnizor
+  // Agregare per furnizor — doar randurile REALE (exclude FACT_NESOSITA)
+  const reale = parsedRows.filter(r => r.tip !== 'FACT_NESOSITA');
   const map = new Map();
-  for (const r of parsedRows) {
+  for (const r of reale) {
     const key = r.nume_furnizor;
     let d = map.get(key);
     if (!d) {
-      d = { nume: key, total: 0, fact: 0, fact_neaj: 0, bo: 0, alt: 0, buc: 0, vechi: 0 };
+      d = { nume: key, total: 0, fact: 0, bo_cec: 0, alt: 0, buc: 0, vechi: 0 };
       map.set(key, d);
     }
     d.total += r.suma_restanta;
     d.buc += 1;
-    if (r.tip === 'BO') d.bo += r.suma_restanta;
-    else if (r.tip === 'FACT_NESOSITA') d.fact_neaj += r.suma_restanta;
+    if (isBOorCEC(r)) d.bo_cec += r.suma_restanta;
     else if (r.tip === 'FACTURA') d.fact += r.suma_restanta;
     else d.alt += r.suma_restanta;
     if (r.zile_intarz > d.vechi) d.vechi = r.zile_intarz;
@@ -725,20 +766,17 @@ function renderTopFurnizori() {
   // KPI
   const top10 = toate.slice(0, 10).reduce((s,d) => s + d.total, 0);
   kpiRow.innerHTML = `
-    <div class="kpi"><div class="lbl">Total datorii</div><div class="val">${fmtRON(totalGlobal)}</div></div>
-    <div class="kpi" style="border-left-color:var(--amber);"><div class="lbl">Top 10 = </div><div class="val">${fmtRON(top10)} <span style="font-size:14px; color:var(--sub);">(${(top10/totalGlobal*100).toFixed(0)}%)</span></div></div>
+    <div class="kpi"><div class="lbl">Total datorii REALE</div><div class="val">${fmtRON(totalGlobal)}</div></div>
+    <div class="kpi" style="border-left-color:var(--amber);"><div class="lbl">Top 10 =</div><div class="val">${fmtRON(top10)} <span style="font-size:14px; color:var(--sub);">(${totalGlobal>0 ? (top10/totalGlobal*100).toFixed(0) : 0}%)</span></div></div>
     <div class="kpi"><div class="lbl">Furnizori</div><div class="val">${toate.length}</div></div>
   `;
 
   // Filter
   const q = (document.getElementById('furn-search').value || '').toLowerCase().trim();
   const limit = parseInt(document.getElementById('furn-filter').value) || 0;
-  const cat = document.getElementById('furn-cat').value;
 
   let data = toate;
   if (q) data = data.filter(d => d.nume.toLowerCase().includes(q));
-  if (cat === 'bo') data = data.filter(d => d.bo > 0);
-  else if (cat === 'real') data = data.map(d => ({...d, total: d.total - d.fact_neaj})).filter(d => d.total > 0).sort((a,b) => b.total - a.total);
 
   const view = limit > 0 ? data.slice(0, limit) : data;
   counter.textContent = `${view.length} / ${data.length} furnizori`;
@@ -750,8 +788,69 @@ function renderTopFurnizori() {
       <td><b>${escHtml(d.nume)}</b></td>
       <td class="num"><b>${fmtRON(d.total)}</b></td>
       <td class="num">${d.fact > 0 ? fmtRON(d.fact) : '—'}</td>
-      <td class="num" style="color:var(--sub);">${d.fact_neaj > 0 ? fmtRON(d.fact_neaj) : '—'}</td>
-      <td class="num">${d.bo > 0 ? `<span style="color:var(--red); font-weight:700;">${fmtRON(d.bo)}</span>` : '—'}</td>
+      <td class="num">${d.bo_cec > 0 ? `<span style="color:var(--red); font-weight:700;">${fmtRON(d.bo_cec)}</span>` : '—'}</td>
+      <td class="num">${d.buc}</td>
+      <td class="num">${vechi}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════════
+// SECȚIUNEA 4: TOP FURNIZORI cu PROVIZIOANE (facturi nesosite)
+// ════════════════════════════════════════════════════════════════════
+function renderProvizioane() {
+  const card = document.getElementById('card-furn-provizioane');
+  const tbody = document.getElementById('prov-tbody');
+  const kpiRow = document.getElementById('prov-kpi');
+  const counter = document.getElementById('prov-count');
+
+  const provs = parsedRows.filter(r => r.tip === 'FACT_NESOSITA');
+  if (provs.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  // Agregare per furnizor
+  const map = new Map();
+  for (const r of provs) {
+    const key = r.nume_furnizor;
+    let d = map.get(key);
+    if (!d) { d = { nume: key, total: 0, buc: 0, vechi: 0 }; map.set(key, d); }
+    d.total += r.suma_restanta;
+    d.buc += 1;
+    if (r.zile_intarz > d.vechi) d.vechi = r.zile_intarz;
+  }
+  let toate = [...map.values()].sort((a,b) => b.total - a.total);
+  const totalGlobal = toate.reduce((s,d) => s + d.total, 0);
+
+  // Cele vechi (>365z)
+  const vechiCount = toate.filter(d => d.vechi > 365).length;
+  const vechiSuma = toate.filter(d => d.vechi > 365).reduce((s,d) => s + d.total, 0);
+
+  kpiRow.innerHTML = `
+    <div class="kpi" style="border-left-color:var(--amber);"><div class="lbl">Total provizioane</div><div class="val">${fmtRON(totalGlobal)}</div></div>
+    <div class="kpi" style="border-left-color:#9ca3af;"><div class="lbl">Vechi (>1 an)</div><div class="val">${fmtRON(vechiSuma)} <span style="font-size:13px; color:var(--sub);">(${vechiCount} furniz)</span></div></div>
+    <div class="kpi"><div class="lbl">Furnizori afectați</div><div class="val">${toate.length}</div></div>
+  `;
+
+  const q = (document.getElementById('prov-search').value || '').toLowerCase().trim();
+  const limit = parseInt(document.getElementById('prov-filter').value) || 0;
+
+  let data = toate;
+  if (q) data = data.filter(d => d.nume.toLowerCase().includes(q));
+
+  const view = limit > 0 ? data.slice(0, limit) : data;
+  counter.textContent = `${view.length} / ${data.length} furnizori`;
+
+  tbody.innerHTML = view.map((d, i) => {
+    const vechi = d.vechi > 0
+      ? `<span class="badge ${d.vechi > 365 ? 'badge-gray' : (d.vechi > 90 ? 'badge-amber' : 'badge-red')}">${d.vechi}z</span>`
+      : '<span class="badge badge-green">OK</span>';
+    return `<tr>
+      <td>${i+1}</td>
+      <td><b>${escHtml(d.nume)}</b></td>
+      <td class="num"><b>${fmtRON(d.total)}</b></td>
       <td class="num">${d.buc}</td>
       <td class="num">${vechi}</td>
     </tr>`;
