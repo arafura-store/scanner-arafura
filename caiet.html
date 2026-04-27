@@ -762,6 +762,42 @@ async function completeLogin(user) {
   verificaBorderouriLipsa();
 }
 
+// localStorage helpers pentru "borderou lipsa dismissed" (magazin inchis, sarbatoare, etc.)
+// Doar EUGEN poate marca; expirare automata la 30 zile.
+const BORDEROU_LIPSA_DISMISS_KEY = 'caiet_borderou_lipsa_dismissed';
+
+function getBorderouLipsaDismissed() {
+  try {
+    const raw = localStorage.getItem(BORDEROU_LIPSA_DISMISS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return new Set();
+    const now = Date.now();
+    const valid = arr.filter(e => e && e.key && e.expires && e.expires > now);
+    // Salveaza inapoi daca au expirat unele entry-uri
+    if (valid.length !== arr.length) {
+      localStorage.setItem(BORDEROU_LIPSA_DISMISS_KEY, JSON.stringify(valid));
+    }
+    return new Set(valid.map(e => e.key));
+  } catch { return new Set(); }
+}
+
+function ascundeBorderouLipsa(magazin, data) {
+  if (!confirm(`Marchezi că ${magazin} a fost închis pe ${data}?\n\nChip-ul dispare din lista ta (timp de 30 zile).`)) return;
+  try {
+    const raw = localStorage.getItem(BORDEROU_LIPSA_DISMISS_KEY);
+    let arr = [];
+    try { arr = raw ? JSON.parse(raw) : []; } catch {}
+    if (!Array.isArray(arr)) arr = [];
+    const key = `${magazin}|${data}`;
+    if (!arr.some(e => e.key === key)) {
+      arr.push({ key, expires: Date.now() + 30 * 24 * 60 * 60 * 1000 }); // 30 zile
+      localStorage.setItem(BORDEROU_LIPSA_DISMISS_KEY, JSON.stringify(arr));
+    }
+    verificaBorderouriLipsa();
+  } catch (e) { showToast('Eroare: ' + e.message, 'err'); }
+}
+
 // Info card: magazinele care nu au trimis borderou pentru ultimele 2 zile (ieri + alaltaieri)
 // Disponibil doar pentru EUGEN. Apare doar daca exista lipsuri.
 async function verificaBorderouriLipsa() {
@@ -813,14 +849,23 @@ async function verificaBorderouriLipsa() {
       }
     }
 
-    if (lipsuri.length === 0) return;
+    // Filtreaza chip-urile pe care EUGEN le-a marcat ca "magazin inchis" (localStorage, expirare 30 zile)
+    const dismissed = getBorderouLipsaDismissed();
+    const lipsuriFiltrate = lipsuri.filter(l => !dismissed.has(`${l.magazin}|${l.data}`));
+
+    if (lipsuriFiltrate.length === 0) return;
 
     // Sortare: cele mai recente lipsuri primele (ieri inainte de alaltaieri); apoi alfabetic pe magazin
-    lipsuri.sort((a, b) => b.data.localeCompare(a.data) || a.magazin.localeCompare(b.magazin));
+    lipsuriFiltrate.sort((a, b) => b.data.localeCompare(a.data) || a.magazin.localeCompare(b.magazin));
 
-    list.innerHTML = lipsuri.map(l =>
-      `<span class="ibl-chip"><strong>${l.magazin}</strong><span class="ibl-date">${l.dataRO}</span></span>`
-    ).join('');
+    const isEugen = currentUser && currentUser.nume === 'EUGEN';
+    list.innerHTML = lipsuriFiltrate.map(l => {
+      const xBtn = isEugen
+        ? `<button onclick="ascundeBorderouLipsa('${l.magazin}','${l.data}')" title="Magazin închis (sărbătoare, vacanță, etc.) — ascunde din listă"
+            style="background:transparent; border:none; color:#9a3412; cursor:pointer; font-size:14px; font-weight:800; padding:0 0 0 6px; line-height:1;">✕</button>`
+        : '';
+      return `<span class="ibl-chip"><strong>${l.magazin}</strong><span class="ibl-date">${l.dataRO}</span>${xBtn}</span>`;
+    }).join('');
     card.style.display = 'block';
   } catch {}
 }
