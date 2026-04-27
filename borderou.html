@@ -376,12 +376,8 @@ const MAGAZINE = ['TOMIS 3','POARTA 6','MARVIMEX','MEDGIDIA','NAVODARI','BABADAG
 const MAGAZINE_2_CASE = ['TOMIS 3']; // magazinele cu 2 case de marcat
 
 // Populate dropdown — gestionat doar de completeLogin (per PIN logat)
-// Lasam dropdown-ul cu doar "— Alege magazin —" pana la login
-window.addEventListener('DOMContentLoaded', () => {
-  // Curat orice optiuni vechi (siguranta)
-  const sel = document.getElementById('f-magazin');
-  if (sel) sel.innerHTML = '<option value="">— Alege magazin —</option>';
-});
+// HTML-ul are deja initial doar "— Alege magazin —", iar completeLogin populeaza la login
+// (Am eliminat DOMContentLoaded reset — sterge dropdown-ul DUPA session-restore)
 
 // ── Session (localStorage 30 zile) ────────────────────────────────
 const SESSION_KEY = 'borderou_session';
