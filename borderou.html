@@ -470,9 +470,25 @@ async function completeLogin(user) {
     if (typeof onMagazinChange === 'function') onMagazinChange();
   }
   // KOGALNICEANU are pagina unica: afiseaza cardul de condica integrat
-  const cardCondica = document.getElementById('card-condica');
-  if (cardCondica) cardCondica.style.display = (user.nume === 'KOGALNICEANU') ? '' : 'none';
+  actualizeazaCardCondica();
   await Promise.all([incarcaIstoric(), incarcaAngajati(), incarcaDispozitiiTeren()]);
+}
+
+// Decide vizibilitatea cardului de condica:
+//  - User magazin = KOGALNICEANU: vizibil intotdeauna
+//  - EUGEN admin: vizibil doar cand dropdown-ul are KOGALNICEANU selectat
+//  - Restul: ascuns
+function actualizeazaCardCondica() {
+  const cardCondica = document.getElementById('card-condica');
+  if (!cardCondica || !currentUser) return;
+  let vizibil = false;
+  if (currentUser.nume === 'KOGALNICEANU') {
+    vizibil = true;
+  } else if (currentUser.nume === 'EUGEN') {
+    const sel = document.getElementById('f-magazin');
+    vizibil = sel && sel.value === 'KOGALNICEANU';
+  }
+  cardCondica.style.display = vizibil ? '' : 'none';
 }
 
 function logout() {
@@ -493,6 +509,8 @@ function onMagazinChange() {
     if (typeof incarcaIstoric === 'function') incarcaIstoric();
     if (typeof incarcaDispozitiiTeren === 'function') incarcaDispozitiiTeren();
   }
+  // Reactualizez vizibilitatea cardului de condica (apare doar cand magazinul e KOGALNICEANU)
+  if (typeof actualizeazaCardCondica === 'function') actualizeazaCardCondica();
   if (!mag) { gridZone.style.display = 'none'; document.getElementById('btn-submit').disabled = true; return; }
 
   const e2 = MAGAZINE_2_CASE.includes(mag);
