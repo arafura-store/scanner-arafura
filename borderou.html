@@ -640,6 +640,12 @@ function recalculeaza() {
 }
 
 async function trimiteBorderou() {
+  // Verificare sesiune EXPIRATA — fara aceasta, currentUser.nume arunca TypeError silent
+  if (!currentUser || !currentUser.nume) {
+    showToast('Sesiunea a expirat — re-loghează-te', 'err');
+    setTimeout(() => { try { logout(); } catch {} }, 1500);
+    return;
+  }
   const data = document.getElementById('f-data').value;
   const magazin = document.getElementById('f-magazin').value;
   if (!data || !magazin) { showToast('Completează data și magazinul', 'err'); return; }
