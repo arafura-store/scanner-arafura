@@ -229,6 +229,18 @@
 <!-- ─── MAIN ─── -->
 <div id="screen-main" class="main" style="display:none;">
 
+  <!-- ADMIN: dropdown context magazin (vizibil doar pentru EUGEN/LIVIA/ELA) -->
+  <div class="card" id="card-admin-context" style="display:none; border-left:4px solid #fbbf24;">
+    <h2 style="color:#92400e; font-size:14px; text-transform:uppercase; letter-spacing:.4px;">⚙️ ADMIN — Context magazin</h2>
+    <p style="font-size:12px; color:var(--sub); margin-bottom:10px;">Alege magazinul pentru care vezi/creezi dispoziții (acționezi în numele lui).</p>
+    <select id="admin-context-magazin" onchange="onAdminContextChange()"
+            style="width:100%; padding:12px; font-size:15px; border:2px solid #fbbf24; border-radius:10px; background:#fffbeb; color:#92400e; font-weight:700;">
+      <option value="">— Alege magazinul —</option>
+      <option value="POPORULUI">POPORULUI</option>
+      <option value="CUMPANA">CUMPĂNA</option>
+    </select>
+  </div>
+
   <!-- PONTAJ -->
   <div class="card">
     <h2 class="pontaj">👋 Pontaj angajat</h2>
@@ -296,6 +308,7 @@ const HEADERS = { 'apikey': window.SUPABASE_KEY, 'Authorization': `Bearer ${wind
 const API = window.SUPABASE_URL + '/rest/v1';
 
 const MAGAZINE_PERMISE = ['POPORULUI', 'CUMPANA'];
+const ADMIN_PERMISI = ['EUGEN', 'LIVIA', 'ELA']; // pot intra pentru testare/control, aleg context din dropdown
 
 // ──────────────────────────────────────────────────────────
 // SESSION (8h localStorage)
@@ -316,6 +329,19 @@ function loadSession() {
 function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
 
 let currentUser = null;
+let contextMagazin = ''; // magazinul activ — pentru user normal = currentUser.nume; pentru admin = dropdown selectat
+
+// Returneaza magazinul efectiv folosit pentru queries/inserts
+function getMagazinActiv() {
+  if (!currentUser) return '';
+  if (ADMIN_PERMISI.includes(currentUser.nume)) return contextMagazin;
+  return currentUser.nume;
+}
+
+function onAdminContextChange() {
+  contextMagazin = document.getElementById('admin-context-magazin').value;
+  incarcaDispozitii();
+}
 
 // ──────────────────────────────────────────────────────────
 // UTIL
@@ -361,8 +387,9 @@ async function onLoginPin() {
       return;
     }
     const user = data[0];
-    if (!MAGAZINE_PERMISE.includes(user.nume)) {
-      showToast('Această pagină e doar pentru POPORULUI și CUMPĂNA', 'err');
+    const acces = MAGAZINE_PERMISE.includes(user.nume) || ADMIN_PERMISI.includes(user.nume);
+    if (!acces) {
+      showToast('Acces interzis pentru acest user', 'err');
       document.getElementById('login-pin').value = '';
       return;
     }
@@ -380,6 +407,16 @@ async function completeLogin(user) {
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-main').style.display = '';
   document.getElementById('login-pin').value = '';
+  // Pentru admin: afiseaza dropdown context magazin
+  const cardCtx = document.getElementById('card-admin-context');
+  if (ADMIN_PERMISI.includes(user.nume)) {
+    cardCtx.style.display = '';
+    contextMagazin = '';
+    document.getElementById('admin-context-magazin').value = '';
+  } else {
+    cardCtx.style.display = 'none';
+    contextMagazin = user.nume; // user de magazin = context fix
+  }
   await incarcaDispozitii();
 }
 
@@ -404,8 +441,10 @@ function logout() {
 // ──────────────────────────────────────────────────────────
 function deschideDispForm() {
   if (!currentUser) return;
+  const mag = getMagazinActiv();
+  if (!mag) { showToast('Alege întâi magazinul (sus)', 'err'); return; }
   document.getElementById('d-tip').value = '';
-  document.getElementById('d-magazin').value = currentUser.nume;
+  document.getElementById('d-magazin').value = mag;
   document.getElementById('d-suma').value = '';
   document.getElementById('d-obs').value = '';
   document.getElementById('modal-disp').classList.add('visible');
@@ -421,6 +460,8 @@ async function salveazaDisp() {
     setTimeout(() => { try { logout(); } catch {} }, 1500);
     return;
   }
+  const mag = getMagazinActiv();
+  if (!mag) { showToast('Alege întâi magazinul (sus)', 'err'); return; }
   const tip = document.getElementById('d-tip').value;
   const suma = parseFloat(document.getElementById('d-suma').value) || 0;
   const obs = document.getElementById('d-obs').value.trim();
@@ -430,13 +471,13 @@ async function salveazaDisp() {
 
   const isIntrare = tip === 'DP AMANET';
 
-  // Verifică duplicate (PENDING TEREN deja deschis pe acest amanet de acest user)
+  // Verifică duplicate (PENDING TEREN deja deschis pe acest amanet)
   try {
-    const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN%')}&beneficiar=eq.${encodeURIComponent(currentUser.nume)}&utilizator=eq.${encodeURIComponent(currentUser.nume)}&select=id,completat_la`, { headers: HEADERS });
+    const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN%')}&beneficiar=eq.${encodeURIComponent(mag)}&utilizator=eq.${encodeURIComponent(mag)}&select=id,completat_la`, { headers: HEADERS });
     const existing = await resp.json();
     if (Array.isArray(existing) && existing.length > 0) {
       const cand = existing[0].completat_la ? fmtDataTime(existing[0].completat_la) : '?';
-      const proceed = confirm(`⚠ Există deja ${tip} deschis pentru ${currentUser.nume} (din ${cand}).\n\nVrei să creezi încă unul?\n\n[OK] = creez nou\n[Cancel] = mă întorc`);
+      const proceed = confirm(`⚠ Există deja ${tip} deschis pentru ${mag} (din ${cand}).\n\nVrei să creezi încă unul?\n\n[OK] = creez nou\n[Cancel] = mă întorc`);
       if (!proceed) return;
     }
   } catch {}
@@ -448,12 +489,12 @@ async function salveazaDisp() {
       body: JSON.stringify({
         data: todayISO(),
         tip: `${tip} (PENDING TEREN)`,
-        beneficiar: currentUser.nume,
+        beneficiar: mag,
         firma: 'PERFECTA INVEST',
         intrare: isIntrare ? suma : 0,
         iesire: isIntrare ? 0 : suma,
         observatii: obs || null,
-        utilizator: currentUser.nume,
+        utilizator: mag, // dispozitia e atribuita magazinului, chiar daca creata de admin
         completat_la: new Date().toISOString()
       })
     });
@@ -469,9 +510,14 @@ async function salveazaDisp() {
 async function incarcaDispozitii() {
   if (!currentUser) return;
   const container = document.getElementById('lista-dispozitii');
+  const mag = getMagazinActiv();
+  if (!mag) {
+    container.innerHTML = '<div class="empty-state">Alege un magazin sus pentru a vedea dispozițiile lui</div>';
+    return;
+  }
   try {
-    // Doar dispozitiile acestui magazin (utilizator=magazin curent)
-    const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN*&utilizator=eq.${encodeURIComponent(currentUser.nume)}&order=completat_la.desc`, { headers: HEADERS });
+    // Doar dispozitiile magazinului activ (utilizator=mag)
+    const resp = await fetch(`${API}/caiet?tip=like.*(PENDING%20TEREN*&utilizator=eq.${encodeURIComponent(mag)}&order=completat_la.desc`, { headers: HEADERS });
     const data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
       container.innerHTML = '<div class="empty-state">Nicio dispoziție deschisă</div>';
