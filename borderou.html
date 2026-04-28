@@ -1388,6 +1388,17 @@ function checkDeviceCode(event) {
     setTimeout(() => document.getElementById('device-code').focus(), 100);
     return;
   }
+  // AUTO-LOGIN per device: daca tableta/PC-ul e asociat cu un magazin (din scanner setup),
+  // intra direct ca acel magazin — fara PIN. Pontajul ramane separat (cu PIN angajat).
+  // Asta previne situatia: fata de la Marvimex tasteaza din greseala PIN Medgidia
+  // si actioneaza pe borderoul altui magazin.
+  const magazinDevice = localStorage.getItem('arafura_magazin');
+  if (magazinDevice && MAGAZINE.includes(magazinDevice)) {
+    const userDevice = { id: null, nume: magazinDevice };
+    saveSession(userDevice);
+    completeLogin(userDevice);
+    return;
+  }
   const saved = loadSession();
   if (saved) completeLogin(saved);
   else {
