@@ -1250,7 +1250,7 @@ async function loadMagazine() {
     let all = [];
     let off = 0;
     while (true) {
-      const rr = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const rr = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&order=id.asc&limit=1000&offset=${off}`, { headers: HEADERS });
       const rows = await rr.json();
       if (!Array.isArray(rows) || !rows.length) break;
       all = all.concat(rows);
@@ -1374,6 +1374,10 @@ const PARTENER_MAP = {
   'BABADAG':   ['Babadag'],
   'BROTACEI':  ['Brotacei'],
   'SHOWROOM':  ['Showroom'],
+  // Locatii cu nume tehnic ("LOCATIE IMPLICITA MAGAZIN XXX") — partenerii sunt "Magazin Xxx"
+  // Patternul e specific (cu prefixul "Magazin") ca sa evite false positive
+  'LOCATIE IMPLICITA MAGAZIN SERVICII':     ['Magazin Servicii'],
+  'LOCATIE IMPLICITA MAGAZIN KOGALNICEANU': ['Magazin Kogalniceanu'],
 };
 
 // ── LIPSURI (sales-driven) ──
@@ -1396,7 +1400,7 @@ async function loadLipsuri() {
     let sales = [];
     let salesOff = 0;
     while (true) {
-      let salesUrl = `${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data,partener&order=cod_art.asc&limit=1000&offset=${salesOff}`;
+      let salesUrl = `${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,data,partener&order=cod_art.asc,id.asc&limit=1000&offset=${salesOff}`;
       if (loc && PARTENER_MAP[loc]) {
         salesUrl += `&partener=ilike.*${encodeURIComponent(PARTENER_MAP[loc][0])}*`;
       }
@@ -1509,7 +1513,7 @@ async function loadStagnat() {
     let stoc = [];
     let offStoc = 0;
     while (true) {
-      let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&valoare_stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&order=valoare_stoc.desc&limit=1000&offset=${offStoc}`;
+      let url = `${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&valoare_stoc=gt.0&select=cod_art,locatie,stoc,valoare_stoc&order=valoare_stoc.desc,id.asc&limit=1000&offset=${offStoc}`;
       if (loc) url += `&locatie=eq.${encodeURIComponent(loc)}`;
       const r = await fetch(url, { headers: HEADERS });
       const rows = await r.json();
@@ -2308,7 +2312,7 @@ async function loadTransferuri() {
     let stoc = [];
     let off = 0;
     while (true) {
-      const r = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&select=cod_art,locatie,stoc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const r = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0&select=cod_art,locatie,stoc&order=id.asc&limit=1000&offset=${off}`, { headers: HEADERS });
       const rows = await r.json();
       if (!Array.isArray(rows) || !rows.length) break;
       stoc = stoc.concat(rows);
@@ -2329,7 +2333,7 @@ async function loadTransferuri() {
     let sales = [];
     let salesOff = 0;
     while (true) {
-      const sr = await fetch(`${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,partener&order=cod_art.asc&limit=1000&offset=${salesOff}`, { headers: HEADERS });
+      const sr = await fetch(`${API}/miscari?data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,partener&order=cod_art.asc,id.asc&limit=1000&offset=${salesOff}`, { headers: HEADERS });
       const rows = await sr.json();
       if (!Array.isArray(rows) || !rows.length) break;
       sales = sales.concat(rows);
@@ -2948,7 +2952,7 @@ async function calculeazaDistributie() {
     let sales = [];
     let off = 0;
     while (true) {
-      const r = await fetch(`${API}/miscari?cod_art=in.${codFilter}&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,partener&limit=1000&offset=${off}`, { headers: HEADERS });
+      const r = await fetch(`${API}/miscari?cod_art=in.${codFilter}&data=gte.${sinceDate}&tip_doc=in.("Bon Fiscal","Factura de Vanzare")&iesiri=gt.0&select=cod_art,iesiri,partener&order=id.asc&limit=1000&offset=${off}`, { headers: HEADERS });
       const d = await r.json();
       if (!Array.isArray(d) || !d.length) break;
       sales = sales.concat(d); off += 1000;
@@ -2978,7 +2982,7 @@ async function calculeazaDistributie() {
     let stocs = [];
     off = 0;
     while (true) {
-      const r = await fetch(`${API}/stocuri_snapshot?cod_art=in.${codFilter}&data_snapshot=eq.${dataSnap}&select=cod_art,locatie,stoc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const r = await fetch(`${API}/stocuri_snapshot?cod_art=in.${codFilter}&data_snapshot=eq.${dataSnap}&select=cod_art,locatie,stoc&order=id.asc&limit=1000&offset=${off}`, { headers: HEADERS });
       const d = await r.json();
       if (!Array.isArray(d) || !d.length) break;
       stocs = stocs.concat(d); off += 1000;
@@ -3241,7 +3245,7 @@ async function loadNegativ() {
     let neg = [];
     let off = 0;
     while (true) {
-      const r = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=lt.0&select=cod_art,locatie,stoc,cost,valoare_stoc&order=stoc.asc&limit=1000&offset=${off}`, { headers: HEADERS });
+      const r = await fetch(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=lt.0&select=cod_art,locatie,stoc,cost,valoare_stoc&order=stoc.asc,id.asc&limit=1000&offset=${off}`, { headers: HEADERS });
       const rows = await r.json();
       if (!Array.isArray(rows) || !rows.length) break;
       neg = neg.concat(rows);
