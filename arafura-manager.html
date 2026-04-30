@@ -274,7 +274,7 @@
       </div>
       <div class="actions">
         <button class="btn">📥 Export</button>
-        <button class="btn primary">🔄 Refresh</button>
+        <button class="btn primary" onclick="loadDashboard()">🔄 Refresh</button>
       </div>
     </div>
 
@@ -776,6 +776,12 @@ function enterApp(user) {
   // User cu acces_erp vede tot
   document.querySelectorAll('.menu-item').forEach(item => item.style.display = '');
   loadDashboard();
+  // Auto-refresh dashboard la fiecare 60s daca e pagina activa
+  setInterval(() => {
+    if (document.getElementById('page-dashboard')?.classList.contains('active')) {
+      loadDashboard();
+    }
+  }, 60000);
   if (new URLSearchParams(window.location.search).has('dist_data') ||
       window.location.hash === '#distributie') {
     setTimeout(() => document.querySelector('[data-page="distributie"]')?.click(), 300);
