@@ -829,9 +829,9 @@ function fmtMoney(n) {
   if (n == null) return '—';
   return Number(n).toLocaleString('ro-RO', {minimumFractionDigits:0, maximumFractionDigits:0});
 }
-async function getCount(url) {
+async function getCount(url, mode = 'estimated') {
   try {
-    const r = await fetch(url, { headers: { ...HEADERS, 'Prefer': 'count=exact', 'Range': '0-0' } });
+    const r = await fetch(url, { headers: { ...HEADERS, 'Prefer': `count=${mode}`, 'Range': '0-0' } });
     const cr = r.headers.get('Content-Range');
     if (cr) return parseInt(cr.split('/')[1]) || 0;
   } catch {}
