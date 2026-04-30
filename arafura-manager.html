@@ -2189,8 +2189,16 @@ function renderVanzari() {
   if (!_vanzariData.length) return;
   const sortBy = document.getElementById('van-sort').value || 'cant';
   const rotMode = document.getElementById('van-rotunjire').value || '';
+  const filterQ = (window._vanFilter || '').trim().toLowerCase();
+  // Filtreaza dupa quick-search daca e set
+  const filtered = filterQ
+    ? _vanzariData.filter(t =>
+        (t.cod_art || '').toLowerCase().includes(filterQ) ||
+        (t.nume_art || '').toLowerCase().includes(filterQ) ||
+        (t.furnizor || '').toLowerCase().includes(filterQ))
+    : _vanzariData;
   // Recalc cu rotunjire dacă e cazul
-  const data = _vanzariData.map(t => {
+  const data = filtered.map(t => {
     const cant = parseFloat(t.cantitate_vanduta) || 0;
     const pretUnit = parseFloat(t.pret_unit) || 0;
     const costUnit = parseFloat(t.cost_unit) || 0;
@@ -3521,6 +3529,51 @@ document.querySelectorAll('.menu-item').forEach(item => {
 
 // Auto-focus PIN
 setTimeout(() => document.getElementById('login-pin').focus(), 100);
+
+// ── QUICK SEARCH (header) ──
+// Comportament:
+//   - Pe pagina Vânzări → filtreaza local tabelul (cod / nume / furnizor)
+//   - Pe alte pagini → navigheaza la Căutare + ruleaza search
+let _qsTimer = null;
+const qsInput = document.getElementById('quick-search');
+if (qsInput) {
+  qsInput.addEventListener('input', e => {
+    clearTimeout(_qsTimer);
+    _qsTimer = setTimeout(() => onQuickSearch(e.target.value, false), 250);
+  });
+  qsInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      clearTimeout(_qsTimer);
+      onQuickSearch(e.target.value, true);
+      e.preventDefault();
+    }
+    if (e.key === 'Escape') {
+      e.target.value = '';
+      onQuickSearch('', false);
+    }
+  });
+}
+
+function onQuickSearch(q, force) {
+  q = (q || '').trim();
+  const activePage = document.querySelector('.page.active')?.id || '';
+  // Pe Vânzări → filtru local (chiar si gol = arata tot)
+  if (activePage === 'page-vanzari') {
+    window._vanFilter = q;
+    if (window._vanzariData && window._vanzariData.length) renderVanzari();
+    return;
+  }
+  // Alte pagini: navigheaza la Cautare daca avem >=3 caractere sau Enter
+  if (q.length < 3 && !force) return;
+  if (!q) return;
+  const cautareItem = document.querySelector('[data-page=cautare]');
+  if (cautareItem) cautareItem.click();
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.value = q;
+    if (typeof doSearch === 'function') doSearch();
+  }
+}
 </script>
 
 </body>
