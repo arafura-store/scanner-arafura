@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<title>Perfecta Invest IFN — Dashboard Central</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1F3864; --blue:#2E75B6; --gold:#FFD700; --gold-d:#856404;
+  --red:#C00000; --green:#00B050; --orange:#FF6600;
+  --bg:#f0f2f5; --border:#e2e8f0; --sub:#64748b;
+}
+body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:14px;line-height:1.4}
+.top{background:var(--navy);color:#fff;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,0.1)}
+.top h1{font-size:16px}
+.top .right{display:flex;gap:14px;align-items:center;font-size:12px}
+.refresh{background:var(--gold);color:var(--navy);border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:12px}
+.refresh:hover{opacity:0.85}
+.container{max-width:1400px;margin:18px auto;padding:0 16px}
+/* LOGIN */
+.login{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:#fff;border-radius:12px;padding:36px;width:340px;box-shadow:0 4px 20px rgba(0,0,0,0.1);text-align:center}
+.login-hdr{background:var(--navy);color:#fff;border-radius:8px;padding:14px;margin-bottom:18px}
+.login input{width:100%;padding:11px;border:1px solid var(--border);border-radius:6px;font-size:14px;margin:6px 0}
+.login button{width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer}
+.login .err{color:var(--red);font-size:12px;margin-top:6px;display:none}
+/* SECTIONS */
+.section{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:16px;overflow:hidden}
+.section h2{background:var(--navy);color:#fff;padding:10px 16px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.section h2 .meta{font-weight:400;font-size:11px;opacity:0.8}
+.section .body{padding:16px}
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi{background:#fff;border-radius:10px;padding:14px 16px;border-left:5px solid var(--blue);box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+.kpi .lbl{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:0.04em}
+.kpi .val{font-size:24px;font-weight:800;color:var(--navy);margin:4px 0}
+.kpi .sub{font-size:11px;color:var(--sub)}
+.kpi.gold{border-left-color:var(--gold)}.kpi.gold .val{color:var(--gold-d)}
+.kpi.red{border-left-color:var(--red)}.kpi.red .val{color:var(--red)}
+.kpi.green{border-left-color:var(--green)}.kpi.green .val{color:var(--green)}
+.var-up{color:var(--green);font-weight:700}.var-down{color:var(--red);font-weight:700}
+/* PV MATRIX */
+.matrix{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+.matrix th{background:#f1f5f9;padding:8px;text-align:center;font-weight:700;color:var(--sub)}
+.matrix td{padding:6px 4px;text-align:center;border:1px solid var(--border)}
+.matrix td.mag{font-weight:700;text-align:left;color:var(--navy);background:#f8fafc;padding-left:10px}
+.cell-ok{background:#dcfce7;color:#166534;font-weight:700}
+.cell-no{background:#fee2e2;color:#991b1b;font-weight:700}
+.cell-cnt{font-size:10px;color:var(--sub);font-weight:400}
+/* TABLES */
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{background:var(--navy);color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--border)}
+.tbl tr:hover td{background:#f8fafc}
+.badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase}
+.b-red{background:#fee2e2;color:#991b1b}.b-orange{background:#fed7aa;color:#9a3412}
+.b-green{background:#dcfce7;color:#166534}.b-blue{background:#dbeafe;color:#1e40af}
+.b-gold{background:#fef3c7;color:#92400e}
+/* CHARTS */
+.chart-wrap{height:280px;position:relative}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+/* PULSE */
+.pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse 1.4s infinite;margin-right:6px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.alert-pulse{animation:apulse 1.5s infinite}
+@keyframes apulse{0%,100%{box-shadow:0 0 0 0 rgba(192,0,0,0.5)}50%{box-shadow:0 0 0 8px rgba(192,0,0,0)}}
+/* CALC POSITIONS */
+.med1{color:#FFD700;font-size:18px}
+.med2{color:#C0C0C0;font-size:16px}
+.med3{color:#CD7F32;font-size:15px}
+.empty-msg{padding:30px;text-align:center;color:var(--sub);font-size:13px}
+.spinner{padding:40px;text-align:center;color:var(--navy);font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login" id="login-screen">
+  <div class="login-box">
+    <div class="login-hdr">
+      <h2 style="font-size:16px">Perfecta Invest IFN</h2>
+      <div style="font-size:11px;opacity:0.85;margin-top:3px">Dashboard Central — Acces Restrictionat</div>
+    </div>
+    <div style="text-align:left">
+      <label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">Parola Admin</label>
+      <input type="password" id="pin" placeholder="Introduce parola" onkeypress="if(event.key==='Enter')login()">
+    </div>
+    <div class="err" id="err">Parola incorecta!</div>
+    <button onclick="login()">Intra in Dashboard</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dash" style="display:none">
+  <div class="top">
+    <h1>💎 Perfecta Invest IFN — Dashboard Central</h1>
+    <div class="right">
+      <span><span class="pulse"></span><span id="last-upd">Live</span></span>
+      <button class="refresh" onclick="loadAll()">🔄 Refresh</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="spinner" id="spinner">⏳ Se incarca datele din Supabase...</div>
+
+    <div id="content" style="display:none">
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- SECTION 1: PULSE BAR — KPI + Status PV matrix      -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="kpi-grid" style="margin-bottom:16px">
+        <div class="kpi">
+          <div class="lbl">Total împrumutat</div>
+          <div class="val" id="k-suma">—</div>
+          <div class="sub">LEI activi · <span id="k-contracte">—</span> contracte</div>
+        </div>
+        <div class="kpi red">
+          <div class="lbl">Risc URGENT</div>
+          <div class="val" id="k-critice">—</div>
+          <div class="sub" id="k-critice-val">— LEI la risc</div>
+        </div>
+        <div class="kpi gold">
+          <div class="lbl">Cotație aur 24K azi</div>
+          <div class="val" id="k-aur">—</div>
+          <div class="sub" id="k-aur-var">RON / gram</div>
+        </div>
+        <div class="kpi green">
+          <div class="lbl">Comision mediu firmă</div>
+          <div class="val" id="k-comision">—</div>
+          <div class="sub">% pe contract</div>
+        </div>
+      </div>
+
+      <!-- PV MATRIX -->
+      <div class="section">
+        <h2>📋 Status PV-uri — ultimele 3 luni
+          <span class="meta" id="pv-meta"></span>
+        </h2>
+        <div class="body">
+          <table class="matrix" id="pv-matrix"></table>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- SECTION 2: ATENTIE URGENTA                          -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="grid-2">
+        <!-- Critice -->
+        <div class="section">
+          <h2>🚨 Top 10 contracte CRITICE
+            <span class="meta" id="critice-meta"></span>
+          </h2>
+          <div class="body" style="padding:0">
+            <div id="critice-list"></div>
+          </div>
+        </div>
+
+        <!-- PV lipsa luna asta -->
+        <div class="section">
+          <h2>⚠️ Magazine fără PV luna aceasta
+            <span class="meta" id="lipsa-meta"></span>
+          </h2>
+          <div class="body" style="padding:0">
+            <div id="lipsa-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Verificari recente -->
+      <div class="section">
+        <h2>🔍 Verificari fizice — diferențe & lipsuri</h2>
+        <div class="body" style="padding:0">
+          <div id="verif-list"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- SECTION 3: ANALIZA & TREND                          -->
+      <!-- ═══════════════════════════════════════════════════ -->
+
+      <!-- Clasament -->
+      <div class="section">
+        <h2>🏆 Clasament magazine — situație curentă</h2>
+        <div class="body" style="padding:0">
+          <table class="tbl" id="clasament">
+            <thead><tr>
+              <th>#</th><th>Magazin</th>
+              <th style="text-align:right">Contracte</th>
+              <th style="text-align:right">Suma totală (LEI)</th>
+              <th style="text-align:right">Comision %</th>
+              <th style="text-align:right">Critice</th>
+              <th style="text-align:right">Pondere</th>
+            </tr></thead>
+            <tbody id="cls-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Grafice -->
+      <div class="grid-2">
+        <div class="section">
+          <h2>📈 Evoluție 12 luni — sumă totală firmă</h2>
+          <div class="body"><div class="chart-wrap"><canvas id="ch-suma"></canvas></div></div>
+        </div>
+        <div class="section">
+          <h2>🪙 Cotație aur 24K — ultimele 30 zile</h2>
+          <div class="body"><div class="chart-wrap"><canvas id="ch-aur"></canvas></div></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="section">
+          <h2>📊 Contracte critice per lună</h2>
+          <div class="body"><div class="chart-wrap"><canvas id="ch-critice"></canvas></div></div>
+        </div>
+        <div class="section">
+          <h2>🔍 Verificări fizice — rată conformitate</h2>
+          <div class="body" style="padding:24px;text-align:center">
+            <div style="font-size:11px;color:var(--sub);text-transform:uppercase;font-weight:700">Total verificate</div>
+            <div style="font-size:42px;font-weight:800;color:var(--navy);margin:10px 0" id="v-total">—</div>
+            <div class="grid-3" style="margin-top:14px">
+              <div style="background:#dcfce7;border-radius:8px;padding:10px">
+                <div style="font-size:10px;color:#166534;font-weight:700">OK</div>
+                <div style="font-size:22px;font-weight:800;color:#166534" id="v-ok">—</div>
+              </div>
+              <div style="background:#fed7aa;border-radius:8px;padding:10px">
+                <div style="font-size:10px;color:#9a3412;font-weight:700">DIFERENȚĂ</div>
+                <div style="font-size:22px;font-weight:800;color:#9a3412" id="v-dif">—</div>
+              </div>
+              <div style="background:#fee2e2;border-radius:8px;padding:10px">
+                <div style="font-size:10px;color:#991b1b;font-weight:700">LIPSĂ</div>
+                <div style="font-size:22px;font-weight:800;color:#991b1b" id="v-lipsa">—</div>
+              </div>
+            </div>
+            <div style="background:#f1f5f9;border-radius:8px;padding:12px;margin-top:14px">
+              <div style="font-size:11px;color:var(--sub);font-weight:700">Rată conformitate</div>
+              <div style="font-size:30px;font-weight:800;color:var(--green)" id="v-rata">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = 'https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1';
+const SUPA_KEY = 'sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw';
+const HEADERS = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY };
+const PAROLA = 'Perfecta2026!';
+
+const MAGAZINE = ['Babadag','Tomis 3','Poarta 6','Poporului','Kogalniceanu',
+                  'Marvimex','Navodari','Medgidia','Cumpana','Lumina'];
+
+// ── LOGIN ──
+function login() {
+  const v = document.getElementById('pin').value;
+  if (v === PAROLA) {
+    sessionStorage.setItem('pf_dash', '1');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dash').style.display = 'block';
+    loadAll();
+  } else {
+    document.getElementById('err').style.display = 'block';
+    document.getElementById('pin').value = '';
+  }
+}
+if (sessionStorage.getItem('pf_dash') === '1') {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('dash').style.display = 'block';
+  setTimeout(loadAll, 100);
+}
+
+// ── HELPERS ──
+const fmt = (n, d=2) => (n||0).toLocaleString('ro-RO', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmt0 = n => (Math.round(n||0)).toLocaleString('ro-RO');
+const escH = s => String(s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+async function fetchAll(table, query='') {
+  // Fetch with pagination (PostgREST default 1000)
+  const all = []; let off = 0;
+  while (true) {
+    const url = `${SUPA_URL}/${table}?${query}&limit=1000&offset=${off}`;
+    const r = await fetch(url, { headers: HEADERS });
+    if (!r.ok) { console.error(table, await r.text()); break; }
+    const arr = await r.json();
+    if (!arr.length) break;
+    all.push(...arr);
+    if (arr.length < 1000) break;
+    off += 1000;
+    if (off > 50000) break;
+  }
+  return all;
+}
+
+let _charts = {};
+
+// ── MAIN LOAD ──
+async function loadAll() {
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('content').style.display = 'none';
+  document.getElementById('last-upd').textContent = 'Se actualizeaza...';
+
+  try {
+    const [contracte, pvuri, verif, cotatii, istoric] = await Promise.all([
+      fetchAll('contracte_amanet', 'select=*'),
+      fetchAll('pv_executare', 'select=nr_pv,magazin,data_doc,perioada'),
+      fetchAll('verificari_amanet', 'select=*&order=data_verificare.desc'),
+      fetchAll('cotatii_aur', 'select=*&order=data_snapshot.desc.nullslast,data_ora.desc&limit=60'),
+      fetchAll('istoric_amanet', 'select=*&order=luna.asc')
+    ]);
+
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('last-upd').textContent = 'Actualizat ' + new Date().toLocaleTimeString('ro-RO');
+
+    renderKPI(contracte, cotatii);
+    renderPVMatrix(pvuri);
+    renderCritice(contracte);
+    renderLipsa(pvuri);
+    renderVerif(verif);
+    renderClasament(contracte);
+    renderGrafice(istoric, cotatii);
+    renderVerifSumar(verif);
+  } catch(e) {
+    document.getElementById('spinner').textContent = '❌ Eroare: ' + e.message;
+  }
+}
+
+// ── SECTION 1: KPIs ──
+function renderKPI(contracte, cotatii) {
+  const sumaTotala = contracte.reduce((a,c) => a + (parseFloat(c.suma_imprumutata)||0), 0);
+  const critice = contracte.filter(c => (c.status_alerta||'').toUpperCase().includes('CRITIC'));
+  const valCritice = critice.reduce((a,c) => a + (parseFloat(c.suma_imprumutata)||0), 0);
+
+  // Comision ponderat (sum suma×comision / sum suma)
+  let sumPonderat = 0, sumPondere = 0;
+  contracte.forEach(c => {
+    const s = parseFloat(c.suma_imprumutata)||0;
+    const com = parseFloat(c.procent_comision)||0;
+    if (s > 0) { sumPonderat += s * com; sumPondere += s; }
+  });
+  const comMed = sumPondere > 0 ? sumPonderat / sumPondere : 0;
+
+  document.getElementById('k-suma').textContent = fmt0(sumaTotala) + ' LEI';
+  document.getElementById('k-contracte').textContent = contracte.length.toLocaleString('ro-RO');
+  document.getElementById('k-critice').textContent = critice.length;
+  document.getElementById('k-critice-val').innerHTML = `<b style="color:var(--red)">${fmt0(valCritice)}</b> LEI la risc`;
+  document.getElementById('k-comision').textContent = fmt(comMed*100, 2) + '%';
+
+  // Cotatie aur azi
+  if (cotatii.length > 0) {
+    const azi = cotatii[0]; // most recent
+    const ieri = cotatii.find(c => c.data_snapshot !== azi.data_snapshot);
+    const pretAzi = parseFloat(azi.pret_24k)||0;
+    document.getElementById('k-aur').textContent = fmt(pretAzi, 2);
+    if (ieri) {
+      const pretIeri = parseFloat(ieri.pret_24k)||0;
+      const diff = pretAzi - pretIeri;
+      const pct = pretIeri > 0 ? (diff/pretIeri*100) : 0;
+      const cls = diff >= 0 ? 'var-up' : 'var-down';
+      const arrow = diff >= 0 ? '↑' : '↓';
+      document.getElementById('k-aur-var').innerHTML = `RON/g · <span class="${cls}">${arrow} ${fmt(Math.abs(diff),2)} RON (${fmt(Math.abs(pct),2)}%)</span> vs ${ieri.data_snapshot||ieri.data_ora||''}`;
+    }
+  }
+}
+
+// ── PV MATRIX ──
+function renderPVMatrix(pvuri) {
+  const azi = new Date();
+  const luniLst = [];
+  for (let i=2; i>=0; i--) {
+    const d = new Date(azi.getFullYear(), azi.getMonth()-i, 1);
+    luniLst.push({
+      key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
+      label: d.toLocaleDateString('ro-RO', {month:'short', year:'numeric'}),
+      year: d.getFullYear(), month: d.getMonth()
+    });
+  }
+
+  // Group by magazin × luna
+  const grup = {};
+  pvuri.forEach(p => {
+    if (!p.data_doc) return;
+    const d = new Date(p.data_doc);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    const k = p.magazin + '|' + key;
+    if (!grup[k]) grup[k] = new Set();
+    grup[k].add(p.nr_pv);
+  });
+
+  let html = '<thead><tr><th>Magazin</th>';
+  luniLst.forEach(l => html += `<th>${l.label}</th>`);
+  html += '</tr></thead><tbody>';
+
+  let totalLipsa = 0;
+  MAGAZINE.forEach(mag => {
+    html += `<tr><td class="mag">${mag}</td>`;
+    luniLst.forEach(l => {
+      const k = mag + '|' + l.key;
+      const set = grup[k];
+      if (set && set.size > 0) {
+        html += `<td class="cell-ok">✓<div class="cell-cnt">${set.size} PV</div></td>`;
+      } else {
+        const isCurent = l === luniLst[luniLst.length-1];
+        if (isCurent) totalLipsa++;
+        html += `<td class="cell-no">${isCurent?'✗':'—'}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('pv-matrix').innerHTML = html;
+  document.getElementById('pv-meta').textContent =
+    pvuri.length === 0 ? 'niciun PV in sistem' : `${pvuri.length} obiecte PV total`;
+}
+
+// ── CRITICE ──
+function renderCritice(contracte) {
+  const critice = contracte.filter(c => (c.status_alerta||'').toUpperCase().includes('CRITIC'))
+    .sort((a,b) => (parseFloat(b.suma_imprumutata)||0) - (parseFloat(a.suma_imprumutata)||0))
+    .slice(0,10);
+  const cont = document.getElementById('critice-list');
+  document.getElementById('critice-meta').textContent = critice.length + ' critice' +
+    (contracte.filter(c => (c.status_alerta||'').toUpperCase().includes('CRITIC')).length > 10 ? ' (top 10)' : '');
+
+  if (critice.length === 0) {
+    cont.innerHTML = '<div class="empty-msg">✓ Niciun contract CRITIC. Felicitari!</div>';
+    return;
+  }
+  let html = '<table class="tbl"><thead><tr><th>Magazin</th><th>Client</th><th>Contract</th><th>Expirare</th><th style="text-align:right">Sumă (LEI)</th><th style="text-align:right">Zile</th></tr></thead><tbody>';
+  critice.forEach(c => {
+    const dt = c.data_expirarii ? new Date(c.data_expirarii).toLocaleDateString('ro-RO') : '—';
+    html += `<tr>
+      <td><b style="color:var(--navy)">${escH(c.magazin)}</b></td>
+      <td>${escH(c.client)}</td>
+      <td><span class="badge b-blue">${escH(c.nr_contract)}</span></td>
+      <td>${dt}</td>
+      <td style="text-align:right;font-weight:700;color:var(--red)">${fmt0(c.suma_imprumutata)}</td>
+      <td style="text-align:right"><span class="badge b-red alert-pulse">${c.zile_depasire}z</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+// ── LIPSA PV LUNA ASTA ──
+function renderLipsa(pvuri) {
+  const azi = new Date();
+  const lunaCurenta = azi.getFullYear() + '-' + String(azi.getMonth()+1).padStart(2,'0');
+  const trimisPV = new Set();
+  pvuri.forEach(p => {
+    if (!p.data_doc) return;
+    const d = new Date(p.data_doc);
+    const k = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    if (k === lunaCurenta) trimisPV.add(p.magazin);
+  });
+  const lipsa = MAGAZINE.filter(m => !trimisPV.has(m));
+  const cont = document.getElementById('lipsa-list');
+  document.getElementById('lipsa-meta').textContent = lipsa.length + '/' + MAGAZINE.length;
+
+  if (lipsa.length === 0) {
+    cont.innerHTML = '<div class="empty-msg" style="background:#dcfce7;color:#166534;font-weight:700;margin:14px;border-radius:8px">✓ Toate magazinele au trimis PV luna aceasta!</div>';
+    return;
+  }
+  let html = '<table class="tbl"><thead><tr><th>Magazin</th><th>Status</th></tr></thead><tbody>';
+  lipsa.forEach(m => {
+    html += `<tr>
+      <td><b style="color:var(--navy)">${m}</b></td>
+      <td><span class="badge b-red alert-pulse">⚠ NU A TRIMIS PV</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+// ── VERIFICARI ──
+function renderVerif(verif) {
+  const probleme = verif.filter(v => v.status === 'LIPSA' || v.status === 'DIFERENTA').slice(0, 15);
+  const cont = document.getElementById('verif-list');
+  if (probleme.length === 0) {
+    cont.innerHTML = '<div class="empty-msg">✓ Nicio diferenta sau lipsa la verificari recente</div>';
+    return;
+  }
+  let html = '<table class="tbl"><thead><tr><th>Data</th><th>Magazin</th><th>Verificator</th><th>Contract</th><th>Obiect</th><th style="text-align:right">Dif. GR</th><th style="text-align:right">Dif. LEI</th><th>Status</th></tr></thead><tbody>';
+  probleme.forEach(v => {
+    const dt = v.data_verificare ? new Date(v.data_verificare).toLocaleDateString('ro-RO') : '—';
+    const cls = v.status === 'LIPSA' ? 'b-red alert-pulse' : 'b-orange';
+    html += `<tr>
+      <td>${dt}</td>
+      <td><b>${escH(v.magazin)}</b></td>
+      <td>${escH(v.nume_verificator)}</td>
+      <td><span class="badge b-blue">${escH(v.nr_contract)}</span></td>
+      <td>${escH(v.denumire_obiect)}</td>
+      <td style="text-align:right;color:${Math.abs(v.diferenta_gr)>0.05?'var(--red)':'var(--sub)'};font-weight:700">${fmt(v.diferenta_gr,2)}</td>
+      <td style="text-align:right;color:${Math.abs(v.diferenta_lei)>0.5?'var(--red)':'var(--sub)'};font-weight:700">${fmt(v.diferenta_lei,2)}</td>
+      <td><span class="badge ${cls}">${v.status}</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+}
+
+// ── CLASAMENT ──
+function renderClasament(contracte) {
+  const perMag = {};
+  MAGAZINE.forEach(m => perMag[m] = {magazin:m, contracte:0, suma:0, comPond:0, sumPond:0, critice:0});
+  contracte.forEach(c => {
+    const mag = c.magazin;
+    if (!perMag[mag]) return;
+    perMag[mag].contracte++;
+    const s = parseFloat(c.suma_imprumutata)||0;
+    perMag[mag].suma += s;
+    if (s > 0) {
+      perMag[mag].comPond += s * (parseFloat(c.procent_comision)||0);
+      perMag[mag].sumPond += s;
+    }
+    if ((c.status_alerta||'').toUpperCase().includes('CRITIC')) perMag[mag].critice++;
+  });
+  const arr = Object.values(perMag).sort((a,b) => b.suma - a.suma);
+  const total = arr.reduce((a,r) => a + r.suma, 0);
+  const tbody = document.getElementById('cls-body');
+  tbody.innerHTML = arr.map((r,i) => {
+    const com = r.sumPond > 0 ? (r.comPond/r.sumPond)*100 : 0;
+    const pct = total > 0 ? (r.suma/total*100) : 0;
+    const med = i===0?'<span class="med1">🥇</span>':i===1?'<span class="med2">🥈</span>':i===2?'<span class="med3">🥉</span>':(i+1+'.');
+    return `<tr>
+      <td>${med}</td>
+      <td><b style="color:var(--navy)">${r.magazin}</b></td>
+      <td style="text-align:right"><span class="badge b-blue">${r.contracte}</span></td>
+      <td style="text-align:right;font-weight:700;color:var(--navy)">${fmt0(r.suma)}</td>
+      <td style="text-align:right;color:${com>=0.35?'var(--green)':'var(--orange)'};font-weight:700">${fmt(com,2)}%</td>
+      <td style="text-align:right">${r.critice>0?`<span class="badge b-red">${r.critice}</span>`:'<span style="color:var(--sub)">0</span>'}</td>
+      <td style="text-align:right">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+          <div style="background:#f1f5f9;border-radius:4px;width:80px;height:6px;overflow:hidden">
+            <div style="background:var(--blue);height:100%;width:${pct}%"></div>
+          </div>
+          <span style="font-size:11px;color:var(--sub);min-width:34px">${fmt(pct,1)}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── GRAFICE ──
+function renderGrafice(istoric, cotatii) {
+  // Total per luna (TOTAL row)
+  const totaluri = istoric.filter(i => i.magazin === 'TOTAL').sort((a,b) => a.luna.localeCompare(b.luna));
+  const labelsLuni = totaluri.map(i => {
+    const p = i.luna.split('-');
+    const luniRo = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
+    return luniRo[parseInt(p[1])-1] + ' ' + p[0];
+  });
+  const dataSuma = totaluri.map(i => parseFloat(i.suma_totala)||0);
+  const dataCritice = totaluri.map(i => parseInt(i.critice)||0);
+
+  const opts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {legend: {display: false}},
+    scales: {
+      x: {grid: {display: false}, ticks: {font: {size: 10}}},
+      y: {grid: {color: '#f1f5f9'}, ticks: {font: {size: 10}}}
+    }
+  };
+
+  if (_charts.suma) _charts.suma.destroy();
+  if (_charts.critice) _charts.critice.destroy();
+  if (_charts.aur) _charts.aur.destroy();
+
+  if (totaluri.length > 0) {
+    _charts.suma = new Chart(document.getElementById('ch-suma'), {
+      type: 'line',
+      data: {labels: labelsLuni, datasets: [{
+        data: dataSuma, borderColor: '#1F3864',
+        backgroundColor: 'rgba(31,56,100,0.1)', fill: true, tension: 0.3, pointRadius: 4
+      }]},
+      options: opts
+    });
+    _charts.critice = new Chart(document.getElementById('ch-critice'), {
+      type: 'bar',
+      data: {labels: labelsLuni, datasets: [{
+        data: dataCritice, backgroundColor: '#C00000', borderRadius: 4
+      }]},
+      options: opts
+    });
+  } else {
+    document.getElementById('ch-suma').parentElement.innerHTML = '<div class="empty-msg">Niciun snapshot lunar inca</div>';
+    document.getElementById('ch-critice').parentElement.innerHTML = '<div class="empty-msg">Niciun snapshot lunar inca</div>';
+  }
+
+  // Cotatie aur 30 zile
+  const cotat30 = cotatii
+    .filter(c => c.data_snapshot)
+    .sort((a,b) => (a.data_snapshot||a.data_ora||'').localeCompare(b.data_snapshot||b.data_ora||''))
+    .slice(-60);
+  if (cotat30.length > 0) {
+    _charts.aur = new Chart(document.getElementById('ch-aur'), {
+      type: 'line',
+      data: {
+        labels: cotat30.map(c => {
+          const d = c.data_snapshot ? new Date(c.data_snapshot) : null;
+          return d ? d.toLocaleDateString('ro-RO',{day:'2-digit',month:'short'}) + ' ' + (c.ora_snapshot||'') : c.data_ora;
+        }),
+        datasets: [{
+          data: cotat30.map(c => parseFloat(c.pret_24k)||0),
+          borderColor: '#FFD700', backgroundColor: 'rgba(255,215,0,0.15)',
+          fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+        }]
+      },
+      options: opts
+    });
+  } else {
+    document.getElementById('ch-aur').parentElement.innerHTML = '<div class="empty-msg">Nicio cotatie inregistrata</div>';
+  }
+}
+
+// ── VERIFICARI SUMAR ──
+function renderVerifSumar(verif) {
+  const total = verif.length;
+  const ok = verif.filter(v => v.status === 'OK').length;
+  const dif = verif.filter(v => v.status === 'DIFERENTA').length;
+  const lipsa = verif.filter(v => v.status === 'LIPSA').length;
+  const rata = total > 0 ? Math.round(ok/total*100) : 0;
+  document.getElementById('v-total').textContent = total;
+  document.getElementById('v-ok').textContent = ok;
+  document.getElementById('v-dif').textContent = dif;
+  document.getElementById('v-lipsa').textContent = lipsa;
+  document.getElementById('v-rata').textContent = rata + '%';
+}
+
+// Auto-refresh la 60s
+setInterval(() => { if (sessionStorage.getItem('pf_dash')==='1') loadAll(); }, 60000);
+</script>
+</body>
+</html>
