@@ -855,7 +855,7 @@ async function loadDashboard() {
       document.getElementById('d-snap-date').textContent = new Date(dataSnap).toLocaleDateString('ro-RO', {day:'2-digit', month:'short', year:'numeric'});
       // Fetch counts for that snapshot
       const [cnt, locCnt, valSum] = await Promise.all([
-        getCount(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0`),
+        getCount(`${API}/stocuri_snapshot?data_snapshot=eq.${dataSnap}&stoc=gt.0`, 'exact'),
         fetch(`${API}/stocuri_snapshot?select=locatie&data_snapshot=eq.${dataSnap}&stoc=gt.0`, { headers: HEADERS })
           .then(r=>r.json()).then(arr => new Set(arr.map(x=>x.locatie)).size),
         // Sum valoare_stoc — folosim aggregare PostgREST
@@ -878,7 +878,7 @@ async function loadDashboard() {
   loadUltimaActualizare();
 
   // 3. Furnizori
-  getCount(`${API}/furnizori?tip=eq.marfa&select=cod_partener`).then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
+  getCount(`${API}/furnizori?tip=eq.marfa&select=cod_partener`, 'exact').then(n => document.getElementById('d-furnizori').textContent = fmtNum(n));
 
   // 4. ETL logs — toate, cu filtre
   loadAllEtlLogs();
