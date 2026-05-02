@@ -130,7 +130,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
         <div class="kpi green">
           <div class="lbl">Comision mediu firmă</div>
           <div class="val" id="k-comision">—</div>
-          <div class="sub">% pe contract</div>
+          <div class="sub" id="k-comision-luna">— pe lună</div>
         </div>
       </div>
 
@@ -381,7 +381,8 @@ function renderKPI(contracte, cotatii) {
   document.getElementById('k-contracte').textContent = contracte.length.toLocaleString('ro-RO');
   document.getElementById('k-critice').textContent = critice.length;
   document.getElementById('k-critice-val').innerHTML = `<b style="color:var(--red)">${fmt0(valCritice)}</b> LEI la risc`;
-  document.getElementById('k-comision').textContent = fmt(comMed*100, 2) + '%';
+  document.getElementById('k-comision').textContent = fmt(comMed, 2) + '% / zi';
+  document.getElementById('k-comision-luna').textContent = fmt(comMed*30, 2) + '% pe lună (×30 zile)';
 
   // Cotatie aur azi
   if (cotatii.length > 0) {
