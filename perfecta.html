@@ -122,8 +122,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
           <div class="val" id="k-critice">—</div>
           <div class="sub" id="k-critice-val">— LEI la risc</div>
         </div>
-        <div class="kpi gold">
-          <div class="lbl">Cotație aur 24K azi</div>
+        <div class="kpi gold" ondblclick="openCotatiiModal()" title="Dublu-click pentru istoric complet" style="cursor:pointer">
+          <div class="lbl">Cotație aur 24K azi <span style="font-size:9px;opacity:0.6">📈 dblclick</span></div>
           <div class="val" id="k-aur">—</div>
           <div class="sub" id="k-aur-var">RON / gram</div>
         </div>
@@ -243,6 +243,37 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ISTORIC COTATII AUR -->
+<div id="cot-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;overflow-y:auto" onclick="if(event.target===this)closeCotatiiModal()">
+  <div style="background:#fff;border-radius:12px;max-width:1100px;margin:30px auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+    <div style="background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:15px">🪙 Istoric complet cotații aur</h3>
+      <button onclick="closeCotatiiModal()" style="background:transparent;border:1px solid #fff;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:700">✕ Închide</button>
+    </div>
+    <div style="padding:16px;max-height:80vh;overflow-y:auto">
+      <div style="margin-bottom:14px"><div class="chart-wrap" style="height:240px"><canvas id="cot-chart"></canvas></div></div>
+      <div style="overflow-x:auto">
+        <table class="tbl" id="cot-tbl">
+          <thead><tr>
+            <th>Data / Ora</th>
+            <th style="text-align:right">EUR/gram</th>
+            <th style="text-align:right">Curs BNR</th>
+            <th style="text-align:right">Curs Ajustat</th>
+            <th style="text-align:right;background:var(--gold);color:var(--navy)">24K (RON/g)</th>
+            <th style="text-align:right">22K</th>
+            <th style="text-align:right">18K</th>
+            <th style="text-align:right">14K</th>
+            <th style="text-align:right">12K</th>
+            <th style="text-align:right">8K</th>
+            <th style="text-align:center">Δ vs anterior</th>
+          </tr></thead>
+          <tbody id="cot-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -632,6 +663,93 @@ function renderVerifSumar(verif) {
   document.getElementById('v-lipsa').textContent = lipsa;
   document.getElementById('v-rata').textContent = rata + '%';
 }
+
+// ── MODAL ISTORIC COTATII ──
+let _allCotatii = [];
+async function openCotatiiModal() {
+  document.getElementById('cot-modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  // Fetch toate cotatiile (ordonate cronologic crescator)
+  if (_allCotatii.length === 0) {
+    _allCotatii = await fetchAll('cotatii_aur', 'select=*&order=data_snapshot.asc.nullslast,data_ora.asc');
+  }
+  renderCotatiiTable();
+  renderCotatiiChart();
+}
+function closeCotatiiModal() {
+  document.getElementById('cot-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function renderCotatiiTable() {
+  // Sorteaza desc pentru tabel (cele mai noi primele)
+  const sorted = [..._allCotatii].sort((a,b) =>
+    (b.data_snapshot||b.data_ora||'').localeCompare(a.data_snapshot||a.data_ora||''));
+  const tbody = document.getElementById('cot-tbody');
+  tbody.innerHTML = sorted.map((c, i) => {
+    const next = sorted[i+1]; // cel anterior cronologic
+    const pretAzi = parseFloat(c.pret_24k)||0;
+    let deltaHtml = '<span style="color:var(--sub)">—</span>';
+    if (next) {
+      const pretIeri = parseFloat(next.pret_24k)||0;
+      const diff = pretAzi - pretIeri;
+      if (Math.abs(diff) > 0.001) {
+        const cls = diff > 0 ? 'var-up' : 'var-down';
+        const arrow = diff > 0 ? '↑' : '↓';
+        const pct = pretIeri > 0 ? Math.abs(diff/pretIeri*100) : 0;
+        deltaHtml = `<span class="${cls}">${arrow} ${fmt(Math.abs(diff),2)} (${fmt(pct,2)}%)</span>`;
+      }
+    }
+    const dataAfis = c.data_snapshot
+      ? new Date(c.data_snapshot).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'}) + (c.ora_snapshot?' '+c.ora_snapshot:'')
+      : (c.data_ora||'');
+    const isCurent = i === 0;
+    const bg = isCurent ? '#fef3c7' : (i%2===0?'#fff':'#f8fafc');
+    return `<tr style="background:${bg}">
+      <td style="font-weight:${isCurent?'700':'400'};color:${isCurent?'var(--gold-d)':'inherit'}">${dataAfis}${isCurent?' <span style="background:var(--green);color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">ULTIMUL</span>':''}</td>
+      <td style="text-align:right">${fmt(c.eur_gram_brut,2)}</td>
+      <td style="text-align:right">${fmt(c.curs_bnr,4)}</td>
+      <td style="text-align:right">${fmt(c.curs_ajustat,4)}</td>
+      <td style="text-align:right;background:#fef3c7;font-weight:700;color:var(--gold-d)">${fmt(c.pret_24k,2)}</td>
+      <td style="text-align:right">${fmt(c.pret_22k,2)}</td>
+      <td style="text-align:right">${fmt(c.pret_18k,2)}</td>
+      <td style="text-align:right">${fmt(c.pret_14k,2)}</td>
+      <td style="text-align:right">${fmt(c.pret_12k,2)}</td>
+      <td style="text-align:right">${fmt(c.pret_8k,2)}</td>
+      <td style="text-align:center;font-weight:700">${deltaHtml}</td>
+    </tr>`;
+  }).join('');
+}
+function renderCotatiiChart() {
+  const sorted = [..._allCotatii].sort((a,b) =>
+    (a.data_snapshot||a.data_ora||'').localeCompare(b.data_snapshot||b.data_ora||''));
+  if (_charts.cot) _charts.cot.destroy();
+  _charts.cot = new Chart(document.getElementById('cot-chart'), {
+    type: 'line',
+    data: {
+      labels: sorted.map(c => c.data_snapshot
+        ? new Date(c.data_snapshot).toLocaleDateString('ro-RO',{day:'2-digit',month:'short'})
+        : (c.data_ora||'').split(' ')[0]),
+      datasets: [{
+        label: '24K RON/g',
+        data: sorted.map(c => parseFloat(c.pret_24k)||0),
+        borderColor: '#FFD700', backgroundColor: 'rgba(255,215,0,0.15)',
+        fill: true, tension: 0.3, pointRadius: 1, borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, position: 'top' } },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 20 } },
+        y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+// ESC inchide modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('cot-modal').style.display === 'block') closeCotatiiModal();
+});
 
 // Auto-refresh la 60s
 setInterval(() => { if (sessionStorage.getItem('pf_dash')==='1') loadAll(); }, 60000);
