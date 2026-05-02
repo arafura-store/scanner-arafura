@@ -127,8 +127,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
           <div class="val" id="k-aur">—</div>
           <div class="sub" id="k-aur-var">RON / gram</div>
         </div>
-        <div class="kpi green">
-          <div class="lbl">Comision mediu firmă <span id="k-comision-luna-ref" style="font-size:9px;opacity:0.7;font-weight:400"></span></div>
+        <div class="kpi green" ondblclick="openComisionModal()" title="Dublu-click pentru breakdown" style="cursor:pointer">
+          <div class="lbl">Comision mediu firmă <span style="font-size:9px;opacity:0.6">📊 dblclick</span><span id="k-comision-luna-ref" style="font-size:9px;opacity:0.7;font-weight:400"></span></div>
           <div class="val" id="k-comision">—</div>
           <div class="sub" id="k-comision-luna">— pe lună</div>
         </div>
@@ -243,6 +243,26 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- MODAL COMISION BREAKDOWN -->
+<div id="com-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;overflow-y:auto" onclick="if(event.target===this)closeComisionModal()">
+  <div style="background:#fff;border-radius:12px;max-width:1100px;margin:30px auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+    <div style="background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:15px">📊 Breakdown comision firmă</h3>
+      <button onclick="closeComisionModal()" style="background:transparent;border:1px solid #fff;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:700">✕ Închide</button>
+    </div>
+    <div style="background:#f8fafc;border-bottom:1px solid var(--border);padding:0 20px;display:flex;gap:0">
+      <button class="com-tab active" data-tab="mag" onclick="switchComTab('mag')" style="background:transparent;border:none;padding:12px 18px;font-weight:700;cursor:pointer;border-bottom:3px solid var(--gold);color:var(--navy)">🏪 Per magazin</button>
+      <button class="com-tab" data-tab="con" onclick="switchComTab('con')" style="background:transparent;border:none;padding:12px 18px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;color:var(--sub)">📋 Per contract</button>
+      <button class="com-tab" data-tab="dis" onclick="switchComTab('dis')" style="background:transparent;border:none;padding:12px 18px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;color:var(--sub)">📈 Distribuție</button>
+    </div>
+    <div style="padding:16px;max-height:75vh;overflow-y:auto">
+      <div id="com-tab-mag"></div>
+      <div id="com-tab-con" style="display:none"></div>
+      <div id="com-tab-dis" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -672,6 +692,159 @@ function renderVerifSumar(verif) {
   document.getElementById('v-rata').textContent = rata + '%';
 }
 
+// ── MODAL COMISION BREAKDOWN ──
+let _allContracteCom = [];
+async function openComisionModal() {
+  document.getElementById('com-modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  if (_allContracteCom.length === 0) {
+    _allContracteCom = await fetchAll('contracte_amanet', 'select=magazin,client,nr_contract,suma_imprumutata,procent_comision,dobanda_zilnica,status_alerta');
+  }
+  renderComMag();
+  renderComCon();
+  renderComDis();
+}
+function closeComisionModal() {
+  document.getElementById('com-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function switchComTab(tab) {
+  ['mag','con','dis'].forEach(t => {
+    document.getElementById('com-tab-'+t).style.display = (t===tab)?'block':'none';
+  });
+  document.querySelectorAll('.com-tab').forEach(b => {
+    if (b.dataset.tab===tab) {
+      b.style.borderBottomColor = 'var(--gold)';
+      b.style.color = 'var(--navy)';
+    } else {
+      b.style.borderBottomColor = 'transparent';
+      b.style.color = 'var(--sub)';
+    }
+  });
+  if (_charts.comDis && tab==='dis') _charts.comDis.update();
+}
+
+function renderComMag() {
+  const perMag = {};
+  _allContracteCom.forEach(c => {
+    const m = c.magazin;
+    if (!perMag[m]) perMag[m] = {magazin:m, n:0, suma:0, comPond:0, sumPond:0, comMin:Infinity, comMax:0};
+    const s = parseFloat(c.suma_imprumutata)||0;
+    const com = parseFloat(c.procent_comision)||0;
+    perMag[m].n++;
+    perMag[m].suma += s;
+    if (s > 0) {
+      perMag[m].comPond += s * com;
+      perMag[m].sumPond += s;
+    }
+    if (com > 0 && com < perMag[m].comMin) perMag[m].comMin = com;
+    if (com > perMag[m].comMax) perMag[m].comMax = com;
+  });
+  const arr = Object.values(perMag).map(r => ({
+    ...r,
+    comMed: r.sumPond > 0 ? r.comPond/r.sumPond : 0,
+    comMinFinal: r.comMin === Infinity ? 0 : r.comMin
+  })).sort((a,b) => b.comMed - a.comMed);
+
+  let html = '<table class="tbl"><thead><tr>' +
+    '<th>Magazin</th><th style="text-align:right">Contracte</th><th style="text-align:right">Suma totală (LEI)</th>' +
+    '<th style="text-align:right;background:var(--gold);color:var(--navy)">Comision mediu /zi</th>' +
+    '<th style="text-align:right">Pe lună</th>' +
+    '<th style="text-align:right">Min</th><th style="text-align:right">Max</th>' +
+    '</tr></thead><tbody>';
+  arr.forEach(r => {
+    html += `<tr>
+      <td><b style="color:var(--navy)">${r.magazin}</b></td>
+      <td style="text-align:right">${r.n}</td>
+      <td style="text-align:right;font-weight:700;color:var(--navy)">${fmt0(r.suma)}</td>
+      <td style="text-align:right;background:#fef3c7;font-weight:700;color:var(--gold-d)">${fmt(r.comMed,3)}%</td>
+      <td style="text-align:right;color:var(--green);font-weight:700">${fmt(r.comMed*30,2)}%</td>
+      <td style="text-align:right;color:var(--sub)">${fmt(r.comMinFinal,2)}%</td>
+      <td style="text-align:right;color:var(--sub)">${fmt(r.comMax,2)}%</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('com-tab-mag').innerHTML = html;
+}
+
+function renderComCon() {
+  const sorted = [..._allContracteCom].sort((a,b) => (parseFloat(b.procent_comision)||0) - (parseFloat(a.procent_comision)||0));
+  const top = sorted.slice(0, 20);
+  const bot = sorted.slice(-20).reverse();
+
+  const renderTbl = (arr, title) => {
+    let h = `<h4 style="color:var(--navy);margin:14px 0 8px">${title}</h4>`;
+    h += '<table class="tbl"><thead><tr><th>Magazin</th><th>Client</th><th>Contract</th><th style="text-align:right">Suma (LEI)</th><th style="text-align:right;background:var(--gold);color:var(--navy)">Comision /zi</th><th style="text-align:right">Pe lună</th></tr></thead><tbody>';
+    arr.forEach(c => {
+      const com = parseFloat(c.procent_comision)||0;
+      h += `<tr>
+        <td><b>${c.magazin}</b></td>
+        <td>${escH(c.client)}</td>
+        <td><span class="badge b-blue">${escH(c.nr_contract)}</span></td>
+        <td style="text-align:right;color:var(--navy)">${fmt0(c.suma_imprumutata)}</td>
+        <td style="text-align:right;background:#fef3c7;font-weight:700;color:var(--gold-d)">${fmt(com,2)}%</td>
+        <td style="text-align:right;color:var(--green);font-weight:700">${fmt(com*30,2)}%</td>
+      </tr>`;
+    });
+    h += '</tbody></table>';
+    return h;
+  };
+  document.getElementById('com-tab-con').innerHTML =
+    renderTbl(top, '🔝 Top 20 contracte cu comision MAXIM') +
+    renderTbl(bot, '⬇️ Top 20 contracte cu comision MINIM');
+}
+
+function renderComDis() {
+  // Histograma: bucketize comision
+  const buckets = {};
+  _allContracteCom.forEach(c => {
+    const com = parseFloat(c.procent_comision)||0;
+    if (com <= 0) return;
+    const bucket = (Math.round(com*100)/100).toFixed(2); // grupare la 0.01
+    if (!buckets[bucket]) buckets[bucket] = {count:0, suma:0};
+    buckets[bucket].count++;
+    buckets[bucket].suma += parseFloat(c.suma_imprumutata)||0;
+  });
+  const labels = Object.keys(buckets).sort((a,b) => parseFloat(a)-parseFloat(b));
+  const counts = labels.map(l => buckets[l].count);
+  const sume = labels.map(l => Math.round(buckets[l].suma));
+
+  let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">';
+  html += '<div><h4 style="color:var(--navy);margin-bottom:8px">📊 Distribuție după număr contracte</h4><div style="height:280px;position:relative"><canvas id="ch-com-cnt"></canvas></div></div>';
+  html += '<div><h4 style="color:var(--navy);margin-bottom:8px">💰 Distribuție după sumă (LEI)</h4><div style="height:280px;position:relative"><canvas id="ch-com-suma"></canvas></div></div>';
+  html += '</div>';
+  // Tabel detalii
+  html += '<table class="tbl"><thead><tr><th>Comision /zi</th><th style="text-align:right">Nr. contracte</th><th style="text-align:right">% din total</th><th style="text-align:right">Suma totală (LEI)</th><th style="text-align:right">Pe lună</th></tr></thead><tbody>';
+  const totalN = counts.reduce((a,b)=>a+b,0);
+  labels.forEach((l, i) => {
+    const pct = totalN > 0 ? counts[i]/totalN*100 : 0;
+    html += `<tr>
+      <td><b style="color:var(--gold-d)">${l}%</b></td>
+      <td style="text-align:right">${counts[i]}</td>
+      <td style="text-align:right;color:var(--sub)">${fmt(pct,1)}%</td>
+      <td style="text-align:right;font-weight:700;color:var(--navy)">${fmt0(sume[i])}</td>
+      <td style="text-align:right;color:var(--green)">${fmt(parseFloat(l)*30,2)}%</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('com-tab-dis').innerHTML = html;
+
+  if (_charts.comCnt) _charts.comCnt.destroy();
+  if (_charts.comSuma) _charts.comSuma.destroy();
+  setTimeout(() => {
+    _charts.comCnt = new Chart(document.getElementById('ch-com-cnt'), {
+      type: 'bar',
+      data: {labels: labels.map(l=>l+'%'), datasets: [{data: counts, backgroundColor: '#1F3864', borderRadius: 4}]},
+      options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}}}}
+    });
+    _charts.comSuma = new Chart(document.getElementById('ch-com-suma'), {
+      type: 'bar',
+      data: {labels: labels.map(l=>l+'%'), datasets: [{data: sume, backgroundColor: '#FFD700', borderRadius: 4}]},
+      options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}}}}
+    });
+  }, 50);
+}
+
 // ── MODAL ISTORIC COTATII ──
 let _allCotatii = [];
 async function openCotatiiModal() {
@@ -756,7 +929,10 @@ function renderCotatiiChart() {
 }
 // ESC inchide modal
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('cot-modal').style.display === 'block') closeCotatiiModal();
+  if (e.key === 'Escape') {
+    if (document.getElementById('cot-modal').style.display === 'block') closeCotatiiModal();
+    if (document.getElementById('com-modal').style.display === 'block') closeComisionModal();
+  }
 });
 
 // Auto-refresh la 60s
