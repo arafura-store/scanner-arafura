@@ -861,10 +861,23 @@ function closeCotatiiModal() {
   document.getElementById('cot-modal').style.display = 'none';
   document.body.style.overflow = '';
 }
+function cotatieKey(c) {
+  // Returneaza timestamp comparabil pentru sortare cronologica
+  // Prefer data_snapshot (YYYY-MM-DD) + ora_snapshot (HH:MM)
+  // Fallback: data_ora text "dd.MM.yyyy HH:MM"
+  if (c.data_snapshot) {
+    return c.data_snapshot + ' ' + (c.ora_snapshot || '00:00');
+  }
+  if (c.data_ora) {
+    const m = c.data_ora.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]} ${m[4]}`;
+  }
+  return '';
+}
+
 function renderCotatiiTable() {
   // Sorteaza desc pentru tabel (cele mai noi primele)
-  const sorted = [..._allCotatii].sort((a,b) =>
-    (b.data_snapshot||b.data_ora||'').localeCompare(a.data_snapshot||a.data_ora||''));
+  const sorted = [..._allCotatii].sort((a,b) => cotatieKey(b).localeCompare(cotatieKey(a)));
   const tbody = document.getElementById('cot-tbody');
   tbody.innerHTML = sorted.map((c, i) => {
     const next = sorted[i+1]; // cel anterior cronologic
@@ -901,8 +914,7 @@ function renderCotatiiTable() {
   }).join('');
 }
 function renderCotatiiChart() {
-  const sorted = [..._allCotatii].sort((a,b) =>
-    (a.data_snapshot||a.data_ora||'').localeCompare(b.data_snapshot||b.data_ora||''));
+  const sorted = [..._allCotatii].sort((a,b) => cotatieKey(a).localeCompare(cotatieKey(b)));
   if (_charts.cot) _charts.cot.destroy();
   _charts.cot = new Chart(document.getElementById('cot-chart'), {
     type: 'line',
