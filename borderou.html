@@ -467,7 +467,25 @@ async function completeLogin(user) {
   }
   // KOGALNICEANU are pagina unica: afiseaza cardul de condica integrat
   actualizeazaCardCondica();
+  // SERVICII NU face dispozitii (nu e amanet) -> ascunde cardul
+  actualizeazaCardTeren();
   await Promise.all([incarcaIstoric(), incarcaAngajati(), incarcaDispozitiiTeren()]);
+}
+
+// SERVICII si alte non-amanet -> ascunde cardul de dispozitii teren
+function actualizeazaCardTeren() {
+  const card = document.getElementById('card-teren');
+  if (!card) return;
+  // Magazine care fac dispozitii pe amaneturi (au atat retail cat si amanet la indemana)
+  const MAGAZINE_CU_DISPOZITII = ['TOMIS 3','MARVIMEX','MEDGIDIA','NAVODARI','POARTA 6','BABADAG','KOGALNICEANU'];
+  let activ = '';
+  if (currentUser && currentUser.nume === 'EUGEN') {
+    activ = document.getElementById('f-magazin')?.value || '';
+  } else {
+    // user magazin: foloseste magazinul selectat in dropdown (defaultul e magazinul lui)
+    activ = document.getElementById('f-magazin')?.value || (currentUser ? currentUser.nume : '');
+  }
+  card.style.display = MAGAZINE_CU_DISPOZITII.includes(activ) ? '' : 'none';
 }
 
 // Decide vizibilitatea cardului de condica:
@@ -507,6 +525,8 @@ function onMagazinChange() {
   }
   // Reactualizez vizibilitatea cardului de condica (apare doar cand magazinul e KOGALNICEANU)
   if (typeof actualizeazaCardCondica === 'function') actualizeazaCardCondica();
+  // Reactualizez vizibilitatea cardului de dispozitii (ascuns pe SERVICII si non-amanet)
+  if (typeof actualizeazaCardTeren === 'function') actualizeazaCardTeren();
   if (!mag) { gridZone.style.display = 'none'; document.getElementById('btn-submit').disabled = true; return; }
 
   const e2 = MAGAZINE_2_CASE.includes(mag);
