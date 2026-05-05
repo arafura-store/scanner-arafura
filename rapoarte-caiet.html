@@ -684,84 +684,97 @@ function detectBanca(d) {
 function renderBanca(an) {
   const container = document.getElementById('tab-banca');
   const lunaFilter = document.getElementById('sel-luna').value;
-  const depuneri = allData.filter(d => d.tip === 'DEPUNERE');
-  const retrageri = allData.filter(d => d.tip === 'RETRAGERE');
+  // Tip-urile reale in DB: "DEPUNERE BANCA" / "RETRAGERE BANCA"
+  // (acceptam si "DEPUNERE"/"RETRAGERE" simple pentru compatibilitate vechi)
+  const depuneri = allData.filter(d => (d.tip || '').startsWith('DEPUNERE'));
+  const retrageri = allData.filter(d => (d.tip || '').startsWith('RETRAGERE'));
 
   // Dacă e filtru pe o lună → vedere detaliată zi cu zi
   if (lunaFilter !== '') {
     return renderBancaDetaliat(an, parseInt(lunaFilter), depuneri, retrageri);
   }
 
-  // Altfel → pivot pe luni
+  // Altfel → pivot pe luni: tabel per BANCA + tabel per FIRMA
   return renderBancaPivot(an, depuneri, retrageri);
+}
+
+// Helper generic pentru a construi un tabel pivot per LUNA × CHEIE (banca sau firma)
+function pivotPerLuna(depuneri, retrageri, getCheie, lista, label) {
+  const matrix = {};
+  for (let m = 0; m < 12; m++) matrix[m] = {};
+  for (const d of depuneri) {
+    const luna = new Date(d.data).getMonth();
+    const k = getCheie(d);
+    if (!matrix[luna][k]) matrix[luna][k] = { dep: 0, ret: 0 };
+    matrix[luna][k].dep += parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
+  }
+  for (const d of retrageri) {
+    const luna = new Date(d.data).getMonth();
+    const k = getCheie(d);
+    if (!matrix[luna][k]) matrix[luna][k] = { dep: 0, ret: 0 };
+    matrix[luna][k].ret += parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
+  }
+
+  const cheiActive = [...lista, 'ALTĂ ' + label.toUpperCase()].filter(k => {
+    for (let m = 0; m < 12; m++) if (matrix[m][k] && (matrix[m][k].dep || matrix[m][k].ret)) return true;
+    return false;
+  });
+
+  if (cheiActive.length === 0) return { html: '', totalDep: 0, totalRet: 0 };
+
+  let html = `<h3 style="margin:18px 0 10px; color:var(--navy);">Per ${label}</h3>`;
+  html += '<table><thead><tr><th>LUNA</th>';
+  for (const k of cheiActive) {
+    html += `<th style="background:#1e3a5f;">${k}<br><span style="font-size:10px; color:#a7f3d0;">DEPUNERE</span></th>`;
+    html += `<th style="background:#3d1e1e;">${k}<br><span style="font-size:10px; color:#fecaca;">RETRAGERE</span></th>`;
+  }
+  html += '<th style="background:var(--blue);">TOTAL LUNA</th></tr></thead><tbody>';
+
+  const totalK = {};
+  for (const k of cheiActive) totalK[k] = { dep: 0, ret: 0 };
+  let grandDep = 0, grandRet = 0;
+
+  for (let m = 0; m < 12; m++) {
+    let hasData = false;
+    for (const k of cheiActive) if (matrix[m][k] && (matrix[m][k].dep || matrix[m][k].ret)) { hasData = true; break; }
+    if (!hasData) continue;
+    let rowDep = 0, rowRet = 0;
+    html += `<tr><td>${LUNI[m]}</td>`;
+    for (const k of cheiActive) {
+      const dep = matrix[m][k]?.dep || 0;
+      const ret = matrix[m][k]?.ret || 0;
+      totalK[k].dep += dep; totalK[k].ret += ret;
+      rowDep += dep; rowRet += ret;
+      html += `<td class="num green">${dep ? fmt(dep) : '—'}</td><td class="num red">${ret ? fmt(ret) : '—'}</td>`;
+    }
+    grandDep += rowDep; grandRet += rowRet;
+    html += `<td class="num" style="font-weight:700;"><span class="green">${fmt(rowDep)}</span> / <span class="red">${fmt(rowRet)}</span></td></tr>`;
+  }
+  html += '<tr class="total-row"><td>TOTAL</td>';
+  for (const k of cheiActive) {
+    html += `<td class="num green">${fmt(totalK[k].dep)}</td><td class="num red">${fmt(totalK[k].ret)}</td>`;
+  }
+  html += `<td class="num" style="font-weight:800;"><span class="green">${fmt(grandDep)}</span> / <span class="red">${fmt(grandRet)}</span></td></tr>`;
+  html += '</tbody></table>';
+  return { html, totalDep: grandDep, totalRet: grandRet };
 }
 
 function renderBancaPivot(an, depuneri, retrageri) {
   const container = document.getElementById('tab-banca');
 
-  const matrix = {};
-  for (let m = 0; m < 12; m++) matrix[m] = {};
-
-  for (const d of depuneri) {
-    const luna = new Date(d.data).getMonth();
-    const banca = detectBanca(d);
-    if (!matrix[luna][banca]) matrix[luna][banca] = { dep: 0, ret: 0 };
-    matrix[luna][banca].dep += parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
-  }
-  for (const d of retrageri) {
-    const luna = new Date(d.data).getMonth();
-    const banca = detectBanca(d);
-    if (!matrix[luna][banca]) matrix[luna][banca] = { dep: 0, ret: 0 };
-    matrix[luna][banca].ret += parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
-  }
-
-  const banciActive = [...BANCI, 'ALTĂ BANCĂ'].filter(b => {
-    for (let m = 0; m < 12; m++) if (matrix[m][b]) return true;
-    return false;
-  });
-
-  if (banciActive.length === 0) {
+  if (depuneri.length === 0 && retrageri.length === 0) {
     container.innerHTML = '<div class="loading">Nu sunt operațiuni bancare pentru anul selectat.</div>';
     return;
   }
 
-  // Header simplu pe un singur rând: "LIBRA DEP" / "LIBRA RET"
-  let html = '<table><thead><tr><th>LUNA</th>';
-  for (const b of banciActive) {
-    html += `<th style="background:#1e3a5f;">${b}<br><span style="font-size:10px; color:#a7f3d0;">DEPUNERE</span></th>`;
-    html += `<th style="background:#3d1e1e;">${b}<br><span style="font-size:10px; color:#fecaca;">RETRAGERE</span></th>`;
-  }
-  html += '<th style="background:var(--blue);">TOTAL LUNA</th></tr></thead><tbody>';
+  // Tabel 1: per BANCA
+  const perBanca = pivotPerLuna(depuneri, retrageri, detectBanca, BANCI, 'BANCĂ');
+  // Tabel 2: per FIRMA (beneficiar)
+  const FIRME_LISTA = ['ARAFURA','PERFECTA','PERFECTA INVEST','PERFECTA EXCHANGE','DOMADAMI','VIENEZ','IMONDIS','ROYAL','FLOROM'];
+  const perFirma = pivotPerLuna(depuneri, retrageri, d => (d.beneficiar || '').trim().toUpperCase() || 'NEDEFINIT', FIRME_LISTA, 'FIRMĂ');
 
-  const totalBanca = {};
-  for (const b of banciActive) totalBanca[b] = { dep: 0, ret: 0 };
-  let grandDep = 0, grandRet = 0;
-
-  for (let m = 0; m < 12; m++) {
-    let hasData = false;
-    for (const b of banciActive) if (matrix[m][b]) { hasData = true; break; }
-    if (!hasData) continue;
-
-    let rowDep = 0, rowRet = 0;
-    html += `<tr><td>${LUNI[m]}</td>`;
-    for (const b of banciActive) {
-      const dep = matrix[m][b]?.dep || 0;
-      const ret = matrix[m][b]?.ret || 0;
-      totalBanca[b].dep += dep;
-      totalBanca[b].ret += ret;
-      rowDep += dep; rowRet += ret;
-      html += `<td class="num green">${fmt(dep)}</td><td class="num red">${fmt(ret)}</td>`;
-    }
-    grandDep += rowDep; grandRet += rowRet;
-    html += `<td class="num" style="font-weight:700;"><span class="green">${fmt(rowDep)}</span> / <span class="red">${fmt(rowRet)}</span></td></tr>`;
-  }
-
-  html += '<tr class="total-row"><td>TOTAL</td>';
-  for (const b of banciActive) {
-    html += `<td class="num green">${fmt(totalBanca[b].dep)}</td><td class="num red">${fmt(totalBanca[b].ret)}</td>`;
-  }
-  html += `<td class="num" style="font-weight:800;"><span class="green">${fmt(grandDep)}</span> / <span class="red">${fmt(grandRet)}</span></td></tr>`;
-  html += '</tbody></table>';
+  const grandDep = perBanca.totalDep;
+  const grandRet = perBanca.totalRet;
 
   const sumHtml = `<div class="summary">
     <div class="summary-card"><div class="label">Total depuneri ${an}</div><div class="value green">${fmt(grandDep)} RON</div></div>
@@ -769,7 +782,7 @@ function renderBancaPivot(an, depuneri, retrageri) {
     <div class="summary-card"><div class="label">Flux net</div><div class="value" style="color:${grandDep-grandRet>=0?'var(--green)':'var(--red)'};">${fmt(grandDep - grandRet)} RON</div></div>
   </div>`;
 
-  container.innerHTML = sumHtml + html;
+  container.innerHTML = sumHtml + perBanca.html + perFirma.html;
 }
 
 function renderBancaDetaliat(an, luna, depuneri, retrageri) {
@@ -796,7 +809,7 @@ function renderBancaDetaliat(an, luna, depuneri, retrageri) {
   for (const d of tranzactii) {
     const banca = detectBanca(d);
     const suma = parseFloat(d.intrare || 0) + parseFloat(d.iesire || 0);
-    const isDep = d.tip === 'DEPUNERE';
+    const isDep = (d.tip || '').startsWith('DEPUNERE');
     const data = new Date(d.data).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     if (!perBanca[banca]) perBanca[banca] = { dep: 0, ret: 0 };
