@@ -1235,6 +1235,14 @@ async function salveazaTeren() {
     }
   } catch {}
 
+  // Daca e admin (EUGEN) si a selectat un magazin in dropdown, salveaza ca acel magazin
+  // (ca sa fie vizibil in pending pentru fata de la magazin, nu doar pentru admin)
+  let utilizatorReal = currentUser.nume;
+  if (currentUser.nume === 'EUGEN') {
+    const sel = document.getElementById('f-magazin')?.value;
+    if (sel) utilizatorReal = sel;
+  }
+
   try {
     const resp = await fetch(`${API}/caiet`, {
       method: 'POST',
@@ -1247,12 +1255,12 @@ async function salveazaTeren() {
         intrare: isIntrare ? suma : 0,
         iesire: isIntrare ? 0 : suma,
         observatii: obs || null,
-        utilizator: currentUser.nume,
+        utilizator: utilizatorReal,
         completat_la: new Date().toISOString()
       })
     });
     if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
-    showToast('✓ Dispoziție deschisă', 'ok');
+    showToast('✓ Dispoziție deschisă' + (utilizatorReal !== currentUser.nume ? ` (ca ${utilizatorReal})` : ''), 'ok');
     inchideTerenForm();
     await incarcaDispozitiiTeren();
   } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
