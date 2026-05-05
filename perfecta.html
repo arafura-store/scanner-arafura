@@ -862,15 +862,17 @@ function closeCotatiiModal() {
   document.body.style.overflow = '';
 }
 function cotatieKey(c) {
-  // Returneaza timestamp comparabil pentru sortare cronologica
-  // Prefer data_snapshot (YYYY-MM-DD) + ora_snapshot (HH:MM)
-  // Fallback: data_ora text "dd.MM.yyyy HH:MM"
+  // Returneaza timestamp comparabil pentru sortare cronologica (string YYYY-MM-DD HH:MM)
   if (c.data_snapshot) {
     return c.data_snapshot + ' ' + (c.ora_snapshot || '00:00');
   }
   if (c.data_ora) {
-    const m = c.data_ora.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/);
+    // Format cu ora: "dd.MM.yyyy HH:MM"
+    let m = c.data_ora.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/);
     if (m) return `${m[3]}-${m[2]}-${m[1]} ${m[4]}`;
+    // Format fara ora: "dd.MM.yyyy"
+    m = c.data_ora.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (m) return `${m[3]}-${m[2]}-${m[1]} 00:00`;
   }
   return '';
 }
