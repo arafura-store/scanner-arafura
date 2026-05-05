@@ -560,20 +560,36 @@ async function confirmaImport() {
 function renderAmanet(an) {
   const container = document.getElementById('tab-amanet');
   const amanet = allData.filter(d => d.tip === 'AMANET' || d.tip === 'FOND AMANET');
+  // Dispozitii: tip incepe cu 'DP AMANET' sau 'DI AMANET' (orice variant: PENDING TEREN, etc.)
+  const dispozitii = allData.filter(d => {
+    const t = (d.tip || '').toUpperCase();
+    return t.startsWith('DP AMANET') || t.startsWith('DI AMANET');
+  });
 
-  const matrix = {}; // luna -> magazin -> {incasare, plata}
+  const matrix = {}; // luna -> magazin -> {incasare, plata, dp, di}
   for (let m = 0; m < 12; m++) matrix[m] = {};
 
   for (const d of amanet) {
     const luna = new Date(d.data).getMonth();
-    const mag = d.beneficiar.trim();
-    if (!matrix[luna][mag]) matrix[luna][mag] = { incasare: 0, plata: 0 };
+    const mag = (d.beneficiar || '').trim();
+    if (!matrix[luna][mag]) matrix[luna][mag] = { incasare: 0, plata: 0, dp: 0, di: 0 };
     matrix[luna][mag].incasare += parseFloat(d.intrare || 0);
     matrix[luna][mag].plata += parseFloat(d.iesire || 0);
   }
+  for (const d of dispozitii) {
+    const luna = new Date(d.data).getMonth();
+    const mag = (d.beneficiar || '').trim();
+    if (!matrix[luna][mag]) matrix[luna][mag] = { incasare: 0, plata: 0, dp: 0, di: 0 };
+    const t = (d.tip || '').toUpperCase();
+    if (t.startsWith('DP AMANET')) matrix[luna][mag].dp += parseFloat(d.intrare || 0);
+    if (t.startsWith('DI AMANET')) matrix[luna][mag].di += parseFloat(d.iesire || 0);
+  }
 
   const magActive = MAGAZINE_AMANET.filter(mag => {
-    for (let m = 0; m < 12; m++) if (matrix[m][mag]) return true;
+    for (let m = 0; m < 12; m++) {
+      const r = matrix[m][mag];
+      if (r && (r.incasare || r.plata || r.dp || r.di)) return true;
+    }
     return false;
   });
 
@@ -581,43 +597,70 @@ function renderAmanet(an) {
   for (const mag of magActive) html += `<th>${mag}</th>`;
   html += '<th style="background:var(--blue);">TOTAL</th></tr></thead><tbody>';
 
-  let totalIncasare = 0, totalPlata = 0;
+  let totalIncasare = 0, totalPlata = 0, totalDP = 0, totalDI = 0;
 
   for (let m = 0; m < 12; m++) {
     let hasData = false;
-    for (const mag of magActive) if (matrix[m][mag]) { hasData = true; break; }
+    for (const mag of magActive) {
+      const r = matrix[m][mag];
+      if (r && (r.incasare || r.plata || r.dp || r.di)) { hasData = true; break; }
+    }
     if (!hasData) continue;
 
-    // Incasare row
+    // ÎNCASARE
     let rowInc = 0;
-    html += `<tr><td rowspan="2" style="vertical-align:middle;">${LUNI[m]}</td><td class="green" style="font-weight:600;">ÎNCASARE</td>`;
+    html += `<tr><td rowspan="4" style="vertical-align:middle;">${LUNI[m]}</td><td class="green" style="font-weight:600;">ÎNCASARE</td>`;
     for (const mag of magActive) {
       const val = matrix[m][mag]?.incasare || 0;
       rowInc += val;
-      html += `<td class="num green">${fmt(val)}</td>`;
+      html += `<td class="num green">${val ? fmt(val) : '—'}</td>`;
     }
     totalIncasare += rowInc;
     html += `<td class="num green" style="font-weight:700;">${fmt(rowInc)}</td></tr>`;
 
-    // Plata row
+    // PLATĂ
     let rowPlata = 0;
     html += `<tr><td class="red" style="font-weight:600;">PLATĂ</td>`;
     for (const mag of magActive) {
       const val = matrix[m][mag]?.plata || 0;
       rowPlata += val;
-      html += `<td class="num red">${fmt(val)}</td>`;
+      html += `<td class="num red">${val ? fmt(val) : '—'}</td>`;
     }
     totalPlata += rowPlata;
     html += `<td class="num red" style="font-weight:700;">${fmt(rowPlata)}</td></tr>`;
+
+    // DP AMANET (intrare bani de la birou la magazin)
+    let rowDP = 0;
+    html += `<tr style="background:#fef3c7;"><td style="font-weight:600;color:#92400e;">DP AMANET<br><span style="font-weight:400;font-size:10px;">(birou→magazin)</span></td>`;
+    for (const mag of magActive) {
+      const val = matrix[m][mag]?.dp || 0;
+      rowDP += val;
+      html += `<td class="num" style="color:#92400e;">${val ? fmt(val) : '—'}</td>`;
+    }
+    totalDP += rowDP;
+    html += `<td class="num" style="font-weight:700;color:#92400e;">${fmt(rowDP)}</td></tr>`;
+
+    // DI AMANET (iesire bani de la magazin spre birou)
+    let rowDI = 0;
+    html += `<tr style="background:#dbeafe;"><td style="font-weight:600;color:#1e40af;">DI AMANET<br><span style="font-weight:400;font-size:10px;">(magazin→birou)</span></td>`;
+    for (const mag of magActive) {
+      const val = matrix[m][mag]?.di || 0;
+      rowDI += val;
+      html += `<td class="num" style="color:#1e40af;">${val ? fmt(val) : '—'}</td>`;
+    }
+    totalDI += rowDI;
+    html += `<td class="num" style="font-weight:700;color:#1e40af;">${fmt(rowDI)}</td></tr>`;
   }
 
   html += '</tbody></table>';
 
   const sumHtml = `<div class="summary">
-    <div class="summary-card"><div class="label">Total încasări amanet</div><div class="value green">${fmt(totalIncasare)} RON</div></div>
-    <div class="summary-card"><div class="label">Total plăți amanet</div><div class="value red">${fmt(totalPlata)} RON</div></div>
+    <div class="summary-card"><div class="label">Total ÎNCASĂRI amanet</div><div class="value green">${fmt(totalIncasare)} RON</div></div>
+    <div class="summary-card"><div class="label">Total PLĂȚI amanet</div><div class="value red">${fmt(totalPlata)} RON</div></div>
+    <div class="summary-card" style="background:#fef3c7;border-color:#fcd34d;"><div class="label">Total DP AMANET (intrate de la birou)</div><div class="value" style="color:#92400e;">${fmt(totalDP)} RON</div></div>
+    <div class="summary-card" style="background:#dbeafe;border-color:#93c5fd;"><div class="label">Total DI AMANET (predate la birou)</div><div class="value" style="color:#1e40af;">${fmt(totalDI)} RON</div></div>
     <div class="summary-card" style="border:2px solid var(--border);">
-      <div class="label" style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">DIFERENȚE</div>
+      <div class="label" style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:8px;">DIFERENȚE AMANET (ÎNCASARE − PLATĂ)</div>
       <div class="label">Încasați din amanet</div>
       <div class="value green" style="font-size:20px;">${totalIncasare > totalPlata ? fmt(totalIncasare - totalPlata) : '0,00'} RON</div>
       <div class="label" style="margin-top:10px;">Plătiți către amanet</div>
