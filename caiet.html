@@ -399,7 +399,26 @@
     <span class="value" id="sold-proiectat">—</span>
     <span class="delta" id="sold-delta"></span>
   </div>
+  <button onclick="deschideActivitate()" id="btn-activitate" style="display:none; background:#7c3aed; color:white; border:none; padding:8px 14px; border-radius:6px; font-weight:700; cursor:pointer; margin-right:8px;" title="Audit trail + randuri sterse">🔍 Activitate</button>
   <button onclick="logout()" id="btn-logout" style="display:none">Ieși</button>
+</div>
+
+<!-- Modal Activitate (audit + sterse) -->
+<div id="modal-activitate" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:500; align-items:flex-start; justify-content:center; padding:30px 16px; overflow-y:auto;">
+  <div style="background:#fff; border-radius:12px; max-width:1100px; width:100%; max-height:92vh; overflow:hidden; display:flex; flex-direction:column;">
+    <div style="background:#1F3864; color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="font-size:16px;">🔍 Activitate — audit & randuri sterse</h3>
+      <button onclick="document.getElementById('modal-activitate').style.display='none';document.body.style.overflow=''" style="background:transparent; border:1px solid #fff; color:#fff; padding:4px 12px; border-radius:6px; cursor:pointer; font-weight:700;">✕ Închide</button>
+    </div>
+    <div style="background:#f1f5f9; border-bottom:1px solid #cbd5e1; display:flex; gap:0;">
+      <button class="act-tab act-tab-active" data-tab="sterse" onclick="switchActTab('sterse')" style="background:transparent; border:none; padding:12px 18px; font-weight:700; cursor:pointer; border-bottom:3px solid #7c3aed; color:#1F3864;">🗑️ Randuri sterse</button>
+      <button class="act-tab" data-tab="modif" onclick="switchActTab('modif')" style="background:transparent; border:none; padding:12px 18px; font-weight:700; cursor:pointer; border-bottom:3px solid transparent; color:#64748b;">✎ Modificari recente</button>
+    </div>
+    <div style="padding:16px; overflow-y:auto; flex:1;">
+      <div id="act-tab-sterse">Se incarca...</div>
+      <div id="act-tab-modif" style="display:none;">Se incarca...</div>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -730,6 +749,9 @@ async function completeLogin(user) {
   currentUser = user;
   document.getElementById('header-user').textContent = currentUser.nume;
   document.getElementById('btn-logout').style.display = '';
+  // Buton Activitate doar pentru EUGEN
+  const btnAct = document.getElementById('btn-activitate');
+  if (btnAct) btnAct.style.display = (currentUser.nume === 'EUGEN') ? '' : 'none';
   document.getElementById('header-sold').style.display = '';
   document.getElementById('screen-login').style.display = 'none';
   document.getElementById('screen-main').style.display = '';
@@ -2544,6 +2566,109 @@ async function restaureazaOperatiune(id) {
     showToast('Restaurat');
     await Promise.all([incarcaSold(), incarcaOperatiuni()]);
   } catch (e) { showToast('Eroare'); }
+}
+
+// ── PANOU ACTIVITATE (admin EUGEN) ──
+async function deschideActivitate() {
+  if (!isEugen()) return;
+  document.getElementById('modal-activitate').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  switchActTab('sterse');
+}
+
+function switchActTab(tab) {
+  ['sterse','modif'].forEach(t => {
+    document.getElementById('act-tab-'+t).style.display = (t===tab)?'block':'none';
+  });
+  document.querySelectorAll('.act-tab').forEach(b => {
+    if (b.dataset.tab===tab) {
+      b.style.borderBottomColor = '#7c3aed';
+      b.style.color = '#1F3864';
+      b.classList.add('act-tab-active');
+    } else {
+      b.style.borderBottomColor = 'transparent';
+      b.style.color = '#64748b';
+      b.classList.remove('act-tab-active');
+    }
+  });
+  if (tab === 'sterse') incarcaActSterse();
+  if (tab === 'modif') incarcaActModif();
+}
+
+async function incarcaActSterse() {
+  const cont = document.getElementById('act-tab-sterse');
+  cont.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;">Se incarca...</div>';
+  try {
+    const resp = await fetch(`${API}/caiet?select=*&sters_la=not.is.null&order=sters_la.desc&limit=200`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      cont.innerHTML = '<div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:14px;border-radius:8px;font-weight:700;text-align:center;">✓ Niciun rand sters</div>';
+      return;
+    }
+    let html = `<div style="margin-bottom:10px;color:#64748b;font-size:13px;">${data.length} randuri sterse (recuperabile)</div>`;
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#1F3864;color:#fff;">';
+    html += '<th style="padding:8px;text-align:left;">Sters la</th><th style="padding:8px;text-align:left;">Sters de</th><th style="padding:8px;text-align:left;">Data op.</th><th style="padding:8px;text-align:left;">Tip</th><th style="padding:8px;text-align:left;">Beneficiar</th><th style="padding:8px;text-align:right;">Intrare</th><th style="padding:8px;text-align:right;">Iesire</th><th style="padding:8px;text-align:left;">Observatii</th><th style="padding:8px;"></th>';
+    html += '</tr></thead><tbody>';
+    for (const d of data) {
+      const sters = d.sters_la ? new Date(d.sters_la).toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '?';
+      html += `<tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:6px 8px;">${sters}</td>
+        <td style="padding:6px 8px;font-weight:700;color:#7c3aed;">${escHtml(d.sters_de||'?')}</td>
+        <td style="padding:6px 8px;">${d.data || ''}</td>
+        <td style="padding:6px 8px;">${escHtml(d.tip||'')}</td>
+        <td style="padding:6px 8px;">${escHtml(d.beneficiar||'')}</td>
+        <td style="padding:6px 8px;text-align:right;color:#16a34a;font-weight:700;">${d.intrare ? Number(d.intrare).toLocaleString('ro-RO',{minimumFractionDigits:2}) : '—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#dc2626;font-weight:700;">${d.iesire ? Number(d.iesire).toLocaleString('ro-RO',{minimumFractionDigits:2}) : '—'}</td>
+        <td style="padding:6px 8px;font-size:11px;color:#64748b;">${escHtml(d.observatii||'')}</td>
+        <td style="padding:6px 8px;text-align:center;"><button onclick="restaureazaSiRefresh(${d.id})" style="background:#16a34a;color:white;border:none;padding:5px 12px;border-radius:5px;font-weight:700;cursor:pointer;font-size:11px;">↺ Restaureaza</button></td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = '<div style="color:var(--red);padding:14px;">Eroare: '+e.message+'</div>';
+  }
+}
+
+async function restaureazaSiRefresh(id) {
+  await restaureazaOperatiune(id);
+  // Reload tab + main list
+  incarcaActSterse();
+}
+
+async function incarcaActModif() {
+  const cont = document.getElementById('act-tab-modif');
+  cont.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;">Se incarca...</div>';
+  try {
+    const resp = await fetch(`${API}/caiet_audit?select=*&order=cand.desc&limit=100`, { headers: HEADERS });
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      cont.innerHTML = '<div style="text-align:center;padding:20px;color:#64748b;">Inca nicio modificare inregistrata</div>';
+      return;
+    }
+    let html = `<div style="margin-bottom:10px;color:#64748b;font-size:13px;">Ultimele ${data.length} modificari</div>`;
+    html += '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#1F3864;color:#fff;">';
+    html += '<th style="padding:8px;text-align:left;">Cand</th><th style="padding:8px;text-align:left;">User</th><th style="padding:8px;text-align:left;">Actiune</th><th style="padding:8px;text-align:right;">Caiet ID</th><th style="padding:8px;text-align:left;">Inainte</th><th style="padding:8px;text-align:left;">Dupa</th>';
+    html += '</tr></thead><tbody>';
+    for (const a of data) {
+      const cand = a.cand ? new Date(a.cand).toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '?';
+      const actCol = a.actiune === 'DELETE' ? '#dc2626' : a.actiune === 'UPDATE' ? '#f59e0b' : a.actiune === 'RESTORE' ? '#16a34a' : '#3b82f6';
+      const inainte = a.valori_inainte ? `<pre style="margin:0;font-size:10px;color:#64748b;white-space:pre-wrap;">${escHtml(JSON.stringify(a.valori_inainte, null, 1))}</pre>` : '—';
+      const dupa = a.valori_dupa ? `<pre style="margin:0;font-size:10px;color:#64748b;white-space:pre-wrap;">${escHtml(JSON.stringify(a.valori_dupa, null, 1))}</pre>` : '—';
+      html += `<tr style="border-bottom:1px solid #e2e8f0;vertical-align:top;">
+        <td style="padding:6px 8px;">${cand}</td>
+        <td style="padding:6px 8px;font-weight:700;color:#7c3aed;">${escHtml(a.user_nume||'?')}</td>
+        <td style="padding:6px 8px;font-weight:700;color:${actCol};">${a.actiune}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#64748b;">${a.caiet_id}</td>
+        <td style="padding:6px 8px;max-width:300px;">${inainte}</td>
+        <td style="padding:6px 8px;max-width:300px;">${dupa}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    cont.innerHTML = html;
+  } catch(e) {
+    cont.innerHTML = '<div style="color:var(--red);padding:14px;">Eroare: '+e.message+'</div>';
+  }
 }
 
 function showToast(msg) {
