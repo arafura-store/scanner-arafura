@@ -2373,7 +2373,7 @@ async function returneazaDecont(utilizator, submittedAt) {
   } catch(e) { showToast('Eroare: ' + e.message); }
 }
 
-let editData = {};
+let editData = null;
 
 async function editOperatiune(id) {
   // Blocheaza deschiderea unei a doua edit forme (duplicate IDs cauzeaza date amestecate)
