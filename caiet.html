@@ -2353,6 +2353,13 @@ async function returneazaDecont(utilizator, submittedAt) {
 let editData = {};
 
 async function editOperatiune(id) {
+  // Blocheaza deschiderea unei a doua edit forme (duplicate IDs cauzeaza date amestecate)
+  if (editData || document.querySelector('.edit-row')) {
+    showToast('⚠ Ai deja un rand in editare. Salveaza sau anuleaza-l intai.');
+    const existing = document.querySelector('.edit-row');
+    if (existing) existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   // Fetch original data
   try {
     const resp = await fetch(`${API}/caiet?id=eq.${id}&select=*`, { headers: HEADERS });
