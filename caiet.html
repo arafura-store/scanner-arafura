@@ -1614,7 +1614,8 @@ async function incarcaOperatiuni() {
     const all = [];
     let offset = 0;
     while (true) {
-      let url = `${API}/caiet?select=*&order=created_at.desc.nullslast,id.desc&limit=1000&offset=${offset}`;
+      // Excludem randurile soft-deleted (sters_la IS NULL = active)
+      let url = `${API}/caiet?select=*&sters_la=is.null&order=created_at.desc.nullslast,id.desc&limit=1000&offset=${offset}`;
       // Filtrez după data introducerii în caiet (completat_la), nu după data operațiunii
       // Așa, un rând adăugat azi cu data operațiunii din luna trecută apare tot azi
       if (dataStart) url += `&completat_la=gte.${dataStart}`;
@@ -2425,6 +2426,25 @@ async function salveazaEdit(id) {
       body: JSON.stringify(updates)
     });
     if (resp.ok) {
+      // Audit: log UPDATE in caiet_audit (totale modificari)
+      if (editData) {
+        try {
+          await fetch(`${API}/caiet_audit`, {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({
+              caiet_id: id,
+              actiune: 'UPDATE',
+              user_nume: currentUser?.nume || 'NECUNOSCUT',
+              valori_inainte: {
+                data: editData.data, tip: editData.tip, beneficiar: editData.beneficiar,
+                intrare: editData.intrare, iesire: editData.iesire, observatii: editData.observatii
+              },
+              valori_dupa: { data, tip, beneficiar, intrare, iesire, observatii: obs }
+            })
+          });
+        } catch(e) { /* audit failure nu blocheaza save-ul */ }
+      }
       showToast('Modificare salvată!');
       editData = null; // ies din modul edit
       await Promise.all([incarcaSold(), incarcaOperatiuni()]);
@@ -2465,14 +2485,65 @@ async function marcheazaVerificat(id) {
 }
 
 async function stergeOperatiune(id) {
-  if (!confirm('Sigur vrei să ștergi această operațiune?')) return;
+  if (!confirm('Sigur vrei să ștergi această operațiune?\n\n(Soft delete - poate fi recuperat din Activitate de către EUGEN)')) return;
   try {
-    await fetch(`${API}/caiet?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
+    // Citesc randul inainte sa fac soft delete (pentru audit)
+    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=*`, { headers: HEADERS });
+    const arr = await respGet.json();
+    const valoriInainte = (Array.isArray(arr) && arr.length) ? arr[0] : null;
+
+    // Soft delete: marchez sters_la + sters_de in loc sa sterg fizic
+    await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        sters_la: new Date().toISOString(),
+        sters_de: currentUser?.nume || 'NECUNOSCUT'
+      })
+    });
+
+    // Audit
+    if (valoriInainte) {
+      await fetch(`${API}/caiet_audit`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          caiet_id: id,
+          actiune: 'DELETE',
+          user_nume: currentUser?.nume || 'NECUNOSCUT',
+          valori_inainte: valoriInainte,
+          valori_dupa: null
+        })
+      });
+    }
+
     await Promise.all([incarcaSold(), incarcaOperatiuni()]);
-    showToast('Operațiune ștearsă');
+    showToast('Operațiune ștearsă (recuperabilă)');
   } catch (e) {
     showToast('Eroare');
   }
+}
+
+// Restaureaza un rand soft-deleted (doar EUGEN)
+async function restaureazaOperatiune(id) {
+  if (!isEugen()) { showToast('Doar EUGEN'); return; }
+  if (!confirm('Restaurezi acest rand?')) return;
+  try {
+    await fetch(`${API}/caiet?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ sters_la: null, sters_de: null })
+    });
+    await fetch(`${API}/caiet_audit`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        caiet_id: id, actiune: 'RESTORE', user_nume: currentUser.nume
+      })
+    });
+    showToast('Restaurat');
+    await Promise.all([incarcaSold(), incarcaOperatiuni()]);
+  } catch (e) { showToast('Eroare'); }
 }
 
 function showToast(msg) {
