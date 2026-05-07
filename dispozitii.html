@@ -267,6 +267,53 @@
     </div>
   </div>
 
+  <!-- CHELTUIELI DIN DP -->
+  <div class="card">
+    <h2 style="color:#FF6600;">💸 Cheltuieli din DP — sold per dispoziție</h2>
+    <div style="font-size:12px; color:var(--sub); margin-bottom:10px;">DP-urile AMANET confirmate (din care se pot face cheltuieli — utilități, chirie, salarii etc.)</div>
+    <div class="lista-dispozitii" id="lista-cheltuieli-dp">
+      <div class="empty-state">Se încarcă...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── MODAL CHELTUIALA ─── -->
+<div class="modal-bg" id="modal-chelt" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:300; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:white; border-radius:14px; max-width:480px; width:100%; padding:22px; max-height:90vh; overflow-y:auto;">
+    <h3 style="margin-bottom:14px; color:#FF6600;">💸 Cheltuială nouă</h3>
+    <div id="chelt-dp-info" style="background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:13px;"></div>
+    <div class="form-group" style="margin-bottom:10px;">
+      <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip cheltuială</label>
+      <select id="ch-tip" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        <option value="">— Alege —</option>
+        <option value="UTILITATI">UTILITĂȚI</option>
+        <option value="CHIRIE">CHIRIE</option>
+        <option value="SALARIU">SALARIU</option>
+        <option value="AVANS SALARIU">AVANS SALARIU</option>
+        <option value="LICHIDARE SALARIU">LICHIDARE SALARIU</option>
+        <option value="IMPRUMUT">ÎMPRUMUT</option>
+        <option value="COMBUSTIBIL">COMBUSTIBIL</option>
+        <option value="ALTUL">ALTUL</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:10px;">
+      <label style="font-size:12px; font-weight:600; color:var(--sub);">Beneficiar (cine primește banii)</label>
+      <input type="text" id="ch-beneficiar" placeholder="ex: ENEL, CRISTINA VERMAN, proprietar..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+    <div class="form-group" style="margin-bottom:10px;">
+      <label style="font-size:12px; font-weight:600; color:var(--sub);">Sumă (RON)</label>
+      <input type="number" step="0.01" id="ch-suma" placeholder="0.00" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label style="font-size:12px; font-weight:600; color:var(--sub);">Observații (opțional)</label>
+      <input type="text" id="ch-obs" placeholder="orice detalii..." style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button onclick="inchideCheltModal()" style="flex:1; padding:12px; background:#e2e8f0; color:var(--text); border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
+      <button onclick="salveazaCheltuiala()" style="flex:2; padding:12px; background:#FF6600; color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer;">Salvează cheltuială</button>
+    </div>
+  </div>
 </div>
 
 <!-- ─── MODAL CREARE DISPOZIȚIE ─── -->
@@ -341,6 +388,7 @@ function getMagazinActiv() {
 function onAdminContextChange() {
   contextMagazin = document.getElementById('admin-context-magazin').value;
   incarcaDispozitii();
+  incarcaCheltuieliDP();
 }
 
 // ──────────────────────────────────────────────────────────
@@ -418,6 +466,7 @@ async function completeLogin(user) {
     contextMagazin = user.nume; // user de magazin = context fix
   }
   await incarcaDispozitii();
+  await incarcaCheltuieliDP();
 }
 
 function logout() {
@@ -750,8 +799,136 @@ async function refreshPontajCurent() {
 
 // Auto-refresh dispoziții la 30 sec (când vizibil)
 setInterval(() => {
-  if (currentUser && !document.hidden) incarcaDispozitii();
+  if (currentUser && !document.hidden) {
+    incarcaDispozitii();
+    incarcaCheltuieliDP();
+  }
 }, 30000);
+
+// ──────────────────────────────────────────────────────────
+// CHELTUIELI DIN DP (UTILITATI / CHIRIE / SALARIU etc.)
+// ──────────────────────────────────────────────────────────
+let _cheltModalDpId = null;
+let _cheltModalDpInitial = 0;
+
+async function incarcaCheltuieliDP() {
+  if (!currentUser) return;
+  const container = document.getElementById('lista-cheltuieli-dp');
+  if (!container) return;
+  const mag = getMagazinActiv();
+  if (!mag) {
+    container.innerHTML = '<div class="empty-state">Alege un magazin sus</div>';
+    return;
+  }
+  try {
+    // DP AMANET CONFIRMATE (fara PENDING TEREN, fara sters_la) pentru magazinul curent
+    // (utilizator = magazinul, tip = exact 'DP AMANET' fara sufix PENDING)
+    const respDP = await fetch(`${API}/caiet?tip=eq.DP%20AMANET&utilizator=eq.${encodeURIComponent(mag)}&sters_la=is.null&order=data.desc&limit=200`, { headers: HEADERS });
+    const dps = await respDP.json();
+    if (!Array.isArray(dps) || dps.length === 0) {
+      container.innerHTML = '<div class="empty-state">Niciun DP AMANET confirmat (fa o dispozitie noua si confirma-o intai)</div>';
+      return;
+    }
+    // Toate cheltuielile din magazin (sa le potrivesc dupa observatii cu DP-urile)
+    const respCh = await fetch(`${API}/caiet?utilizator=eq.${encodeURIComponent(mag)}&observatii=like.din%20DP%20%23*&sters_la=is.null&order=completat_la.desc&limit=500`, { headers: HEADERS });
+    const cheltuieli = await respCh.json();
+    // Group cheltuieli by DP id
+    const chPerDP = {};
+    for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
+      const m = (c.observatii || '').match(/din DP #(\d+)/);
+      if (!m) continue;
+      const dpId = parseInt(m[1]);
+      if (!chPerDP[dpId]) chPerDP[dpId] = [];
+      chPerDP[dpId].push(c);
+    }
+    let html = '';
+    for (const dp of dps) {
+      const sumaInitiala = parseFloat(dp.intrare || 0);
+      const cheltuieliDP = chPerDP[dp.id] || [];
+      const sumaCheltuita = cheltuieliDP.reduce((a, c) => a + parseFloat(c.iesire || 0), 0);
+      const soldRamas = sumaInitiala - sumaCheltuita;
+      const dataDP = dp.data || '?';
+      const obs = dp.observatii ? ` · ${escHtml(dp.observatii)}` : '';
+      const colSold = soldRamas <= 0 ? '#16a34a' : '#FF6600';
+      html += `<div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+          <div>
+            <div style="font-weight:700; color:var(--navy); font-size:14px;">DP #${dp.id} · ${sumaInitiala.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON · ${dataDP}${obs}</div>
+            <div style="font-size:12px; color:var(--sub); margin-top:3px;">Cheltuit: <b style="color:#dc2626;">${sumaCheltuita.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</b> · Sold ramas: <b style="color:${colSold};">${soldRamas.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</b></div>
+          </div>
+          <button onclick="deschideCheltModal(${dp.id}, ${sumaInitiala}, ${soldRamas})" style="padding:8px 14px; background:#FF6600; color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; font-size:13px;">+ Cheltuiala</button>
+        </div>`;
+      if (cheltuieliDP.length > 0) {
+        html += '<div style="margin-top:10px; padding-left:10px; border-left:3px solid #fcd34d;">';
+        for (const c of cheltuieliDP) {
+          const dataCh = c.data || '?';
+          const tip = c.tip || '?';
+          const ben = c.beneficiar || '';
+          const obsExtra = (c.observatii || '').replace(/^din DP #\d+\s*[—-]?\s*/, '');
+          html += `<div style="font-size:12px; padding:4px 0; border-bottom:1px dotted #e2e8f0;">
+            <span style="display:inline-block; min-width:90px; font-weight:700; color:var(--navy);">${escHtml(tip)}</span>
+            <span style="color:#dc2626; font-weight:700;">−${parseFloat(c.iesire||0).toLocaleString('ro-RO',{minimumFractionDigits:2})}</span>
+            <span style="color:var(--sub);"> · ${escHtml(ben)} · ${dataCh}${obsExtra ? ' · '+escHtml(obsExtra):''}</span>
+          </div>`;
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state" style="color:var(--red);">Eroare conexiune: '+e.message+'</div>';
+  }
+}
+
+function deschideCheltModal(dpId, sumaInitiala, soldRamas) {
+  _cheltModalDpId = dpId;
+  _cheltModalDpInitial = sumaInitiala;
+  document.getElementById('chelt-dp-info').innerHTML = `Cheltuiala pentru <b>DP #${dpId}</b> (${sumaInitiala.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON) · Sold ramas: <b>${soldRamas.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</b>`;
+  document.getElementById('ch-tip').value = '';
+  document.getElementById('ch-beneficiar').value = '';
+  document.getElementById('ch-suma').value = '';
+  document.getElementById('ch-obs').value = '';
+  document.getElementById('modal-chelt').style.display = 'flex';
+}
+
+function inchideCheltModal() {
+  document.getElementById('modal-chelt').style.display = 'none';
+  _cheltModalDpId = null;
+}
+
+async function salveazaCheltuiala() {
+  if (!_cheltModalDpId) return;
+  const tip = document.getElementById('ch-tip').value;
+  const ben = document.getElementById('ch-beneficiar').value.trim().toUpperCase();
+  const suma = parseFloat(document.getElementById('ch-suma').value) || 0;
+  const obs = document.getElementById('ch-obs').value.trim();
+  if (!tip) { showToast('Alege tipul', 'err'); return; }
+  if (!ben) { showToast('Beneficiar obligatoriu', 'err'); return; }
+  if (suma <= 0) { showToast('Suma invalida', 'err'); return; }
+  const mag = getMagazinActiv();
+  const observatii = `din DP #${_cheltModalDpId}${obs ? ' — '+obs : ''}`;
+  try {
+    const resp = await fetch(`${API}/caiet`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        data: new Date().toISOString().slice(0,10),
+        tip: tip,
+        beneficiar: ben,
+        intrare: 0,
+        iesire: suma,
+        observatii: observatii,
+        utilizator: mag,
+        completat_la: new Date().toISOString()
+      })
+    });
+    if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
+    showToast('✓ Cheltuiala salvata', 'ok');
+    inchideCheltModal();
+    incarcaCheltuieliDP();
+  } catch(e) { showToast('Eroare: '+e.message, 'err'); }
+}
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden && currentUser) incarcaDispozitii();
