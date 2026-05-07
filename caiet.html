@@ -2060,10 +2060,20 @@ async function verificaDispozitiiTeren() {
       }
     }
 
+    // Indexez cheltuielile linked la DP (key = dp_id)
+    const cheltLinked = {};
+    for (const d of data) {
+      const m = (d.observatii || '').match(/^din DP #(\d+)/);
+      if (m) cheltLinked[parseInt(m[1])] = d;
+    }
     let html = '';
     for (const d of data) {
       const tipBaza = (d.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
       const estePredat = (d.tip||'').includes('PREDAT');
+      // Sari peste cheltuielile linked la un DP (apar ca parte a DP-ului parinte, nu separat)
+      if ((d.observatii || '').match(/^din DP #\d+/)) continue;
+      // Detectie: DP cu cheltuiala in pereche (marcat in observatii cu "[CHELTUIALA]")
+      const areCheltuialaPair = tipBaza === 'DP AMANET' && (d.observatii || '').includes('[CHELTUIALA]');
       // Semn din perspectiva casei/birou: DP = intrare (+), DI = ieșire (−)
       const isIntrareBirou = tipBaza === 'DP AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
@@ -2075,8 +2085,11 @@ async function verificaDispozitiiTeren() {
       //   real (fără PENDING)
       let actiuni;
       if (tipBaza === 'DP AMANET') {
-        // bani de la amanet → birou
-        if (!estePredat) {
+        if (areCheltuialaPair) {
+          // DP+Cheltuiala in pereche: nu se misca bani fizic, doar confirma birou
+          actiuni = `<button type="button" onclick="confirmaDispozitieTeren(${d.id})" style="flex:1; padding:10px 14px; font-size:13px; font-weight:700; background:var(--green); color:white; border:none; border-radius:8px; cursor:pointer;">✓ Confirmă DP + Cheltuială</button>
+                     <button type="button" onclick="anuleazaDispozitieTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;">Anulează</button>`;
+        } else if (!estePredat) {
           // așteaptă magazinul să predea
           actiuni = `<div style="flex:1; padding:10px 14px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">⏳ Așteaptă predarea la șofer (magazin)</div>
                      <button type="button" onclick="anuleazaDispozitieTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;">Anulează</button>`;
@@ -2097,17 +2110,33 @@ async function verificaDispozitiiTeren() {
                      <button type="button" onclick="anuleazaDispozitieTeren(${d.id})" style="flex:0 0 auto; padding:10px 16px; font-size:13px; font-weight:700; background:var(--red); color:white; border:none; border-radius:8px; cursor:pointer;">Anulează</button>`;
         }
       }
-      const cardStyle = estePredat ? 'border-left:4px solid var(--green); background:#f0fdf4;' : 'border-left:4px solid #fb923c;';
+      const cardStyle = areCheltuialaPair
+        ? 'border-left:4px solid #f59e0b; background:#fffbeb;'
+        : (estePredat ? 'border-left:4px solid var(--green); background:#f0fdf4;' : 'border-left:4px solid #fb923c;');
       const badgePredat = estePredat
         ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">🚚 PREDAT</span>'
         : '';
+      const badgeChelt = areCheltuialaPair
+        ? '<span style="background:#f59e0b; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">💸 + CHELTUIALA</span>'
+        : '';
+      // Daca DP are cheltuiala linked → arata detaliile (tip + beneficiar)
+      let cheltDetalii = '';
+      if (areCheltuialaPair && cheltLinked[d.id]) {
+        const c = cheltLinked[d.id];
+        const cTipBaza = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+        const cObsExtra = (c.observatii || '').replace(/^din DP #\d+\s*[—-]?\s*/, '');
+        cheltDetalii = `<div style="margin-top:6px; padding:8px 12px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; font-size:12px;">
+          <b>Cheltuială:</b> ${escHtml(cTipBaza)} · ${escHtml(c.beneficiar||'')} · −${parseFloat(c.iesire||0).toLocaleString('ro-RO',{minimumFractionDigits:2})} RON${cObsExtra ? ' · '+escHtml(cObsExtra) : ''}
+        </div>`;
+      }
       html += `<div class="alerta-decont-box" style="${cardStyle}">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">📋</div>
           <div class="alerta-text">
-            <div class="alerta-nume">${escHtml(tipBaza)} · ${escHtml(d.beneficiar||'')} · ${dt} ${badgePredat}</div>
+            <div class="alerta-nume">${escHtml(tipBaza)} · ${escHtml(d.beneficiar||'')} · ${dt} ${badgePredat}${badgeChelt}</div>
             <div class="alerta-suma" style="color:${isIntrareBirou?'var(--green)':'var(--red)'};">${isIntrareBirou?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
-            <div style="font-size:11px; color:var(--sub); margin-top:2px;">Deschis: <b>${deschisLa}</b> de ${d.utilizator||'?'}${d.observatii ? ' · ' + escHtml(d.observatii) : ''}</div>
+            <div style="font-size:11px; color:var(--sub); margin-top:2px;">Deschis: <b>${deschisLa}</b> de ${d.utilizator||'?'}${d.observatii && !areCheltuialaPair ? ' · ' + escHtml(d.observatii) : ''}</div>
+            ${cheltDetalii}
           </div>
         </div>
         <div style="display:flex; gap:8px;">${actiuni}</div>
@@ -2175,8 +2204,14 @@ async function predaDispozitieTeren(id) {
 }
 
 async function anuleazaDispozitieTeren(id) {
-  if (!confirm('Ștergi dispoziția de pe teren? Operațiunea nu a afectat soldul.')) return;
+  if (!confirm('Ștergi dispoziția de pe teren?\n(Daca e DP+Cheltuiala pereche, se sterg ambele)')) return;
   try {
+    // Daca e DP cu cheltuiala in pereche → sterg si cheltuiala linked
+    const respCh = await fetch(`${API}/caiet?observatii=like.din%20DP%20%23${id}*&select=id`, { headers: HEADERS });
+    const cheltuieli = await respCh.json();
+    for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
+      await fetch(`${API}/caiet?id=eq.${c.id}`, { method: 'DELETE', headers: HEADERS });
+    }
     const resp = await fetch(`${API}/caiet?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
     if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
     showToast('Dispoziție anulată', 'ok');
