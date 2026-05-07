@@ -1777,9 +1777,14 @@ function renderOperatiuni() {
     const isConfirmat = d.tip && d.tip.includes('CONFIRMAT');
     const isCorectat = d.corectat_de && d.corectat_de.length > 0;
     // Detectează rând migrat (observatii începe cu [CUVANT])
+    // Exceptii: [CHELTUIALA] = marker de DP-cheltuiala pereche, NU migrare
     const migratMatch = (d.observatii || '').match(/^\[([A-ZĂÎÂȘȚ ]+)\]/);
-    const isMigrat = !!migratMatch;
+    const isCheltuialaMarker = migratMatch && migratMatch[1] === 'CHELTUIALA';
+    const isMigrat = !!migratMatch && !isCheltuialaMarker;
     const migratFrom = isMigrat ? migratMatch[1] : '';
+    // Detectie linkare DP↔Cheltuiala
+    const dinDPMatch = (d.observatii || '').match(/din DP #(\d+)/);
+    const linkedDpId = isCheltuialaMarker ? d.id : (dinDPMatch ? parseInt(dinDPMatch[1]) : null);
 
     let rowStyle = '';
     let rowClass = '';
@@ -1791,6 +1796,10 @@ function renderOperatiuni() {
     const benEsc = escHtml(d.beneficiar || '').replace(/'/g, "\\'");
     const migratBadge = isMigrat
       ? `<span style="background:#e7e5e4; color:#78716c; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-left:4px;" title="Migrat automat din tipul vechi: ${migratFrom}">📦 migrat</span>`
+      : '';
+    // Badge link DP↔Cheltuiala (vizual: ambele randuri perechiate au aceeasi cheie)
+    const linkBadge = linkedDpId
+      ? `<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700; margin-left:4px; border:1px solid #fcd34d;" title="Pereche DP-Cheltuiala">🔗 #${linkedDpId}</span>`
       : '';
     // Extrage "Confirmat de" din observații (marker [conf. XYZ])
     const confMatch = (d.observatii || '').match(/\[conf\.\s+([A-ZĂÎÂȘȚ ]+)\]/i);
@@ -1820,7 +1829,7 @@ function renderOperatiuni() {
     html += `<tr id="row-${d.id}" class="${rowClass}" style="${rowStyle}">
       <td style="white-space:nowrap; font-size:12px; color:#555; text-align:center;">${dtCompletat}</td>
       <td style="font-weight:600; white-space:nowrap; text-align:center;">${dtChitanta}</td>
-      <td style="text-align:center;"><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span>${migratBadge}</td>
+      <td style="text-align:center;"><span style="background:#e8f0fe; color:#1a56a8; padding:3px 10px; border-radius:6px; font-size:12px; font-weight:700;">${escHtml(d.tip)}</span>${migratBadge}${linkBadge}</td>
       <td style="font-weight:500; text-align:center;"><span class="clickable-ben" onclick="filtreazaBeneficiar('${benEsc}')" title="Click: filtrează după acest beneficiar">${escHtml(d.beneficiar)}</span></td>
       <td class="td-center">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
       <td class="td-center" style="padding-left:30px;">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
@@ -2063,7 +2072,7 @@ async function verificaDispozitiiTeren() {
     // Indexez cheltuielile linked la DP (key = dp_id)
     const cheltLinked = {};
     for (const d of data) {
-      const m = (d.observatii || '').match(/^din DP #(\d+)/);
+      const m = (d.observatii || '').match(/din DP #(\d+)/);
       if (m) cheltLinked[parseInt(m[1])] = d;
     }
     let html = '';
@@ -2071,7 +2080,7 @@ async function verificaDispozitiiTeren() {
       const tipBaza = (d.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
       const estePredat = (d.tip||'').includes('PREDAT');
       // Sari peste cheltuielile linked la un DP (apar ca parte a DP-ului parinte, nu separat)
-      if ((d.observatii || '').match(/^din DP #\d+/)) continue;
+      if ((d.observatii || '').match(/din DP #\d+/)) continue;
       // Detectie: DP cu cheltuiala in pereche (marcat in observatii cu "[CHELTUIALA]")
       const areCheltuialaPair = tipBaza === 'DP AMANET' && (d.observatii || '').includes('[CHELTUIALA]');
       // Semn din perspectiva casei/birou: DP = intrare (+), DI = ieșire (−)
@@ -2119,14 +2128,15 @@ async function verificaDispozitiiTeren() {
       const badgeChelt = areCheltuialaPair
         ? '<span style="background:#f59e0b; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">💸 + CHELTUIALA</span>'
         : '';
-      // Daca DP are cheltuiala linked → arata detaliile (tip + beneficiar)
+      // Daca DP are cheltuiala linked → arata detaliile (tip + destinatar din observatii)
       let cheltDetalii = '';
       if (areCheltuialaPair && cheltLinked[d.id]) {
         const c = cheltLinked[d.id];
         const cTipBaza = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
-        const cObsExtra = (c.observatii || '').replace(/^din DP #\d+\s*[—-]?\s*/, '');
+        // observatii poate fi: "ENEL · obs · din DP #X"  sau  "din DP #X — chObs" (vechi)
+        const cObsClean = (c.observatii || '').replace(/\s*·?\s*din DP #\d+\s*/, '').replace(/^din DP #\d+\s*[—-]?\s*/, '').trim();
         cheltDetalii = `<div style="margin-top:6px; padding:8px 12px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; font-size:12px;">
-          <b>Cheltuială:</b> ${escHtml(cTipBaza)} · ${escHtml(c.beneficiar||'')} · −${parseFloat(c.iesire||0).toLocaleString('ro-RO',{minimumFractionDigits:2})} RON${cObsExtra ? ' · '+escHtml(cObsExtra) : ''}
+          <b>Cheltuială:</b> ${escHtml(cTipBaza)} · −${parseFloat(c.iesire||0).toLocaleString('ro-RO',{minimumFractionDigits:2})} RON${cObsClean ? ' · '+escHtml(cObsClean) : ''}
         </div>`;
       }
       html += `<div class="alerta-decont-box" style="${cardStyle}">
@@ -2166,7 +2176,7 @@ async function confirmaDispozitieTeren(id) {
     // Daca DP are cheltuiala in pereche → confirm si cheltuiala automat
     let cheltConfirmata = 0;
     if ((dpRow.observatii || '').includes('[CHELTUIALA]')) {
-      const respCh = await fetch(`${API}/caiet?observatii=like.din%20DP%20%23${id}*&select=id,tip`, { headers: HEADERS });
+      const respCh = await fetch(`${API}/caiet?observatii=like.*din%20DP%20%23${id}*&select=id,tip`, { headers: HEADERS });
       const cheltuieli = await respCh.json();
       for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
         const newTipCh = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
@@ -2207,7 +2217,7 @@ async function anuleazaDispozitieTeren(id) {
   if (!confirm('Ștergi dispoziția de pe teren?\n(Daca e DP+Cheltuiala pereche, se sterg ambele)')) return;
   try {
     // Daca e DP cu cheltuiala in pereche → sterg si cheltuiala linked
-    const respCh = await fetch(`${API}/caiet?observatii=like.din%20DP%20%23${id}*&select=id`, { headers: HEADERS });
+    const respCh = await fetch(`${API}/caiet?observatii=like.*din%20DP%20%23${id}*&select=id`, { headers: HEADERS });
     const cheltuieli = await respCh.json();
     for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
       await fetch(`${API}/caiet?id=eq.${c.id}`, { method: 'DELETE', headers: HEADERS });

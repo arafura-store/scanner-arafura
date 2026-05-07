@@ -539,17 +539,18 @@ async function salveazaDisp() {
       if (!respDP.ok) { showToast('Eroare DP: ' + await respDP.text(), 'err'); return; }
       const dpRow = (await respDP.json())[0];
       // 2. Creez cheltuiala PENDING TEREN (iesire = suma) link-uita prin observatii la DP id
+      // Beneficiar = magazinul (ca DP-ul); destinatarul real (ENEL etc.) intra in observatii
       const respCh = await fetch(`${API}/caiet`, {
         method: 'POST',
         headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({
           data: dataIso,
           tip: `${chTip} (PENDING TEREN)`,
-          beneficiar: chBen,
+          beneficiar: mag,
           firma: 'PERFECTA INVEST',
           intrare: 0,
           iesire: suma,
-          observatii: `din DP #${dpRow.id}${chObs ? ' — ' + chObs : ''}`,
+          observatii: `${chBen}${chObs ? ' · ' + chObs : ''} · din DP #${dpRow.id}`,
           utilizator: mag,
           completat_la: completatLa
         })
@@ -710,8 +711,8 @@ async function anuleazaDisp(id) {
   if (!confirm('Anulezi dispoziția?\n(Daca e DP+Cheltuiala pereche, se sterg ambele)')) return;
   try {
     // Daca e DP cu cheltuiala in pereche → sterg si cheltuiala linked
-    // Identific prin observatii LIKE 'din DP #<id>%'
-    const respCh = await fetch(`${API}/caiet?observatii=like.din%20DP%20%23${id}*&select=id`, { headers: HEADERS });
+    // Identific prin observatii care contin 'din DP #<id>'
+    const respCh = await fetch(`${API}/caiet?observatii=like.*din%20DP%20%23${id}*&select=id`, { headers: HEADERS });
     const cheltuieli = await respCh.json();
     for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
       await fetch(`${API}/caiet?id=eq.${c.id}`, { method: 'DELETE', headers: HEADERS });
