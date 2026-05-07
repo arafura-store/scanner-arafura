@@ -2122,17 +2122,34 @@ async function verificaDispozitiiTeren() {
 
 async function confirmaDispozitieTeren(id) {
   try {
-    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip`, { headers: HEADERS });
+    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip,observatii`, { headers: HEADERS });
     const arr = await respGet.json();
     if (!Array.isArray(arr) || arr.length === 0) { showToast('Entry negăsit'); return; }
-    const newTip = (arr[0].tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+    const dpRow = arr[0];
+    const newTip = (dpRow.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
     const resp = await fetch(`${API}/caiet?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ tip: newTip })
     });
     if (!resp.ok) { showToast('Eroare: ' + await resp.text(), 'err'); return; }
-    showToast('✓ Dispoziție confirmată', 'ok');
+
+    // Daca DP are cheltuiala in pereche → confirm si cheltuiala automat
+    let cheltConfirmata = 0;
+    if ((dpRow.observatii || '').includes('[CHELTUIALA]')) {
+      const respCh = await fetch(`${API}/caiet?observatii=like.din%20DP%20%23${id}*&select=id,tip`, { headers: HEADERS });
+      const cheltuieli = await respCh.json();
+      for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
+        const newTipCh = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+        await fetch(`${API}/caiet?id=eq.${c.id}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ tip: newTipCh })
+        });
+        cheltConfirmata++;
+      }
+    }
+    showToast(cheltConfirmata > 0 ? `✓ DP + ${cheltConfirmata} cheltuiala confirmate` : '✓ Dispoziție confirmată', 'ok');
     await Promise.all([incarcaSold(), incarcaOperatiuni(), verificaDispozitiiTeren()]);
   } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
 }
