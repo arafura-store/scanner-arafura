@@ -732,8 +732,18 @@ async function refreshPontajCurent() {
 // AUTO-RESTORE SESSION
 // ──────────────────────────────────────────────────────────
 (async function init() {
+  // 1. Auto-login per device (magazinul setat in localStorage la instalare)
+  // Pe tabletele/PC-urile fixe ale magazinelor: NU mai cere PIN, login automat
+  const magazinDevice = localStorage.getItem('arafura_magazin');
+  if (magazinDevice && MAGAZINE_PERMISE.includes(magazinDevice)) {
+    const userDevice = { id: null, nume: magazinDevice };
+    saveSession(userDevice);
+    await completeLogin(userDevice);
+    return;
+  }
+  // 2. Fallback: sesiune salvata anterior
   const u = loadSession();
-  if (u && MAGAZINE_PERMISE.includes(u.nume)) {
+  if (u && (MAGAZINE_PERMISE.includes(u.nume) || ADMIN_PERMISI.includes(u.nume))) {
     await completeLogin(u);
   }
 })();
