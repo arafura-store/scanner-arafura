@@ -618,10 +618,18 @@ async function incarcaDispozitii() {
       container.innerHTML = '<div class="empty-state">Nicio dispoziție deschisă</div>';
       return;
     }
+    // Indexez cheltuielile linked la DP (key = dp_id)
+    const cheltLinked = {};
+    for (const d of data) {
+      const m = (d.observatii || '').match(/din DP #(\d+)/);
+      if (m) cheltLinked[parseInt(m[1])] = d;
+    }
     let html = '';
     for (const d of data) {
       const tipBaza = (d.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
       const estePredat = (d.tip||'').includes('PREDAT');
+      // Sari peste cheltuielile linked la DP (apar incorporate in cardul DP-ului parinte)
+      if ((d.observatii || '').match(/din DP #\d+/)) continue;
       const isIntrareAmanet = tipBaza === 'DI AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const deschisLa = fmtDataTime(d.completat_la);
@@ -653,12 +661,28 @@ async function incarcaDispozitii() {
       }
 
       const badgePredat = estePredat ? '<span class="badge-predat">🚚 PREDAT</span>' : '';
+      const badgeChelt = areCheltuialaPair ? '<span style="background:#f59e0b; color:white; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:700; margin-left:6px;">💸 + CHELTUIALA</span>' : '';
+      // Detalii cheltuiala linked (daca exista)
+      let cheltDetalii = '';
+      if (areCheltuialaPair && cheltLinked[d.id]) {
+        const c = cheltLinked[d.id];
+        const cTipBaza = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+        const cObsClean = (c.observatii || '').replace(/\s*·?\s*din DP #\d+\s*/, '').replace(/^din DP #\d+\s*[—-]?\s*/, '').trim();
+        cheltDetalii = `<div style="margin-top:8px; padding:8px 12px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; font-size:12px;">
+          <b>Cheltuiala:</b> ${escHtml(cTipBaza)} · −${parseFloat(c.iesire||0).toLocaleString('ro-RO',{minimumFractionDigits:2})} RON${cObsClean ? ' · '+escHtml(cObsClean) : ''}
+        </div>`;
+      }
+      // Pentru DP cu cheltuiala pereche, ascund [CHELTUIALA] din observatii vizibile (e marker tehnic)
+      const obsVizibile = areCheltuialaPair
+        ? (d.observatii || '').replace(/\[CHELTUIALA\]\s*/, '').trim()
+        : (d.observatii || '');
       html += `<div class="disp-card${estePredat?' predat':''}">
         <div class="top">
           <div>
-            <div class="label-tip">${escHtml(tipBaza)} ${badgePredat}</div>
+            <div class="label-tip">${escHtml(tipBaza)} ${badgePredat}${badgeChelt}</div>
             <div class="meta">Deschis: <b>${deschisLa}</b></div>
-            ${d.observatii ? `<div class="obs">${escHtml(d.observatii)}</div>` : ''}
+            ${obsVizibile ? `<div class="obs">${escHtml(obsVizibile)}</div>` : ''}
+            ${cheltDetalii}
           </div>
           <div class="suma ${isIntrareAmanet?'in':'out'}">${isIntrareAmanet?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
         </div>
