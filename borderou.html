@@ -341,10 +341,11 @@
         <h3 style="margin-bottom:14px; color:var(--navy);">📋 Deschide dispoziție pe teren</h3>
         <div class="form-group" style="margin-bottom:10px;">
           <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip</label>
-          <select id="tr-tip" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+          <select id="tr-tip" onchange="onTrTipChange()" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
             <option value="">— Alege —</option>
             <option value="DP AMANET">📤 PREDAU bani la birou (DP AMANET)</option>
             <option value="DI AMANET">📥 ÎNCASEZ bani de la birou (DI AMANET)</option>
+            <option value="CHELTUIALA">💸 CHELTUIALA din DP (DP+cheltuiala in pereche)</option>
           </select>
         </div>
         <div class="form-group" style="margin-bottom:10px;">
@@ -356,8 +357,34 @@
           <input type="number" step="0.01" id="tr-suma" placeholder="0.00" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
         </div>
         <div class="form-group" style="margin-bottom:14px;">
-          <label style="font-size:12px; font-weight:600; color:var(--sub);">Observații (opțional)</label>
+          <label style="font-size:12px; font-weight:600; color:var(--sub);" id="tr-obs-label">Observații (opțional)</label>
           <input type="text" id="tr-obs" style="width:100%; padding:12px; font-size:15px; border:1px solid var(--border); border-radius:8px;">
+        </div>
+        <!-- CAMPURI EXTRA pentru CHELTUIALA -->
+        <div id="tr-chelt-extra" style="display:none; padding:12px; background:#fef3c7; border:1px solid #fcd34d; border-radius:10px; margin-bottom:12px;">
+          <div style="font-size:11px; color:#92400e; font-weight:700; margin-bottom:8px;">📋 Detalii cheltuială (suma = aceeași cu DP)</div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-size:12px; font-weight:600; color:var(--sub);">Tip cheltuială</label>
+            <select id="tr-chelt-tip" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:6px;">
+              <option value="">— Alege —</option>
+              <option value="UTILITATI">UTILITĂȚI</option>
+              <option value="CHIRIE">CHIRIE</option>
+              <option value="SALARIU">SALARIU</option>
+              <option value="AVANS SALARIU">AVANS SALARIU</option>
+              <option value="LICHIDARE SALARIU">LICHIDARE SALARIU</option>
+              <option value="IMPRUMUT">ÎMPRUMUT</option>
+              <option value="COMBUSTIBIL">COMBUSTIBIL</option>
+              <option value="ALTUL">ALTUL</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-size:12px; font-weight:600; color:var(--sub);">Beneficiar cheltuială</label>
+            <input type="text" id="tr-chelt-beneficiar" placeholder="ex: KOGALNICEANU, NECHITA ELENA" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:6px;">
+          </div>
+          <div class="form-group">
+            <label style="font-size:12px; font-weight:600; color:var(--sub);">Observații cheltuială (opțional)</label>
+            <input type="text" id="tr-chelt-obs" placeholder="orice detaliu..." style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:6px;">
+          </div>
         </div>
         <div style="display:flex; gap:10px;">
           <button onclick="inchideTerenForm()" style="flex:1; padding:12px; background:#e2e8f0; color:var(--text); border:none; border-radius:8px; font-weight:700; cursor:pointer;">Anulează</button>
@@ -1157,13 +1184,21 @@ async function incarcaDispozitiiTeren() {
       }
     }
 
+    // Indexez cheltuielile linked la DP
+    const cheltLinked = {};
+    for (const d of data) {
+      const m = (d.observatii || '').match(/din DP #(\d+)/);
+      if (m) cheltLinked[parseInt(m[1])] = d;
+    }
     let html = '';
     for (const d of data) {
       const tipBaza = (d.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
       const estePredat = (d.tip||'').includes('PREDAT');
+      // Sari peste cheltuielile linked la DP (apar in cardul DP-ului)
+      if ((d.observatii || '').match(/din DP #\d+/)) continue;
+      // Detectie DP cu cheltuiala in pereche
+      const areCheltuialaPair = tipBaza === 'DP AMANET' && (d.observatii || '').includes('[CHELTUIALA]');
       // Semn din perspectiva AMANETULUI:
-      //  DP = amanet pierde bani → −
-      //  DI = amanet primește bani → +
       const isIntrareAmanet = tipBaza === 'DI AMANET';
       const val = parseFloat(d.intrare||0) + parseFloat(d.iesire||0);
       const deschisLa = d.completat_la ? new Date(d.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
@@ -1175,7 +1210,11 @@ async function incarcaDispozitiiTeren() {
 
       let actiuni;
       if (tipBaza === 'DP AMANET') {
-        if (!estePredat) {
+        if (areCheltuialaPair) {
+          // DP+Cheltuiala in pereche: nu se preda fizic, doar asteapta confirmare
+          actiuni = `<div style="flex:1; padding:10px; background:#fef3c7; color:#92400e; border-radius:8px; font-weight:700; text-align:center; font-size:13px;">📋 DP+Cheltuială pereche · așteaptă confirmare la birou</div>
+                     <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează (șterge ambele)</button>`;
+        } else if (!estePredat) {
           actiuni = `<button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `predaTeren(${d.id})` : ''}" ${btnTitle} style="flex:1; padding:10px; background:var(--blue); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">🚚 Predă banii la șofer</button>
                      <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează</button>`;
         } else {
@@ -1191,13 +1230,25 @@ async function incarcaDispozitiiTeren() {
                      <button type="button" onclick="${onclickGuard ? onclickGuard + ';' : ''}${userPoateActiona ? `anuleazaTeren(${d.id})` : ''}" ${btnTitle} style="flex:0 0 auto; padding:10px 16px; background:var(--red); color:white; border:none; border-radius:8px; font-weight:700; cursor:pointer; ${btnDisabled}">Anulează</button>`;
         }
       }
-      const cardStyle = estePredat
-        ? 'padding:14px; background:#f0fdf4; border-left:3px solid var(--green); border-radius:10px; margin-bottom:8px;'
-        : 'padding:14px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;';
+      const cardStyle = areCheltuialaPair
+        ? 'padding:14px; background:#fffbeb; border-left:3px solid #f59e0b; border-radius:10px; margin-bottom:8px;'
+        : (estePredat
+          ? 'padding:14px; background:#f0fdf4; border-left:3px solid var(--green); border-radius:10px; margin-bottom:8px;'
+          : 'padding:14px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:10px; margin-bottom:8px;');
       const badgePredat = estePredat ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">🚚 PREDAT</span>' : '';
+      const badgeChelt = areCheltuialaPair ? '<span style="background:#f59e0b; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">💸 + CHELTUIALA</span>' : '';
+      // Detalii cheltuiala linked
+      let cheltDetalii = '';
+      if (areCheltuialaPair && cheltLinked[d.id]) {
+        const c = cheltLinked[d.id];
+        const cTipBaza = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+        const cObsClean = (c.observatii || '').replace(/\s*·?\s*din DP #\d+\s*/, '').replace(/^din DP #\d+\s*[—-]?\s*/, '').trim();
+        cheltDetalii = `<div style="margin-top:8px; padding:8px 12px; background:#fef3c7; border-left:3px solid #f59e0b; border-radius:6px; font-size:12px;"><b>Cheltuiala:</b> ${escHtml(cTipBaza)} · −${parseFloat(c.iesire||0).toLocaleString('ro-RO',{minimumFractionDigits:2})} RON${cObsClean ? ' · '+escHtml(cObsClean) : ''}</div>`;
+      }
+      const obsVizibile = areCheltuialaPair ? (d.observatii || '').replace(/\[CHELTUIALA\]\s*/, '').trim() : (d.observatii || '');
       html += `<div style="${cardStyle}">
         <div style="display:flex; justify-content:space-between; align-items:center; font-size:14px; flex-wrap:wrap; gap:10px;">
-          <div><b>${escHtml(tipBaza)}</b> · ${escHtml(d.beneficiar||'')}${badgePredat} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${d.observatii ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(d.observatii)+'</div>' : ''}</div>
+          <div><b>${escHtml(tipBaza)}</b> · ${escHtml(d.beneficiar||'')}${badgePredat}${badgeChelt} <span style="font-size:11px; color:var(--sub);">(${deschisLa} de ${d.utilizator||'?'})</span>${obsVizibile ? '<div style=\"font-size:11px; color:var(--sub);\">'+escHtml(obsVizibile)+'</div>' : ''}${cheltDetalii}</div>
           <div style="font-weight:800; font-size:26px; color:${isIntrareAmanet?'var(--green)':'var(--red)'}; font-variant-numeric:tabular-nums;">${isIntrareAmanet?'+':'−'}${val.toLocaleString('ro-RO',{minimumFractionDigits:2})}</div>
         </div>
         <div style="display:flex; gap:8px; margin-top:10px;">${actiuni}</div>
@@ -1236,11 +1287,25 @@ function deschideTerenForm() {
   document.getElementById('tr-amanet').value = magazin;
   document.getElementById('tr-suma').value = '';
   document.getElementById('tr-obs').value = '';
+  // Reset campuri cheltuiala
+  document.getElementById('tr-chelt-tip').value = '';
+  document.getElementById('tr-chelt-beneficiar').value = '';
+  document.getElementById('tr-chelt-obs').value = '';
+  document.getElementById('tr-chelt-extra').style.display = 'none';
+  document.getElementById('tr-obs-label').textContent = 'Observații (opțional)';
   document.getElementById('modal-teren').style.display = 'flex';
 }
 
 function inchideTerenForm() {
   document.getElementById('modal-teren').style.display = 'none';
+}
+
+// Toggle campuri extra cand selectezi CHELTUIALA
+function onTrTipChange() {
+  const tip = document.getElementById('tr-tip').value;
+  const isChelt = tip === 'CHELTUIALA';
+  document.getElementById('tr-chelt-extra').style.display = isChelt ? '' : 'none';
+  document.getElementById('tr-obs-label').textContent = isChelt ? 'Observații DP (opțional)' : 'Observații (opțional)';
 }
 
 async function salveazaTeren() {
@@ -1253,28 +1318,79 @@ async function salveazaTeren() {
   if (!amanet) { showToast('Alege amanetul', 'err'); return; }
   if (suma <= 0) { showToast('Sumă invalidă', 'err'); return; }
 
+  // Daca e admin (EUGEN) si a selectat un magazin in dropdown, salveaza ca acel magazin
+  let utilizatorReal = currentUser.nume;
+  if (currentUser.nume === 'EUGEN') {
+    const sel = document.getElementById('f-magazin')?.value;
+    if (sel) utilizatorReal = sel;
+  }
+
+  // ── Caz special: CHELTUIALA = creez DP AMANET + cheltuiala in pereche ──
+  if (tip === 'CHELTUIALA') {
+    const chTip = document.getElementById('tr-chelt-tip').value;
+    const chBen = document.getElementById('tr-chelt-beneficiar').value.trim().toUpperCase();
+    const chObs = document.getElementById('tr-chelt-obs').value.trim();
+    if (!chTip) { showToast('Alege tipul cheltuielii', 'err'); return; }
+    if (!chBen) { showToast('Beneficiar cheltuială obligatoriu', 'err'); return; }
+    try {
+      const completatLa = new Date().toISOString();
+      const dataIso = new Date().toISOString().slice(0,10);
+      // 1. DP AMANET PENDING TEREN cu marker [CHELTUIALA]
+      const respDP = await fetch(`${API}/caiet`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          data: dataIso,
+          tip: 'DP AMANET (PENDING TEREN)',
+          beneficiar: amanet,
+          firma: 'PERFECTA INVEST',
+          intrare: suma,
+          iesire: 0,
+          observatii: obs ? `[CHELTUIALA] ${obs}` : '[CHELTUIALA]',
+          utilizator: utilizatorReal,
+          completat_la: completatLa
+        })
+      });
+      if (!respDP.ok) { showToast('Eroare DP: ' + await respDP.text(), 'err'); return; }
+      const dpRow = (await respDP.json())[0];
+      // 2. Cheltuiala PENDING TEREN linked
+      const respCh = await fetch(`${API}/caiet`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          data: dataIso,
+          tip: `${chTip} (PENDING TEREN)`,
+          beneficiar: amanet,
+          firma: 'PERFECTA INVEST',
+          intrare: 0,
+          iesire: suma,
+          observatii: `${chBen}${chObs ? ' · ' + chObs : ''} · din DP #${dpRow.id}`,
+          utilizator: utilizatorReal,
+          completat_la: completatLa
+        })
+      });
+      if (!respCh.ok) { showToast('Eroare cheltuiala: ' + await respCh.text(), 'err'); return; }
+      showToast('✓ DP + Cheltuială salvate' + (utilizatorReal !== currentUser.nume ? ` (ca ${utilizatorReal})` : ''), 'ok');
+      inchideTerenForm();
+      await incarcaDispozitiiTeren();
+    } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
+    return;
+  }
+
+  // ── Cazul standard DP/DI AMANET singur ──
   const isIntrare = tip === 'DP AMANET';
 
-  // Verifică duplicare DOAR la același utilizator (magazin) — alte magazine pot avea DP pe același amanet
+  // Verifică duplicare
   try {
     const resp = await fetch(`${API}/caiet?tip=like.${encodeURIComponent(tip + ' (PENDING TEREN%')}&beneficiar=eq.${encodeURIComponent(amanet)}&utilizator=eq.${encodeURIComponent(currentUser?.nume||'')}&select=id,utilizator,completat_la`, { headers: HEADERS });
     const existing = await resp.json();
     if (Array.isArray(existing) && existing.length > 0) {
       const e = existing[0];
       const cand = e.completat_la ? new Date(e.completat_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?';
-      // Permit cu confirmare — uneori magazinul trebuie sa faca multiple dispozitii pe acelasi amanet
       const proceed = confirm(`⚠ Există deja ${tip} pentru ${amanet} (deschis ${cand}).\n\nVrei să faci încă o dispoziție?\n\n[OK] = creez una nouă\n[Cancel] = mă întorc`);
       if (!proceed) return;
     }
   } catch {}
-
-  // Daca e admin (EUGEN) si a selectat un magazin in dropdown, salveaza ca acel magazin
-  // (ca sa fie vizibil in pending pentru fata de la magazin, nu doar pentru admin)
-  let utilizatorReal = currentUser.nume;
-  if (currentUser.nume === 'EUGEN') {
-    const sel = document.getElementById('f-magazin')?.value;
-    if (sel) utilizatorReal = sel;
-  }
 
   try {
     const resp = await fetch(`${API}/caiet`, {
@@ -1302,23 +1418,45 @@ async function salveazaTeren() {
 async function confirmaTeren(id) {
   if (!confirm('Confirmi că banii au circulat fizic? Entry devine operațiune reală și afectează soldul.')) return;
   try {
-    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip`, { headers: HEADERS });
+    const respGet = await fetch(`${API}/caiet?id=eq.${id}&select=tip,observatii`, { headers: HEADERS });
     const arr = await respGet.json();
     if (!Array.isArray(arr) || arr.length === 0) return;
-    const newTip = (arr[0].tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+    const dpRow = arr[0];
+    const newTip = (dpRow.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
     await fetch(`${API}/caiet?id=eq.${id}`, {
       method: 'PATCH',
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
       body: JSON.stringify({ tip: newTip })
     });
-    showToast('✓ Confirmat', 'ok');
+    // Confirma si cheltuiala linked daca DP are [CHELTUIALA]
+    let cheltConfirmata = 0;
+    if ((dpRow.observatii || '').includes('[CHELTUIALA]')) {
+      const respCh = await fetch(`${API}/caiet?observatii=like.*din%20DP%20%23${id}*&select=id,tip`, { headers: HEADERS });
+      const cheltuieli = await respCh.json();
+      for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
+        const newTipCh = (c.tip || '').replace(/ \(PENDING TEREN(?: PREDAT)?\)/, '');
+        await fetch(`${API}/caiet?id=eq.${c.id}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ tip: newTipCh })
+        });
+        cheltConfirmata++;
+      }
+    }
+    showToast(cheltConfirmata > 0 ? `✓ DP + ${cheltConfirmata} cheltuiala confirmate` : '✓ Confirmat', 'ok');
     await incarcaDispozitiiTeren();
   } catch(e) { showToast('Eroare: ' + e.message, 'err'); }
 }
 
 async function anuleazaTeren(id) {
-  if (!confirm('Anulezi dispoziția?')) return;
+  if (!confirm('Anulezi dispoziția?\n(Daca e DP+Cheltuiala pereche, se sterg ambele)')) return;
   try {
+    // Sterg si cheltuiala linked daca exista
+    const respCh = await fetch(`${API}/caiet?observatii=like.*din%20DP%20%23${id}*&select=id`, { headers: HEADERS });
+    const cheltuieli = await respCh.json();
+    for (const c of (Array.isArray(cheltuieli) ? cheltuieli : [])) {
+      await fetch(`${API}/caiet?id=eq.${c.id}`, { method: 'DELETE', headers: HEADERS });
+    }
     await fetch(`${API}/caiet?id=eq.${id}`, { method: 'DELETE', headers: HEADERS });
     showToast('Anulat', 'ok');
     await incarcaDispozitiiTeren();
