@@ -1979,34 +1979,70 @@ async function verificaBorderouri() {
       }
     }
 
+    // Pentru fiecare MAGAZIN, calculez total cash + cheltuieli si gasesc ultimul card 'trimis'
+    // Cassa cumulata: cheltuielile + soldul sunt afisate doar pe ultimul card 'trimis' per magazin
+    const perMag = {};
+    for (let i = 0; i < data.length; i++) {
+      const b = data[i];
+      if (!perMag[b.magazin]) perMag[b.magazin] = { cash: 0, cheltuieli: [], lastTrimisIdx: -1, totalCh: 0 };
+      const cashZ = (parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0));
+      const cashFizic = parseFloat(b.cash_fizic||0);
+      perMag[b.magazin].cash += cashFizic > 0 ? cashFizic : cashZ;
+      if (b.status === 'trimis') perMag[b.magazin].lastTrimisIdx = i;
+    }
+    // Asociaz cheltuielile la magazinul lor (via borderou id)
+    for (const c of cheltuieli) {
+      const m = (c.observatii || '').match(/cheltuiala borderou #(\d+)/);
+      if (!m) continue;
+      const bid = parseInt(m[1]);
+      const bord = data.find(b => b.id === bid);
+      if (!bord) continue;
+      const val = parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+      perMag[bord.magazin].cheltuieli.push(c);
+      perMag[bord.magazin].totalCh += val;
+    }
+    // Fallback: daca un magazin n-are 'trimis', folosesc ultimul absolut
+    for (const m in perMag) {
+      if (perMag[m].lastTrimisIdx === -1) {
+        let lastIdx = -1;
+        for (let i = 0; i < data.length; i++) if (data[i].magazin === m) lastIdx = i;
+        perMag[m].lastTrimisIdx = lastIdx;
+      }
+    }
+
     let html = '';
-    for (const b of data) {
+    for (let idx = 0; idx < data.length; idx++) {
+      const b = data[idx];
       const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
       const trimis = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '?';
       const cashZ = (parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0));
       const cashFizic = parseFloat(b.cash_fizic||0);
       const sumaBrut = cashFizic > 0 ? cashFizic : cashZ;
-      const chAle = cheltuieli.filter(c => (c.observatii||'').startsWith(`cheltuiala borderou #${b.id}`));
-      let totalCh = 0;
-      for (const c of chAle) totalCh += parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
-      const net = sumaBrut - totalCh;
       const estePredat = b.status === 'predat-sofer';
+      const isLastCard = idx === perMag[b.magazin].lastTrimisIdx;
       const statusBadge = estePredat
         ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800;">🚚 PREDAT ȘOFER</span>'
         : '<span style="background:#fef3c7; color:#92400e; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700;">LA MAGAZIN (așteaptă predare)</span>';
-      const cardBorder = estePredat ? 'border-left:5px solid var(--green); background:#f0fdf4;' : '';
+      const cardBorder = isLastCard && !estePredat
+        ? 'border-left:5px solid #16a34a; background:#f0fdf4;'
+        : (estePredat ? 'border-left:5px solid var(--green); background:#f0fdf4;' : '');
+      const badgeUltim = isLastCard && !estePredat
+        ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">ULTIMUL — sold cumulat aici</span>'
+        : '';
       html += `<div class="alerta-decont-box" style="${cardBorder}">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">🏪</div>
           <div class="alerta-text">
-            <div class="alerta-nume">Borderou ${escHtml(b.magazin)} · ${dt} ${statusBadge}</div>
-            <div class="alerta-suma">${net.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON <span style="font-size:11px; color:var(--sub); font-weight:500;">(brut ${sumaBrut.toFixed(2)} − cheltuieli ${totalCh.toFixed(2)})</span></div>
+            <div class="alerta-nume">Borderou ${escHtml(b.magazin)} · ${dt} ${statusBadge}${badgeUltim}</div>
+            <div class="alerta-suma" style="color:var(--green);">${sumaBrut.toLocaleString('ro-RO', {minimumFractionDigits:2})} RON</div>
             <div style="font-size:11px; color:var(--sub); margin-top:2px;">Trimis: <b>${trimis}</b> de ${b.utilizator||'?'}${b.observatii ? ' · ' + escHtml(b.observatii) : ''}</div>
           </div>
         </div>`;
-      if (chAle.length > 0) {
-        html += '<div style="margin-top:8px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px; background:#fffbeb; padding:8px 10px; border-radius:6px;">';
-        for (const c of chAle) {
+      // Cheltuielile si soldul cumulat afisate DOAR pe ultimul card per magazin
+      if (isLastCard && perMag[b.magazin].cheltuieli.length > 0) {
+        html += '<div style="margin-top:8px; padding:8px 10px; border-left:3px solid #f59e0b; background:#fffbeb; border-radius:6px; font-size:12px;">';
+        html += `<div style="font-weight:700; color:#92400e; margin-bottom:4px;">Cheltuieli ${escHtml(b.magazin)} (toate ne-confirmate)</div>`;
+        for (const c of perMag[b.magazin].cheltuieli) {
           const intr = parseFloat(c.intrare||0);
           const ies = parseFloat(c.iesire||0);
           const val = ies - intr;
@@ -2026,6 +2062,14 @@ async function verificaBorderouri() {
           }
         }
         html += '</div>';
+      }
+      if (isLastCard) {
+        const soldCumulat = perMag[b.magazin].cash - perMag[b.magazin].totalCh;
+        const cssCol = soldCumulat < 0 ? '#fecaca' : '#bbf7d0';
+        html += `<div style="margin-top:10px; padding:10px 14px; background:#1F3864; color:white; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-size:14px;">
+          <div>SOLD CUMULAT ${escHtml(b.magazin)} (incasari − cheltuieli)</div>
+          <div style="font-size:18px; font-weight:800; color:${cssCol};">${soldCumulat.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
+        </div>`;
       }
       const actiuniBord = estePredat
         ? `<button type="button" class="btn-deconteaza" onclick="confirmaBorderou(${b.id})" style="flex:1;">Confirmă (banii au ajuns)</button>
