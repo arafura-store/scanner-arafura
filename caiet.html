@@ -1534,6 +1534,25 @@ async function adaugaOperatiune() {
 }
 
 let allOperatiuni = [];
+// Filtru focus pe un magazin (set la click pe SOLD CUMULAT, reset cand toate borderourile magazinului sunt confirmate)
+let _filtruMagazinFocus = null;
+let _filtruBorderouIds = []; // ids ale borderourilor magazinului filtrat — folosite pentru a filtra randurile pending in tabel
+
+async function toggleFiltruMagazin(magazin) {
+  if (_filtruMagazinFocus === magazin) {
+    _filtruMagazinFocus = null;
+    _filtruBorderouIds = [];
+  } else {
+    _filtruMagazinFocus = magazin;
+    // Aflu id-urile borderourilor pending pentru magazinul ales
+    try {
+      const r = await fetch(`${API}/borderouri?magazin=eq.${encodeURIComponent(magazin)}&or=(status.eq.trimis,status.eq.predat-sofer)&select=id`, { headers: HEADERS });
+      const arr = await r.json();
+      _filtruBorderouIds = Array.isArray(arr) ? arr.map(b => b.id) : [];
+    } catch { _filtruBorderouIds = []; }
+  }
+  await Promise.all([verificaBorderouri(), incarcaOperatiuni()]);
+}
 let searchTimer = null;
 let _bordMap = {}; // {borderouId: {magazin, nrMagazin}}
 
@@ -1689,6 +1708,18 @@ function renderOperatiuni() {
   const fDir = document.getElementById('t-directie').value;
 
   let data = allOperatiuni;
+
+  // FILTRU FOCUS pe un magazin: doar randurile PENDING legate la borderourile lui
+  if (_filtruMagazinFocus && _filtruBorderouIds.length > 0) {
+    const idsSet = new Set(_filtruBorderouIds.map(String));
+    data = data.filter(d => {
+      const t = (d.tip || '');
+      if (!t.includes('PENDING')) return false; // doar pending
+      const m = (d.observatii || '').match(/borderou #(\d+)/);
+      if (!m) return false;
+      return idsSet.has(m[1]);
+    });
+  }
 
   if (q) {
     data = data.filter(d => {
@@ -1948,10 +1979,22 @@ async function verificaBorderouri() {
   }
   try {
     const resp = await fetch(`${API}/borderouri?or=(status.eq.trimis,status.eq.predat-sofer)&order=status.desc,data.asc,trimis_la.asc`, { headers: HEADERS });
-    const data = await resp.json();
+    let data = await resp.json();
     if (!Array.isArray(data) || data.length === 0) {
+      // Daca filtrul de focus era activ, l-am consumat → reset
+      if (_filtruMagazinFocus) { _filtruMagazinFocus = null; incarcaOperatiuni(); }
       container.style.display = 'none';
       return;
+    }
+    // Daca filtru focus magazin → tin doar borderourile magazinului. Cand magazinul nu mai apare → reset
+    if (_filtruMagazinFocus) {
+      const mai = data.some(b => b.magazin === _filtruMagazinFocus);
+      if (!mai) {
+        _filtruMagazinFocus = null;
+        incarcaOperatiuni();
+      } else {
+        data = data.filter(b => b.magazin === _filtruMagazinFocus);
+      }
     }
 
     // Încarcă cheltuielile pending legate
@@ -2064,8 +2107,12 @@ async function verificaBorderouri() {
       if (isLastCard) {
         const soldCumulat = perMag[b.magazin].cash - perMag[b.magazin].totalCh;
         const cssCol = soldCumulat < 0 ? '#fecaca' : '#bbf7d0';
-        html += `<div style="margin-top:10px; padding:10px 14px; background:#1F3864; color:white; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-size:14px;">
-          <div>SOLD CUMULAT ${escHtml(b.magazin)} (incasari − cheltuieli)</div>
+        const magEsc = escHtml(b.magazin).replace(/'/g, "\\'");
+        const isFocused = _filtruMagazinFocus === b.magazin;
+        const focusStyle = isFocused ? 'box-shadow:0 0 0 3px #FFD700;' : '';
+        const focusHint = isFocused ? '<span style="font-size:10px; opacity:0.8; margin-left:6px;">(filtru activ — click pentru reset)</span>' : '<span style="font-size:10px; opacity:0.6; margin-left:6px;">(click pentru filtru focus)</span>';
+        html += `<div onclick="toggleFiltruMagazin('${magEsc}')" style="margin-top:10px; padding:10px 14px; background:#1F3864; color:white; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-size:14px; cursor:pointer; ${focusStyle}">
+          <div>SOLD CUMULAT ${escHtml(b.magazin)} (incasari − cheltuieli)${focusHint}</div>
           <div style="font-size:18px; font-weight:800; color:${cssCol};">${soldCumulat.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
         </div>`;
       }
