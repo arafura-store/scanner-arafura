@@ -988,22 +988,39 @@ async function incarcaIstoric() {
 
     let totalCash = 0;
     let totalCheltuieli = 0;
+    // Calculez prima totalul cheltuielilor (toate, indiferent de borderou)
+    for (const c of cheltuieli) {
+      totalCheltuieli += parseFloat(c.iesire||0) - parseFloat(c.intrare||0);
+    }
+    // Detect ULTIMUL card 'trimis' (cea mai recenta dispozitie ne-predata) — acolo afisez cheltuielile + sold cumulat
+    // Daca toate sunt 'predat-sofer', folosesc ultimul absolut
+    let lastTrimisIdx = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i].status === 'trimis') lastTrimisIdx = i;
+    }
+    if (lastTrimisIdx === -1) lastTrimisIdx = data.length - 1;
+
     let html = '';
-    for (const b of data) {
+    for (let idx = 0; idx < data.length; idx++) {
+      const b = data[idx];
       const dt = new Date(b.data).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'});
       const trimis = b.trimis_la ? new Date(b.trimis_la).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '';
       const cashZ = parseFloat(b.cash_z_c1||0) + parseFloat(b.cash_z_c2||0);
       const cashFizic = parseFloat(b.cash_fizic||0);
       const suma = cashFizic > 0 ? cashFizic : cashZ;
       totalCash += suma;
-      const chAle = cheltuieli.filter(c => (c.observatii||'').startsWith(`cheltuiala borderou #${b.id}`));
       const estePredat = b.status === 'predat-sofer';
+      const isLastCard = idx === lastTrimisIdx;
       const cardStyle = estePredat
         ? 'padding:12px; background:#eff6ff; border-radius:10px; margin-bottom:8px; border-left:3px solid #6366f1; opacity:.85;'
-        : 'padding:12px; background:#f8fafc; border-radius:10px; margin-bottom:8px; border-left:3px solid var(--blue);';
+        : (isLastCard
+            ? 'padding:14px; background:#f0fdf4; border-radius:10px; margin-bottom:8px; border-left:5px solid var(--green);'
+            : 'padding:12px; background:#f8fafc; border-radius:10px; margin-bottom:8px; border-left:3px solid var(--blue);');
       const badgeStatus = estePredat
         ? '<span style="background:#6366f1; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">🚚 PREDAT — așteaptă birou</span>'
-        : '';
+        : (isLastCard
+            ? '<span style="background:#16a34a; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800; margin-left:6px;">ULTIMUL — sold cumulat aici</span>'
+            : '');
       const btnSterge = (currentUser && currentUser.nume === 'EUGEN')
         ? `<button onclick="event.stopPropagation(); stergeBorderou(${b.id}, '${escHtml(b.magazin)}', '${dt}')" style="background:var(--red); color:white; border:none; border-radius:5px; padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer; margin-left:8px;" title="Șterge borderoul + entry-urile asociate">🗑</button>`
         : '';
@@ -1015,13 +1032,14 @@ async function incarcaIstoric() {
             ${btnSterge}
           </div>
         </div>`;
-      if (chAle.length > 0) {
-        html += '<div style="margin-top:6px; padding-left:12px; border-left:2px solid #fbbf24; font-size:12px;">';
-        for (const c of chAle) {
+      // Afisez TOATE cheltuielile + soldul cumulat DOAR pe ultimul card
+      if (isLastCard && cheltuieli.length > 0) {
+        html += '<div style="margin-top:8px; padding:10px 12px; background:#fffbeb; border-left:3px solid #f59e0b; border-radius:6px; font-size:12px;">';
+        html += '<div style="font-weight:700; color:#92400e; margin-bottom:6px;">Cheltuieli (toate ne-predate, indiferent din ce zi)</div>';
+        for (const c of cheltuieli) {
           const intr = parseFloat(c.intrare||0);
           const ies = parseFloat(c.iesire||0);
-          const val = ies - intr; // pozitiv = iese din pool, negativ = intră în pool
-          totalCheltuieli += val;
+          const val = ies - intr;
           const tipClean = (c.tip||'').replace(' (PENDING MAGAZIN)','');
           const obsExtra = (c.observatii||'').split(' — ')[1];
           const labelExtra = obsExtra ? ' ('+escHtml(obsExtra)+')' : '';
@@ -1038,6 +1056,15 @@ async function incarcaIstoric() {
           }
         }
         html += '</div>';
+      }
+      // Sold cumulat afisat doar pe ultimul card
+      if (isLastCard) {
+        const soldCumulat = totalCash - totalCheltuieli;
+        const cssCol = soldCumulat < 0 ? 'var(--red)' : 'var(--green)';
+        html += `<div style="margin-top:10px; padding:10px 14px; background:#1F3864; color:white; border-radius:8px; display:flex; justify-content:space-between; align-items:center; font-size:14px;">
+          <div>SOLD CUMULAT (toate borderourile − cheltuieli)</div>
+          <div style="font-size:18px; font-weight:800; color:${soldCumulat<0?'#fecaca':'#bbf7d0'};">${soldCumulat.toLocaleString('ro-RO',{minimumFractionDigits:2})} RON</div>
+        </div>`;
       }
       html += '</div>';
     }
@@ -1111,12 +1138,12 @@ async function salveazaCheltuiala() {
     if (!confirm(`Suma ${suma.toFixed(2)} depășește disponibilul (${disponibil.toFixed(2)} RON). Continui oricum?`)) return;
   }
 
-  // Link la borderoul CEL MAI RECENT al magazinului curent (nu cel mai vechi)
+  // Link la borderoul CEL MAI RECENT 'trimis' (nu cel predat-sofer, alea sunt deja cu soferul)
   const magazinFilter = (currentUser && currentUser.nume !== 'EUGEN' && MAGAZINE.includes(currentUser.nume))
     ? currentUser.nume : (document.getElementById('f-magazin').value || null);
   const candidate = magazinFilter
-    ? _asteptareBorderouri.filter(b => b.magazin === magazinFilter)
-    : _asteptareBorderouri;
+    ? _asteptareBorderouri.filter(b => b.magazin === magazinFilter && b.status === 'trimis')
+    : _asteptareBorderouri.filter(b => b.status === 'trimis');
   // Sortez DESCENDENT după data → primul = cel mai recent
   candidate.sort((a, b) => new Date(b.data) - new Date(a.data));
   const bTarget = candidate[0];
