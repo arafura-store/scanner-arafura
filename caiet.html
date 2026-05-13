@@ -2026,9 +2026,7 @@ async function verificaBorderouri() {
       const cardBorder = isLastCard && !estePredat
         ? 'border-left:5px solid #16a34a; background:#f0fdf4;'
         : (estePredat ? 'border-left:5px solid var(--green); background:#f0fdf4;' : '');
-      const badgeUltim = isLastCard && !estePredat
-        ? '<span style="background:#16a34a; color:white; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:800; margin-left:6px;">ULTIMUL — sold cumulat aici</span>'
-        : '';
+      const badgeUltim = '';
       html += `<div class="alerta-decont-box" style="${cardBorder}">
         <div style="display:flex; align-items:center; gap:12px;">
           <div class="alerta-icon">🏪</div>
