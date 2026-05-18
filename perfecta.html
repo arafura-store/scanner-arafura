@@ -505,8 +505,9 @@ async function loadAll() {
       fetchAll('registru_casa_lunar',    'select=*&order=an.asc,luna.asc')
     ]);
 
-    _valoriLunar = valoriLunar;
-    _casaLunar   = casaLunar;
+    // Filtrez magazinele inchise (valori reziduale) inca de la sursa
+    _valoriLunar = valoriLunar.filter(r => !MAG_INCHISE.has(r.magazin));
+    _casaLunar   = casaLunar  .filter(r => !MAG_INCHISE.has(r.magazin));
 
     document.getElementById('spinner').style.display = 'none';
     document.getElementById('content').style.display = 'block';
@@ -848,12 +849,13 @@ const LUNI_RO_LUNG = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie',
 const LUNI_RO_SCRT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
 
 // Magazine canonice — populate DINAMIC din datele Supabase
-// (uniunea numelor distincte de magazin din ambele tabele, excluzand 'TOTAL')
+// Exclude TOTAL + magazine inchise (valori reziduale, nu reale)
+const MAG_INCHISE = new Set(['ION RATIU', 'OVIDIU LIPSA']);
 let MAG_UPP = [];
 function rebuildMagList() {
   const set = new Set();
-  _valoriLunar.forEach(r => { if (r.magazin && r.magazin !== 'TOTAL') set.add(r.magazin); });
-  _casaLunar  .forEach(r => { if (r.magazin && r.magazin !== 'TOTAL') set.add(r.magazin); });
+  _valoriLunar.forEach(r => { if (r.magazin && r.magazin !== 'TOTAL' && !MAG_INCHISE.has(r.magazin)) set.add(r.magazin); });
+  _casaLunar  .forEach(r => { if (r.magazin && r.magazin !== 'TOTAL' && !MAG_INCHISE.has(r.magazin)) set.add(r.magazin); });
   MAG_UPP = Array.from(set).sort();
 }
 
