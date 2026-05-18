@@ -309,15 +309,18 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
 
       <!-- D. DP / DI ADMINISTRATOR -->
       <div class="section">
-        <h2>📑 Dispoziții Plată / Încasare către Administrator
-          <span class="meta" id="ad-meta"></span>
+        <h2 style="flex-wrap:wrap;gap:8px">
+          <span>📑 Dispoziții Plată / Încasare către Administrator
+            <span class="meta" id="ad-meta"></span>
+          </span>
+          <span id="ad-flux"></span>
         </h2>
         <div class="body" style="padding:0">
           <table class="tbl" id="ad-tbl">
             <thead><tr>
-              <th>Magazin</th>
-              <th style="text-align:right">DP Administrator (LEI)</th>
-              <th style="text-align:right">DI Administrator (LEI)</th>
+              <th>Punct de lucru</th>
+              <th style="text-align:right">DP (Dispoziții de plată) LEI</th>
+              <th style="text-align:right">DI (Dispoziții de încasare) LEI</th>
               <th style="text-align:right">Net (DI − DP)</th>
             </tr></thead>
             <tbody id="ad-body"></tbody>
@@ -1126,9 +1129,11 @@ function renderDPDIAdmin(ref) {
     return {mag, dp, di, net: di - dp, hasData: !!r};
   }).filter(r => r.hasData && (r.dp !== 0 || r.di !== 0));
 
+  const fluxEl = document.getElementById('ad-flux');
   if (rows.length === 0) {
     document.getElementById('ad-body').innerHTML = '<tr><td colspan="4" class="empty-msg">Nicio dispoziție către administrator luna aceasta</td></tr>';
     document.getElementById('ad-foot').innerHTML = '';
+    fluxEl.innerHTML = '';
   } else {
     document.getElementById('ad-body').innerHTML = rows.map(r => `<tr>
       <td><b style="color:var(--navy)">${r.mag}</b></td>
@@ -1143,9 +1148,17 @@ function renderDPDIAdmin(ref) {
       <td style="text-align:right;color:var(--green)">${fmt(totDI,2)}</td>
       <td style="text-align:right;color:${colorVar(totNet)}">${totNet >= 0 ? '+' : ''}${fmt(totNet,2)}</td>
     </tr>`;
+    // Badge flux: plus → ARAFURA incaseaza; minus → PERFECTA incaseaza
+    if (Math.abs(totNet) < 0.01) {
+      fluxEl.innerHTML = '<span style="background:#475569;color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700">⚖ Flux echilibrat</span>';
+    } else if (totNet > 0) {
+      fluxEl.innerHTML = `<span style="background:#00B050;color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(0,176,80,0.4)">↗ Bani încasați de ARAFURA: +${fmt0(totNet)} LEI</span>`;
+    } else {
+      fluxEl.innerHTML = `<span style="background:#C00000;color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(192,0,0,0.4)">↘ Bani încasați de PERFECTA: ${fmt0(totNet)} LEI</span>`;
+    }
   }
   document.getElementById('ad-meta').textContent =
-    `${rows.length} magazine cu activitate · luna ${lunaLabel(ref.luna, ref.an, true)}`;
+    `${rows.length} amaneturi cu activitate · luna ${lunaLabel(ref.luna, ref.an, true)}`;
 }
 
 // ── E. EXECUTARI ────────────────────────────────────────────
