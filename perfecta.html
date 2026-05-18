@@ -1154,7 +1154,7 @@ function renderDPDIAdmin(ref) {
     } else if (totNet > 0) {
       fluxEl.innerHTML = `<span style="background:#00B050;color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(0,176,80,0.4)">↗ Bani încasați de ARAFURA: +${fmt0(totNet)} LEI</span>`;
     } else {
-      fluxEl.innerHTML = `<span style="background:#C00000;color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(192,0,0,0.4)">↘ Bani încasați de PERFECTA: ${fmt0(totNet)} LEI</span>`;
+      fluxEl.innerHTML = `<span style="background:#C00000;color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;box-shadow:0 1px 3px rgba(192,0,0,0.4)">↘ Bani plătiți de ARAFURA: ${fmt0(Math.abs(totNet))} LEI</span>`;
     }
   }
   document.getElementById('ad-meta').textContent =
