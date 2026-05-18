@@ -84,7 +84,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
 .mc.danger{border-left:4px solid var(--red)}
 .mc.good{border-left:4px solid var(--green)}
 @media(max-width:900px){.mag-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.kpi-grid{grid-template-columns:1fr!important}}
-@media(max-width:1200px) and (min-width:901px){.mag-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:1200px) and (min-width:901px){.mag-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}}
 </style>
 </head>
 <body>
@@ -258,7 +258,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
               <div class="sub" id="vc-net-sub">—</div>
             </div>
           </div>
-          <div id="vc-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+          <div id="vc-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
           <div class="chart-wrap" style="height:300px"><canvas id="ch-valori-istoric"></canvas></div>
         </div>
       </div>
@@ -302,7 +302,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
               <div class="sub" id="cm-eff-sub">— RON comision la 100 RON acordați</div>
             </div>
           </div>
-          <div id="cm-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+          <div id="cm-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
           <div class="chart-wrap" style="height:300px"><canvas id="ch-comision-istoric"></canvas></div>
         </div>
       </div>
@@ -344,7 +344,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
               <div class="sub">% din acordările lunii</div>
             </div>
           </div>
-          <div id="ex-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+          <div id="ex-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
           <div class="chart-wrap" style="height:300px"><canvas id="ch-executari-istoric"></canvas></div>
         </div>
       </div>
@@ -847,9 +847,15 @@ const LUNI_RO_LUNG = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie',
                       'Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
 const LUNI_RO_SCRT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
 
-// Magazine canonice (uppercase) — match cu ce vine din ETL (curata_magazin → upper)
-const MAG_UPP = ['BABADAG','TOMIS 3','POARTA 6','POPORULUI','KOGALNICEANU',
-                 'MARVIMEX','NAVODARI','MEDGIDIA','CUMPANA','LUMINA'];
+// Magazine canonice — populate DINAMIC din datele Supabase
+// (uniunea numelor distincte de magazin din ambele tabele, excluzand 'TOTAL')
+let MAG_UPP = [];
+function rebuildMagList() {
+  const set = new Set();
+  _valoriLunar.forEach(r => { if (r.magazin && r.magazin !== 'TOTAL') set.add(r.magazin); });
+  _casaLunar  .forEach(r => { if (r.magazin && r.magazin !== 'TOTAL') set.add(r.magazin); });
+  MAG_UPP = Array.from(set).sort();
+}
 
 function lunaKey(luna, an) { return an*100 + luna; }
 function lunaPrev(luna, an) {
@@ -896,6 +902,7 @@ function arrowVar(delta) {
 function renderRapoarteLunare() {
   const ref = getLunaRef();
   if (!ref) return;
+  rebuildMagList();
   renderValoriContracte(ref);
   renderRegistruCasa(ref);
   renderComisionLunar(ref);
