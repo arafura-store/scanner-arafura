@@ -73,6 +73,18 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
 .med3{color:#CD7F32;font-size:15px}
 .empty-msg{padding:30px;text-align:center;color:var(--sub);font-size:13px}
 .spinner{padding:40px;text-align:center;color:var(--navy);font-weight:700}
+/* MAG CARDS (compact, pentru rapoarte lunare) */
+.mc{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;transition:transform .12s}
+.mc:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(0,0,0,0.08)}
+.mc .mc-mag{font-size:10px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:0.04em}
+.mc .mc-val{font-size:17px;font-weight:800;color:var(--navy);margin:4px 0}
+.mc .mc-var{font-size:10px;font-weight:700}
+.mc.zero{opacity:0.55}
+.mc.top{border-left:4px solid var(--gold)}
+.mc.danger{border-left:4px solid var(--red)}
+.mc.good{border-left:4px solid var(--green)}
+@media(max-width:900px){.mag-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.kpi-grid{grid-template-columns:1fr!important}}
+@media(max-width:1200px) and (min-width:901px){.mag-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
 </style>
 </head>
 <body>
@@ -208,6 +220,132 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
         <div class="section">
           <h2>🪙 Cotație aur 24K — ultimele 30 zile</h2>
           <div class="body"><div class="chart-wrap"><canvas id="ch-aur"></canvas></div></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- RAPOARTE LUNARE PERFECTA — valori contracte +      -->
+      <!-- registru casa, importate automat din Drive          -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="section" style="background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;margin-top:24px">
+        <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+          <div>
+            <div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:0.06em">📊 Rapoarte lunare</div>
+            <div style="font-size:18px;font-weight:800;margin-top:2px">Situație financiară · Perfecta Invest IFN</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="font-size:11px;opacity:0.9;font-weight:700">Lună de referință:</label>
+            <select id="luna-ref" onchange="renderRapoarteLunare()" style="padding:6px 10px;border-radius:6px;border:none;background:#fff;color:var(--navy);font-weight:700;cursor:pointer;font-size:12px"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- A. VALOARE CONTRACTE PER MAGAZIN -->
+      <div class="section">
+        <h2>💼 Valoarea contractelor active per magazin
+          <span class="meta" id="vc-meta"></span>
+        </h2>
+        <div class="body">
+          <div class="kpi-grid" style="margin-bottom:14px;grid-template-columns:repeat(2,1fr)">
+            <div class="kpi gold">
+              <div class="lbl">Total firmă · luna ref.</div>
+              <div class="val" id="vc-total">—</div>
+              <div class="sub" id="vc-total-var">—</div>
+            </div>
+            <div class="kpi">
+              <div class="lbl">Acordări noi vs Restituiri luna ref.</div>
+              <div class="val" id="vc-net">—</div>
+              <div class="sub" id="vc-net-sub">—</div>
+            </div>
+          </div>
+          <div id="vc-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+          <div class="chart-wrap" style="height:300px"><canvas id="ch-valori-istoric"></canvas></div>
+        </div>
+      </div>
+
+      <!-- B. SOLD CASH PRIMA/ULTIMA ZI LUNA -->
+      <div class="section">
+        <h2>💰 Sold cash · prima și ultima zi a lunii
+          <span class="meta" id="rc-meta"></span>
+        </h2>
+        <div class="body" style="padding:0">
+          <table class="tbl" id="rc-tbl">
+            <thead><tr>
+              <th>Magazin</th>
+              <th style="text-align:right">Sold inițial (LEI)</th>
+              <th style="text-align:right">Total încasări</th>
+              <th style="text-align:right">Total plăți</th>
+              <th style="text-align:right">Sold final (LEI)</th>
+              <th style="text-align:right">Δ pe lună</th>
+            </tr></thead>
+            <tbody id="rc-body"></tbody>
+            <tfoot id="rc-foot" style="background:#f1f5f9;font-weight:800"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- C. COMISION PER MAGAZIN -->
+      <div class="section">
+        <h2>🪙 Comision încasat per magazin
+          <span class="meta" id="cm-meta"></span>
+        </h2>
+        <div class="body">
+          <div class="kpi-grid" style="margin-bottom:14px;grid-template-columns:repeat(2,1fr)">
+            <div class="kpi green">
+              <div class="lbl">Total comision firmă · luna ref.</div>
+              <div class="val" id="cm-total">—</div>
+              <div class="sub" id="cm-total-var">—</div>
+            </div>
+            <div class="kpi gold">
+              <div class="lbl">Comision/Acordări (eficiență)</div>
+              <div class="val" id="cm-eff">—</div>
+              <div class="sub" id="cm-eff-sub">— RON comision la 100 RON acordați</div>
+            </div>
+          </div>
+          <div id="cm-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+          <div class="chart-wrap" style="height:300px"><canvas id="ch-comision-istoric"></canvas></div>
+        </div>
+      </div>
+
+      <!-- D. DP / DI ADMINISTRATOR -->
+      <div class="section">
+        <h2>📑 Dispoziții Plată / Încasare către Administrator
+          <span class="meta" id="ad-meta"></span>
+        </h2>
+        <div class="body" style="padding:0">
+          <table class="tbl" id="ad-tbl">
+            <thead><tr>
+              <th>Magazin</th>
+              <th style="text-align:right">DP Administrator (LEI)</th>
+              <th style="text-align:right">DI Administrator (LEI)</th>
+              <th style="text-align:right">Net (DI − DP)</th>
+            </tr></thead>
+            <tbody id="ad-body"></tbody>
+            <tfoot id="ad-foot" style="background:#f1f5f9;font-weight:800"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- E. EXECUTARI PER MAGAZIN -->
+      <div class="section">
+        <h2>⚖️ Executări per magazin
+          <span class="meta" id="ex-meta"></span>
+        </h2>
+        <div class="body">
+          <div class="kpi-grid" style="margin-bottom:14px;grid-template-columns:repeat(2,1fr)">
+            <div class="kpi red">
+              <div class="lbl">Total executări firmă · luna ref.</div>
+              <div class="val" id="ex-total">—</div>
+              <div class="sub" id="ex-total-var">—</div>
+            </div>
+            <div class="kpi">
+              <div class="lbl">Rata executări vs Acordări</div>
+              <div class="val" id="ex-rata">—</div>
+              <div class="sub">% din acordările lunii</div>
+            </div>
+          </div>
+          <div id="ex-mag-grid" class="mag-grid" style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px"></div>
+          <div class="chart-wrap" style="height:300px"><canvas id="ch-executari-istoric"></canvas></div>
         </div>
       </div>
 
@@ -357,13 +495,18 @@ async function loadAll() {
   document.getElementById('last-upd').textContent = 'Se actualizeaza...';
 
   try {
-    const [contracte, pvuri, verif, cotatii, istoric] = await Promise.all([
+    const [contracte, pvuri, verif, cotatii, istoric, valoriLunar, casaLunar] = await Promise.all([
       fetchAll('contracte_amanet', 'select=*'),
       fetchAll('pv_executare', 'select=nr_pv,magazin,data_doc,perioada'),
       fetchAll('verificari_amanet', 'select=*&order=data_verificare.desc'),
       fetchAll('cotatii_aur', 'select=*&order=data_snapshot.desc.nullslast,data_ora.desc&limit=60'),
-      fetchAll('istoric_amanet', 'select=*&order=luna.asc')
+      fetchAll('istoric_amanet', 'select=*&order=luna.asc'),
+      fetchAll('valori_contracte_lunar', 'select=*&order=an.asc,luna.asc'),
+      fetchAll('registru_casa_lunar',    'select=*&order=an.asc,luna.asc')
     ]);
+
+    _valoriLunar = valoriLunar;
+    _casaLunar   = casaLunar;
 
     document.getElementById('spinner').style.display = 'none';
     document.getElementById('content').style.display = 'block';
@@ -377,6 +520,8 @@ async function loadAll() {
     renderClasament(contracte);
     renderGrafice(istoric, cotatii);
     renderVerifSumar(verif);
+    populeazaLuniRef();
+    renderRapoarteLunare();
   } catch(e) {
     document.getElementById('spinner').textContent = '❌ Eroare: ' + e.message;
   }
@@ -690,6 +835,375 @@ function renderVerifSumar(verif) {
   document.getElementById('v-dif').textContent = dif;
   document.getElementById('v-lipsa').textContent = lipsa;
   document.getElementById('v-rata').textContent = rata + '%';
+}
+
+// ═══════════════════════════════════════════════════════════
+// RAPOARTE LUNARE (valori_contracte_lunar + registru_casa_lunar)
+// ═══════════════════════════════════════════════════════════
+let _valoriLunar = [];
+let _casaLunar   = [];
+
+const LUNI_RO_LUNG = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie',
+                      'Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+const LUNI_RO_SCRT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
+
+// Magazine canonice (uppercase) — match cu ce vine din ETL (curata_magazin → upper)
+const MAG_UPP = ['BABADAG','TOMIS 3','POARTA 6','POPORULUI','KOGALNICEANU',
+                 'MARVIMEX','NAVODARI','MEDGIDIA','CUMPANA','LUMINA'];
+
+function lunaKey(luna, an) { return an*100 + luna; }
+function lunaPrev(luna, an) {
+  if (luna === 1) return {luna: 12, an: an-1};
+  return {luna: luna-1, an: an};
+}
+function lunaLabel(luna, an, lung=false) {
+  return (lung ? LUNI_RO_LUNG : LUNI_RO_SCRT)[luna-1] + ' ' + an;
+}
+
+function populeazaLuniRef() {
+  const sel = document.getElementById('luna-ref');
+  if (!sel) return;
+  const setLuni = new Set();
+  _valoriLunar.forEach(r => setLuni.add(r.an*100 + r.luna));
+  _casaLunar  .forEach(r => setLuni.add(r.an*100 + r.luna));
+  const luni = Array.from(setLuni).sort((a,b) => b-a); // desc, ultima sus
+  if (luni.length === 0) {
+    sel.innerHTML = '<option>— fără date —</option>';
+    return;
+  }
+  sel.innerHTML = luni.map(k => {
+    const an = Math.floor(k/100), luna = k%100;
+    return `<option value="${k}">${lunaLabel(luna, an, true)}</option>`;
+  }).join('');
+}
+
+function getLunaRef() {
+  const sel = document.getElementById('luna-ref');
+  if (!sel || !sel.value) return null;
+  const k = parseInt(sel.value);
+  return {luna: k%100, an: Math.floor(k/100), key: k};
+}
+
+function colorVar(delta) {
+  if (Math.abs(delta) < 0.01) return 'var(--sub)';
+  return delta > 0 ? 'var(--green)' : 'var(--red)';
+}
+function arrowVar(delta) {
+  if (Math.abs(delta) < 0.01) return '→';
+  return delta > 0 ? '↑' : '↓';
+}
+
+function renderRapoarteLunare() {
+  const ref = getLunaRef();
+  if (!ref) return;
+  renderValoriContracte(ref);
+  renderRegistruCasa(ref);
+  renderComisionLunar(ref);
+  renderDPDIAdmin(ref);
+  renderExecutariLunar(ref);
+}
+
+// ── A. VALORI CONTRACTE ─────────────────────────────────────
+function renderValoriContracte(ref) {
+  const curent = _valoriLunar.filter(r => r.luna === ref.luna && r.an === ref.an);
+  const prev   = lunaPrev(ref.luna, ref.an);
+  const lunaP  = _valoriLunar.filter(r => r.luna === prev.luna && r.an === prev.an);
+  const mapCur = Object.fromEntries(curent.map(r => [r.magazin, r]));
+  const mapPrv = Object.fromEntries(lunaP.map(r => [r.magazin, r]));
+
+  // KPI: total firma
+  const totalCur = curent.reduce((a,r) => a + (parseFloat(r.sold_final)||0), 0);
+  const totalPrv = lunaP .reduce((a,r) => a + (parseFloat(r.sold_final)||0), 0);
+  const dTotal   = totalCur - totalPrv;
+  const pctTotal = totalPrv > 0 ? (dTotal/totalPrv*100) : 0;
+  document.getElementById('vc-total').textContent = fmt0(totalCur) + ' LEI';
+  document.getElementById('vc-total-var').innerHTML = totalPrv > 0
+    ? `<span style="color:${colorVar(dTotal)};font-weight:700">${arrowVar(dTotal)} ${fmt0(Math.abs(dTotal))} LEI (${fmt(Math.abs(pctTotal),1)}%)</span> vs ${lunaLabel(prev.luna, prev.an, true)}`
+    : '— prima luna cu date';
+
+  // Net acordari - restituiri luna ref
+  const acordariCur  = curent.reduce((a,r) => a + (parseFloat(r.acordari)||0), 0);
+  const restituiriCur = curent.reduce((a,r) => a + (parseFloat(r.restituiri)||0), 0);
+  const net = acordariCur - restituiriCur;
+  document.getElementById('vc-net').textContent = (net >= 0 ? '+' : '') + fmt0(net) + ' LEI';
+  document.getElementById('vc-net-sub').innerHTML = `<b style="color:var(--green)">${fmt0(acordariCur)}</b> acordări · <b style="color:var(--red)">${fmt0(restituiriCur)}</b> restituiri`;
+
+  // Cards per magazin
+  const grid = document.getElementById('vc-mag-grid');
+  // sort magazine dupa sold_final desc
+  const sorted = MAG_UPP.slice().sort((a,b) => (parseFloat(mapCur[b]?.sold_final)||0) - (parseFloat(mapCur[a]?.sold_final)||0));
+  const maxVal = Math.max(...MAG_UPP.map(m => parseFloat(mapCur[m]?.sold_final)||0));
+  grid.innerHTML = sorted.map(mag => {
+    const c = mapCur[mag], p = mapPrv[mag];
+    const valCur = parseFloat(c?.sold_final)||0;
+    const valPrv = parseFloat(p?.sold_final)||0;
+    const d = valCur - valPrv;
+    const pct = valPrv > 0 ? (d/valPrv*100) : 0;
+    let varHtml;
+    if (!c) {
+      varHtml = '<span style="color:var(--sub)">— fără date</span>';
+    } else if (!p || valPrv === 0) {
+      varHtml = '<span style="color:var(--sub)">— prima lună</span>';
+    } else {
+      varHtml = `<span style="color:${colorVar(d)}">${arrowVar(d)} ${fmt0(Math.abs(d))} (${fmt(Math.abs(pct),1)}%)</span>`;
+    }
+    const cls = !c || valCur === 0 ? 'zero' : (valCur === maxVal ? 'top' : '');
+    return `<div class="mc ${cls}">
+      <div class="mc-mag">${mag}</div>
+      <div class="mc-val">${fmt0(valCur)}</div>
+      <div class="mc-var">${varHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('vc-meta').textContent =
+    `${curent.length}/${MAG_UPP.length} magazine cu date · luna ${lunaLabel(ref.luna, ref.an, true)}`;
+
+  // Chart istoric: total firma per luna (12 luni inapoi de la ref)
+  const labels = [], dataTot = [];
+  for (let i=11; i>=0; i--) {
+    let an = ref.an, luna = ref.luna - i;
+    while (luna <= 0) { luna += 12; an--; }
+    labels.push(LUNI_RO_SCRT[luna-1] + ' ' + an);
+    const rows = _valoriLunar.filter(r => r.luna === luna && r.an === an);
+    dataTot.push(rows.reduce((a,r) => a + (parseFloat(r.sold_final)||0), 0));
+  }
+  if (_charts.valoriIst) _charts.valoriIst.destroy();
+  _charts.valoriIst = new Chart(document.getElementById('ch-valori-istoric'), {
+    type: 'line',
+    data: { labels, datasets: [{
+      label: 'Total contracte active firmă (LEI)',
+      data: dataTot, borderColor: '#1F3864',
+      backgroundColor: 'rgba(31,56,100,0.12)', fill: true, tension: 0.3,
+      pointRadius: 4, pointHoverRadius: 6, borderWidth: 2
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: {font: {size: 11}} },
+                 tooltip: { callbacks: { label: ctx => ctx.parsed.y.toLocaleString('ro-RO') + ' LEI' } } },
+      scales: { x: {grid:{display:false}, ticks:{font:{size:10}}},
+                y: {grid:{color:'#f1f5f9'}, ticks:{font:{size:10}, callback: v => v.toLocaleString('ro-RO')}} }
+    }
+  });
+}
+
+// ── B. REGISTRU CASA (sold prima/ultima zi) ─────────────────
+function renderRegistruCasa(ref) {
+  const curent = _casaLunar.filter(r => r.luna === ref.luna && r.an === ref.an && r.magazin !== 'TOTAL');
+  const mapCur = Object.fromEntries(curent.map(r => [r.magazin, r]));
+  let totSi = 0, totIn = 0, totPl = 0, totSf = 0;
+  const rows = MAG_UPP.map(mag => {
+    const r = mapCur[mag];
+    const si = parseFloat(r?.sold_initial)||0;
+    const tIn = parseFloat(r?.total_incasari)||0;
+    const tPl = parseFloat(r?.total_plati)||0;
+    const sf = parseFloat(r?.sold_final)||0;
+    totSi += si; totIn += tIn; totPl += tPl; totSf += sf;
+    const delta = sf - si;
+    return {mag, si, tIn, tPl, sf, delta, hasData: !!r};
+  });
+  document.getElementById('rc-body').innerHTML = rows.map(r => {
+    if (!r.hasData) return `<tr style="opacity:0.5"><td><b>${r.mag}</b></td><td colspan="5" style="text-align:center;color:var(--sub)">— fără date —</td></tr>`;
+    return `<tr>
+      <td><b style="color:var(--navy)">${r.mag}</b></td>
+      <td style="text-align:right">${fmt(r.si,2)}</td>
+      <td style="text-align:right;color:var(--green);font-weight:700">${fmt(r.tIn,2)}</td>
+      <td style="text-align:right;color:var(--red);font-weight:700">${fmt(r.tPl,2)}</td>
+      <td style="text-align:right;font-weight:800;color:var(--navy)">${fmt(r.sf,2)}</td>
+      <td style="text-align:right;color:${colorVar(r.delta)};font-weight:700">${arrowVar(r.delta)} ${fmt(Math.abs(r.delta),2)}</td>
+    </tr>`;
+  }).join('');
+  const dTot = totSf - totSi;
+  document.getElementById('rc-foot').innerHTML = `<tr>
+    <td><b>TOTAL FIRMĂ</b></td>
+    <td style="text-align:right">${fmt(totSi,2)}</td>
+    <td style="text-align:right;color:var(--green)">${fmt(totIn,2)}</td>
+    <td style="text-align:right;color:var(--red)">${fmt(totPl,2)}</td>
+    <td style="text-align:right;color:var(--navy)">${fmt(totSf,2)}</td>
+    <td style="text-align:right;color:${colorVar(dTot)}">${arrowVar(dTot)} ${fmt(Math.abs(dTot),2)}</td>
+  </tr>`;
+  document.getElementById('rc-meta').textContent =
+    `${curent.length}/${MAG_UPP.length} magazine · luna ${lunaLabel(ref.luna, ref.an, true)}`;
+}
+
+// ── C. COMISION ─────────────────────────────────────────────
+function renderComisionLunar(ref) {
+  const curent = _valoriLunar.filter(r => r.luna === ref.luna && r.an === ref.an);
+  const prev   = lunaPrev(ref.luna, ref.an);
+  const lunaP  = _valoriLunar.filter(r => r.luna === prev.luna && r.an === prev.an);
+  const mapCur = Object.fromEntries(curent.map(r => [r.magazin, r]));
+  const mapPrv = Object.fromEntries(lunaP.map(r => [r.magazin, r]));
+
+  const totalCur = curent.reduce((a,r) => a + (parseFloat(r.comision_incasat)||0), 0);
+  const totalPrv = lunaP .reduce((a,r) => a + (parseFloat(r.comision_incasat)||0), 0);
+  const d = totalCur - totalPrv;
+  const pct = totalPrv > 0 ? (d/totalPrv*100) : 0;
+  document.getElementById('cm-total').textContent = fmt0(totalCur) + ' LEI';
+  document.getElementById('cm-total-var').innerHTML = totalPrv > 0
+    ? `<span style="color:${colorVar(d)};font-weight:700">${arrowVar(d)} ${fmt0(Math.abs(d))} LEI (${fmt(Math.abs(pct),1)}%)</span> vs ${lunaLabel(prev.luna, prev.an, true)}`
+    : '— prima luna cu date';
+
+  // Eficienta: comision / acordari * 100
+  const acordCur = curent.reduce((a,r) => a + (parseFloat(r.acordari)||0), 0);
+  const eff = acordCur > 0 ? (totalCur / acordCur * 100) : 0;
+  document.getElementById('cm-eff').textContent = fmt(eff, 2) + '%';
+  document.getElementById('cm-eff-sub').textContent =
+    acordCur > 0 ? `${fmt(eff,2)} RON comision la 100 RON acordați` : '— fără acordări luna ref.';
+
+  // Cards per magazin
+  const grid = document.getElementById('cm-mag-grid');
+  const sorted = MAG_UPP.slice().sort((a,b) => (parseFloat(mapCur[b]?.comision_incasat)||0) - (parseFloat(mapCur[a]?.comision_incasat)||0));
+  const maxVal = Math.max(...MAG_UPP.map(m => parseFloat(mapCur[m]?.comision_incasat)||0));
+  grid.innerHTML = sorted.map(mag => {
+    const c = mapCur[mag], p = mapPrv[mag];
+    const valCur = parseFloat(c?.comision_incasat)||0;
+    const valPrv = parseFloat(p?.comision_incasat)||0;
+    const dd = valCur - valPrv;
+    const pp = valPrv > 0 ? (dd/valPrv*100) : 0;
+    let varHtml;
+    if (!c) varHtml = '<span style="color:var(--sub)">— fără date</span>';
+    else if (!p || valPrv === 0) varHtml = '<span style="color:var(--sub)">— prima lună</span>';
+    else varHtml = `<span style="color:${colorVar(dd)}">${arrowVar(dd)} ${fmt0(Math.abs(dd))} (${fmt(Math.abs(pp),1)}%)</span>`;
+    const cls = !c || valCur === 0 ? 'zero' : (valCur === maxVal ? 'good' : '');
+    return `<div class="mc ${cls}">
+      <div class="mc-mag">${mag}</div>
+      <div class="mc-val" style="color:var(--green)">${fmt0(valCur)}</div>
+      <div class="mc-var">${varHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('cm-meta').textContent =
+    `total ${fmt0(totalCur)} LEI · luna ${lunaLabel(ref.luna, ref.an, true)}`;
+
+  // Chart istoric: total comision firma 12 luni
+  const labels = [], dataTot = [];
+  for (let i=11; i>=0; i--) {
+    let an = ref.an, luna = ref.luna - i;
+    while (luna <= 0) { luna += 12; an--; }
+    labels.push(LUNI_RO_SCRT[luna-1] + ' ' + an);
+    const rows = _valoriLunar.filter(r => r.luna === luna && r.an === an);
+    dataTot.push(rows.reduce((a,r) => a + (parseFloat(r.comision_incasat)||0), 0));
+  }
+  if (_charts.comIst) _charts.comIst.destroy();
+  _charts.comIst = new Chart(document.getElementById('ch-comision-istoric'), {
+    type: 'bar',
+    data: { labels, datasets: [{
+      label: 'Comision incasat firmă (LEI)',
+      data: dataTot, backgroundColor: '#00B050', borderRadius: 4
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: {font: {size: 11}} },
+                 tooltip: { callbacks: { label: ctx => ctx.parsed.y.toLocaleString('ro-RO') + ' LEI' } } },
+      scales: { x: {grid:{display:false}, ticks:{font:{size:10}}},
+                y: {grid:{color:'#f1f5f9'}, ticks:{font:{size:10}, callback: v => v.toLocaleString('ro-RO')}} }
+    }
+  });
+}
+
+// ── D. DP / DI ADMINISTRATOR ────────────────────────────────
+function renderDPDIAdmin(ref) {
+  const curent = _casaLunar.filter(r => r.luna === ref.luna && r.an === ref.an && r.magazin !== 'TOTAL');
+  const mapCur = Object.fromEntries(curent.map(r => [r.magazin, r]));
+  let totDP = 0, totDI = 0;
+  const rows = MAG_UPP.map(mag => {
+    const r = mapCur[mag];
+    const dp = parseFloat(r?.plati_dp_admin)||0;
+    const di = parseFloat(r?.incasari_di_admin)||0;
+    totDP += dp; totDI += di;
+    return {mag, dp, di, net: di - dp, hasData: !!r};
+  }).filter(r => r.hasData && (r.dp !== 0 || r.di !== 0));
+
+  if (rows.length === 0) {
+    document.getElementById('ad-body').innerHTML = '<tr><td colspan="4" class="empty-msg">Nicio dispoziție către administrator luna aceasta</td></tr>';
+    document.getElementById('ad-foot').innerHTML = '';
+  } else {
+    document.getElementById('ad-body').innerHTML = rows.map(r => `<tr>
+      <td><b style="color:var(--navy)">${r.mag}</b></td>
+      <td style="text-align:right;color:var(--red);font-weight:700">${fmt(r.dp,2)}</td>
+      <td style="text-align:right;color:var(--green);font-weight:700">${fmt(r.di,2)}</td>
+      <td style="text-align:right;font-weight:800;color:${colorVar(r.net)}">${r.net >= 0 ? '+' : ''}${fmt(r.net,2)}</td>
+    </tr>`).join('');
+    const totNet = totDI - totDP;
+    document.getElementById('ad-foot').innerHTML = `<tr>
+      <td><b>TOTAL FIRMĂ</b></td>
+      <td style="text-align:right;color:var(--red)">${fmt(totDP,2)}</td>
+      <td style="text-align:right;color:var(--green)">${fmt(totDI,2)}</td>
+      <td style="text-align:right;color:${colorVar(totNet)}">${totNet >= 0 ? '+' : ''}${fmt(totNet,2)}</td>
+    </tr>`;
+  }
+  document.getElementById('ad-meta').textContent =
+    `${rows.length} magazine cu activitate · luna ${lunaLabel(ref.luna, ref.an, true)}`;
+}
+
+// ── E. EXECUTARI ────────────────────────────────────────────
+function renderExecutariLunar(ref) {
+  const curent = _valoriLunar.filter(r => r.luna === ref.luna && r.an === ref.an);
+  const prev   = lunaPrev(ref.luna, ref.an);
+  const lunaP  = _valoriLunar.filter(r => r.luna === prev.luna && r.an === prev.an);
+  const mapCur = Object.fromEntries(curent.map(r => [r.magazin, r]));
+  const mapPrv = Object.fromEntries(lunaP.map(r => [r.magazin, r]));
+
+  const totalCur = curent.reduce((a,r) => a + (parseFloat(r.executari)||0), 0);
+  const totalPrv = lunaP .reduce((a,r) => a + (parseFloat(r.executari)||0), 0);
+  const d = totalCur - totalPrv;
+  const pct = totalPrv > 0 ? (d/totalPrv*100) : 0;
+  document.getElementById('ex-total').textContent = fmt0(totalCur) + ' LEI';
+  document.getElementById('ex-total-var').innerHTML = totalPrv > 0
+    ? `<span style="color:${colorVar(-d)};font-weight:700">${arrowVar(d)} ${fmt0(Math.abs(d))} LEI (${fmt(Math.abs(pct),1)}%)</span> vs ${lunaLabel(prev.luna, prev.an, true)}`
+    : '— prima luna cu date';
+
+  const acordCur = curent.reduce((a,r) => a + (parseFloat(r.acordari)||0), 0);
+  const rata = acordCur > 0 ? (totalCur / acordCur * 100) : 0;
+  document.getElementById('ex-rata').textContent = fmt(rata, 2) + '%';
+
+  const grid = document.getElementById('ex-mag-grid');
+  const sorted = MAG_UPP.slice().sort((a,b) => (parseFloat(mapCur[b]?.executari)||0) - (parseFloat(mapCur[a]?.executari)||0));
+  const maxVal = Math.max(...MAG_UPP.map(m => parseFloat(mapCur[m]?.executari)||0));
+  grid.innerHTML = sorted.map(mag => {
+    const c = mapCur[mag], p = mapPrv[mag];
+    const valCur = parseFloat(c?.executari)||0;
+    const valPrv = parseFloat(p?.executari)||0;
+    const dd = valCur - valPrv;
+    const pp = valPrv > 0 ? (dd/valPrv*100) : 0;
+    let varHtml;
+    if (!c) varHtml = '<span style="color:var(--sub)">— fără date</span>';
+    else if (!p || valPrv === 0) varHtml = valCur > 0 ? '<span style="color:var(--red)">— nou luna asta</span>' : '<span style="color:var(--sub)">—</span>';
+    else varHtml = `<span style="color:${colorVar(-dd)}">${arrowVar(dd)} ${fmt0(Math.abs(dd))} (${fmt(Math.abs(pp),1)}%)</span>`;
+    const cls = !c || valCur === 0 ? 'zero' : (valCur === maxVal && valCur > 0 ? 'danger' : '');
+    return `<div class="mc ${cls}">
+      <div class="mc-mag">${mag}</div>
+      <div class="mc-val" style="color:${valCur > 0 ? 'var(--red)' : 'var(--sub)'}">${fmt0(valCur)}</div>
+      <div class="mc-var">${varHtml}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('ex-meta').textContent =
+    `total ${fmt0(totalCur)} LEI executări · luna ${lunaLabel(ref.luna, ref.an, true)}`;
+
+  // Chart istoric: executari firma 12 luni
+  const labels = [], dataTot = [];
+  for (let i=11; i>=0; i--) {
+    let an = ref.an, luna = ref.luna - i;
+    while (luna <= 0) { luna += 12; an--; }
+    labels.push(LUNI_RO_SCRT[luna-1] + ' ' + an);
+    const rows = _valoriLunar.filter(r => r.luna === luna && r.an === an);
+    dataTot.push(rows.reduce((a,r) => a + (parseFloat(r.executari)||0), 0));
+  }
+  if (_charts.execIst) _charts.execIst.destroy();
+  _charts.execIst = new Chart(document.getElementById('ch-executari-istoric'), {
+    type: 'bar',
+    data: { labels, datasets: [{
+      label: 'Executări firmă (LEI)',
+      data: dataTot, backgroundColor: '#C00000', borderRadius: 4
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top', labels: {font: {size: 11}} },
+                 tooltip: { callbacks: { label: ctx => ctx.parsed.y.toLocaleString('ro-RO') + ' LEI' } } },
+      scales: { x: {grid:{display:false}, ticks:{font:{size:10}}},
+                y: {grid:{color:'#f1f5f9'}, ticks:{font:{size:10}, callback: v => v.toLocaleString('ro-RO')}} }
+    }
+  });
 }
 
 // ── MODAL COMISION BREAKDOWN ──
