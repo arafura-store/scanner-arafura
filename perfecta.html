@@ -489,10 +489,12 @@ async function fetchAll(table, query='') {
 let _charts = {};
 
 // ── MAIN LOAD ──
-async function loadAll() {
-  document.getElementById('spinner').style.display = 'block';
-  document.getElementById('content').style.display = 'none';
-  document.getElementById('last-upd').textContent = 'Se actualizeaza...';
+async function loadAll(silent=false) {
+  if (!silent) {
+    document.getElementById('spinner').style.display = 'block';
+    document.getElementById('content').style.display = 'none';
+  }
+  document.getElementById('last-upd').textContent = silent ? '🔄 sync...' : 'Se actualizeaza...';
 
   try {
     const [contracte, pvuri, verif, cotatii, istoric, valoriLunar, casaLunar] = await Promise.all([
@@ -509,8 +511,10 @@ async function loadAll() {
     _valoriLunar = valoriLunar.filter(r => !MAG_INCHISE.has(r.magazin));
     _casaLunar   = casaLunar  .filter(r => !MAG_INCHISE.has(r.magazin));
 
-    document.getElementById('spinner').style.display = 'none';
-    document.getElementById('content').style.display = 'block';
+    if (!silent) {
+      document.getElementById('spinner').style.display = 'none';
+      document.getElementById('content').style.display = 'block';
+    }
     document.getElementById('last-upd').textContent = 'Actualizat ' + new Date().toLocaleTimeString('ro-RO');
 
     renderKPI(contracte, cotatii);
@@ -1472,8 +1476,8 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Auto-refresh la 60s
-setInterval(() => { if (sessionStorage.getItem('pf_dash')==='1') loadAll(); }, 60000);
+// Auto-refresh TACUT la 60s (fara spinner, fara salt la inceputul paginii)
+setInterval(() => { if (sessionStorage.getItem('pf_dash')==='1') loadAll(true); }, 60000);
 </script>
 </body>
 </html>
