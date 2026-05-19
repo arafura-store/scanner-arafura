@@ -1006,8 +1006,11 @@ function renderValoriContracte(ref) {
 function renderRegistruCasa(ref) {
   const curent = _casaLunar.filter(r => r.luna === ref.luna && r.an === ref.an && r.magazin !== 'TOTAL');
   const mapCur = Object.fromEntries(curent.map(r => [r.magazin, r]));
+  // Pentru Sold Cash folosesc doar magazinele care apar in registrul de casa (oricand),
+  // NU uniunea cu valori_contracte (ex: DEPOZIT CENTRAL exista doar in valori contracte, nu are casierie)
+  const magInCasa = MAG_UPP.filter(m => _casaLunar.some(r => r.magazin === m));
   let totSi = 0, totIn = 0, totPl = 0, totSf = 0;
-  const rows = MAG_UPP.map(mag => {
+  const rows = magInCasa.map(mag => {
     const r = mapCur[mag];
     const si = parseFloat(r?.sold_initial)||0;
     const tIn = parseFloat(r?.total_incasari)||0;
