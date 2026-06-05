@@ -252,14 +252,51 @@ body.is-admin .role-admin{display:flex}
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
-      <!-- ENEL — placeholder                                   -->
+      <!-- ENEL — COMPLET                                       -->
       <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-enel">
-        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
-          <div style="font-size:64px;margin-bottom:14px">⚡</div>
-          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">ENEL — în construire</h3>
-          <p style="color:var(--sub);max-width:500px;margin:0 auto">Modulul va fi disponibil in sesiunea urmatoare. Va include: introducere factura ENEL, indexuri pentru cele 31 contoare individuale, alocarea consumului AC etaj forfait (cat timp e stricat), calcul pierderi cu alerta anti-frauda.</p>
-        </div></div>
+        <div class="card">
+          <div class="card-hdr"><h3>⚡ ENEL — Factura lunara</h3></div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Total factura (RON)</label>
+                <input type="number" id="el-total-lei" step="0.01" min="0" placeholder="ex: 8543.21">
+              </div>
+              <div class="form-grp">
+                <label>Total kw factura</label>
+                <input type="number" id="el-total-kw" step="0.001" min="0" placeholder="ex: 21500">
+                <div class="hint">Pretul unitar = total / kw (calculat automat)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Nr. luni acoperite</label>
+                <select id="el-nr-luni"><option value="1">1 lună (normal)</option><option value="2">2 luni (cumulat)</option></select>
+                <div class="hint">2 luni daca factura acopera ex: aprilie+mai</div>
+              </div>
+              <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
+                <button class="btn btn-success" onclick="salveazaFacturaEnel()" style="flex:1">💾 Salveaza factura</button>
+                <button class="btn btn-primary" onclick="incarcaCitiriEnel()" style="flex:1">📥 Incarca citiri</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>📊 Indexuri contoare ENEL (31 contoare individuale)</h3></div>
+          <div class="card-body" id="el-citiri">
+            <div class="spinner">Selecteaza luna apoi apasa "Incarca citiri"</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>🧮 Rezultat calcul + Pierderi (anti-frauda)</h3></div>
+          <div class="card-body" id="el-rezultat">
+            <div class="empty-msg">Apasa "Recalculeaza" dupa ce introduci factura + indexurile</div>
+            <button class="btn btn-primary" onclick="calculeazaEnel()" style="margin-top:12px">🧮 Recalculeaza</button>
+          </div>
+        </div>
       </div>
 
       <!-- RAJA — placeholder -->
@@ -499,6 +536,7 @@ function refreshPage(pageId) {
   const handlers = {
     dashboard: renderDashboard,
     gaze: () => incarcaFacturaGaze(),
+    enel: () => incarcaFacturaEnel(),
     chiriasi: renderChiriasi,
     setari: renderSetari,
     utilizatori: renderUtilizatori
@@ -847,6 +885,337 @@ async function calculeazaGaze() {
     `;
     document.getElementById('gz-rezultat').innerHTML = html;
     toast('Calcul GAZE finalizat', 'ok');
+  } catch (e) {
+    toast('Eroare calcul: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ENEL — Factura, Citiri, Calcul (cu Pierderi anti-frauda)
+// ═══════════════════════════════════════════════════════════════
+async function incarcaFacturaEnel() {
+  const { an, luna } = getLuna();
+  try {
+    const facturi = await api(`/domadami_facturi?modul=eq.ENEL&an=eq.${an}&luna=eq.${luna}&select=*`);
+    if (facturi.length > 0) {
+      const f = facturi[0];
+      document.getElementById('el-total-lei').value = f.total_factura_lei || '';
+      document.getElementById('el-total-kw').value = f.total_consum || '';
+      toast(`Factura ENEL ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
+    } else {
+      document.getElementById('el-total-lei').value = '';
+      document.getElementById('el-total-kw').value = '';
+    }
+    incarcaCitiriEnel();
+  } catch (e) {
+    toast('Eroare incarcare ENEL: ' + e.message, 'err');
+  }
+}
+
+async function salveazaFacturaEnel() {
+  const { an, luna } = getLuna();
+  const total_lei = parseFloat(document.getElementById('el-total-lei').value) || 0;
+  const total_kw = parseFloat(document.getElementById('el-total-kw').value) || 0;
+  if (total_lei <= 0 || total_kw <= 0) { toast('Completeaza total RON si total kw', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify({
+        modul: 'ENEL', an, luna,
+        total_factura_lei: total_lei,
+        total_consum: total_kw,
+        unitate_masura: 'kw',
+        introdus_de: currentUser.id
+      })
+    });
+    toast(`Factura ENEL ${LUNI_RO[luna-1]} ${an} salvata`, 'ok');
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare: ' + e.message, 'err');
+  }
+}
+
+async function incarcaCitiriEnel() {
+  const { an, luna } = getLuna();
+  // Contoare ENEL individual (exclus AC etaj — stricat)
+  const contoareEnel = _contoare.filter(c => c.modul === 'ENEL' && c.tip === 'individual')
+    .sort((a,b) => {
+      const ua = _unitati.find(u => u.id === a.unitate_id);
+      const ub = _unitati.find(u => u.id === b.unitate_id);
+      return (ua?.ordine || 99) - (ub?.ordine || 99) || a.id - b.id;
+    });
+  const idLuna = an*100 + luna;
+  const ids = contoareEnel.map(c => c.id).join(',');
+  try {
+    const citiri = await api(`/domadami_citiri?contor_id=in.(${ids})&select=*`);
+    const mapCur = {}, mapPrev = {};
+    citiri.forEach(c => {
+      if (c.an === an && c.luna === luna) mapCur[c.contor_id] = c;
+      if (c.an*100 + c.luna < idLuna) {
+        if (!mapPrev[c.contor_id] || (mapPrev[c.contor_id].an*100+mapPrev[c.contor_id].luna) < (c.an*100+c.luna)) {
+          mapPrev[c.contor_id] = c;
+        }
+      }
+    });
+    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (kw)</th></tr></thead><tbody>';
+    let lastUnitateId = null;
+    contoareEnel.forEach(c => {
+      const cur = mapCur[c.id];
+      const prev = mapPrev[c.id];
+      const u = _unitati.find(x => x.id === c.unitate_id);
+      const ix = cur ? cur.index_final : '';
+      const ixPrev = prev ? prev.index_final : '—';
+      const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(0) : '—';
+      const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
+      const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
+      // Separator vizual cand schimba unitatea
+      let sepStyle = '';
+      if (lastUnitateId !== null && lastUnitateId !== c.unitate_id) sepStyle = 'border-top:2px solid #e5e7eb';
+      lastUnitateId = c.unitate_id;
+      html += `<tr style="${sepStyle}">
+        <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
+        <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
+        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt0(ixPrev) : '—'}</td>
+        <td><input type="number" step="1" min="0" value="${ix}" data-contor-id="${c.id}" class="el-input"></td>
+        <td class="num" style="${consumCls}">${consum !== '—' ? fmt0(consum) : '—'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    html += '<div style="margin-top:14px"><button class="btn btn-success" onclick="salveazaCitiriEnel()">💾 Salveaza toate citirile</button></div>';
+    document.getElementById('el-citiri').innerHTML = html;
+    document.querySelectorAll('.el-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const row = inp.closest('tr');
+        const cells = row.querySelectorAll('td.num');
+        const ixPrev = parseFloat(cells[0].textContent.replace(/\./g,'').replace(',','.'));
+        const val = parseFloat(inp.value);
+        if (!isNaN(ixPrev) && !isNaN(val)) {
+          const c = val - ixPrev;
+          cells[1].textContent = fmt0(c);
+          cells[1].style.cssText = c < 0 ? 'color:var(--red);font-weight:700' : '';
+        }
+      });
+    });
+  } catch (e) {
+    toast('Eroare incarcare citiri ENEL: ' + e.message, 'err');
+  }
+}
+
+async function salveazaCitiriEnel() {
+  const { an, luna } = getLuna();
+  const inputs = document.querySelectorAll('.el-input');
+  const nrLuni = parseInt(document.getElementById('el-nr-luni').value) || 1;
+  const payload = [];
+  inputs.forEach(inp => {
+    const val = parseFloat(inp.value);
+    if (!isNaN(val) && val > 0) {
+      payload.push({
+        contor_id: parseInt(inp.dataset.contorId),
+        an, luna,
+        data_citire: `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`,
+        index_final: val,
+        nr_luni_acoperite: nrLuni,
+        introdus_de: currentUser.id
+      });
+    }
+  });
+  if (payload.length === 0) { toast('Nicio citire de salvat', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify(payload)
+    });
+    toast(`${payload.length} citiri ENEL salvate pentru ${LUNI_RO[luna-1]} ${an}`, 'ok');
+    incarcaCitiriEnel();
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare citiri: ' + e.message, 'err');
+  }
+}
+
+// CALCUL ENEL — algoritmul complet din spec (cu pierderi + anti-frauda)
+async function calculeazaEnel() {
+  const { an, luna } = getLuna();
+  try {
+    const [facturi, ocupareLst, allCitiri] = await Promise.all([
+      api(`/domadami_facturi?modul=eq.ENEL&an=eq.${an}&luna=eq.${luna}&select=*`),
+      api(`/domadami_ocupare_lunara?an=eq.${an}&luna=eq.${luna}&select=*`),
+      api(`/domadami_citiri?select=*`)
+    ]);
+    if (facturi.length === 0) { toast('Nu exista factura ENEL pentru luna selectata', 'err'); return; }
+    const f = facturi[0];
+    const totalLei = parseFloat(f.total_factura_lei) || 0;
+    const totalKw = parseFloat(f.total_consum) || 0;
+    if (totalKw <= 0) { toast('Total kw factura este 0', 'err'); return; }
+
+    const idLuna = an*100 + luna;
+    const prevForContor = id => {
+      const cand = allCitiri.filter(c => c.contor_id === id && (c.an*100+c.luna) < idLuna);
+      if (cand.length === 0) return null;
+      cand.sort((a,b) => (b.an*100+b.luna) - (a.an*100+a.luna));
+      return cand[0];
+    };
+    const curForContor = id => allCitiri.find(c => c.contor_id === id && c.an === an && c.luna === luna);
+
+    // Pret unitar
+    const pretUnitar = totalLei / totalKw;
+
+    // Ocupare implicit: toate unitatile active ocupate, exceptie cele marcate explicit
+    const isOcupat = u => {
+      const o = ocupareLst.find(x => x.unitate_id === u.id);
+      return o ? o.este_ocupata : true; // default ocupat
+    };
+    const garsoniere = _unitati.filter(u => u.tip === 'garsoniera');
+    const garsOcupate = garsoniere.filter(isOcupat);
+    const etajUnitati = _unitati.filter(u => u.tip === 'etaj');
+    const etajOcupate = etajUnitati.filter(isOcupat);
+
+    // Setari
+    const forfaitScari = parseFloat(_setari.forfait_iluminat_scari_kw) || 10;
+    const forfaitEtaj = parseFloat(_setari.forfait_iluminat_etaj_kw) || 10;
+    const acStricat = _setari.contor_ac_etaj_stricat === 'true';
+    const acForfait = parseFloat(_setari.contor_ac_etaj_forfait_kw) || 40;
+    const nrLuniFactura = (allCitiri.find(c => c.an === an && c.luna === luna)?.nr_luni_acoperite) || 1;
+
+    // Cost per unitate (suma contoare)
+    const costPerUnitate = {};
+    const consumPerUnitate = {};
+    const consumIluminat = {};
+    const consumAC = {};
+
+    let sumaKwIndiv = 0;
+
+    _unitati.forEach(u => {
+      // Contoare ENEL individuale ale acestei unitati
+      const contoare = _contoare.filter(c => c.modul === 'ENEL' && c.tip === 'individual' && c.unitate_id === u.id);
+      let consumU = 0;
+      contoare.forEach(ct => {
+        const cur = curForContor(ct.id);
+        const prev = prevForContor(ct.id);
+        if (cur && prev) {
+          consumU += (parseFloat(cur.index_final) - parseFloat(prev.index_final));
+        }
+      });
+      consumPerUnitate[u.id] = consumU;
+      sumaKwIndiv += consumU;
+
+      // Iluminat scari (doar garsoniere ocupate)
+      if (u.utilizeaza_iluminat_scari && isOcupat(u)) {
+        consumIluminat[u.id] = forfaitScari * nrLuniFactura;
+      }
+      // Iluminat etaj (doar etaj ocupate)
+      if (u.utilizeaza_iluminat_etaj && isOcupat(u)) {
+        consumIluminat[u.id] = (consumIluminat[u.id] || 0) + forfaitEtaj * nrLuniFactura;
+      }
+      // AC etaj
+      if (u.utilizeaza_ac_etaj && isOcupat(u)) {
+        if (acStricat) {
+          consumAC[u.id] = acForfait;  // forfait fix (NU se multiplica cu nr_luni)
+        } else {
+          // Citim contor AC etaj comun si impartim egal
+          const contorAC = _contoare.find(c => c.tip === 'ac_etaj');
+          if (contorAC) {
+            const cur = curForContor(contorAC.id);
+            const prev = prevForContor(contorAC.id);
+            if (cur && prev) {
+              const consumAcTotal = parseFloat(cur.index_final) - parseFloat(prev.index_final);
+              consumAC[u.id] = consumAcTotal / etajOcupate.length;
+            }
+          }
+        }
+      }
+    });
+
+    // Suma totala kw forfait + iluminat + AC
+    const sumaIluminatScari = garsOcupate.length * forfaitScari * nrLuniFactura;
+    const sumaIluminatEtaj = etajOcupate.length * forfaitEtaj * nrLuniFactura;
+    const sumaAC = acStricat ? etajOcupate.length * acForfait : Object.values(consumAC).reduce((a,b)=>a+b, 0);
+    const sumaKwDistribuiti = sumaKwIndiv + sumaIluminatScari + sumaIluminatEtaj + sumaAC;
+    const pierderiKw = totalKw - sumaKwDistribuiti;
+    const pierderiLei = pierderiKw * pretUnitar;
+    const pierderiPct = totalKw > 0 ? (pierderiKw / totalKw * 100) : 0;
+    const pragAlerta = parseFloat(_setari.prag_alerta_pierderi_pct) || 20;
+    const pierderiAlerta = pierderiPct > pragAlerta;
+
+    // Cost final per unitate
+    _unitati.forEach(u => {
+      const consumTotal = (consumPerUnitate[u.id] || 0) + (consumIluminat[u.id] || 0) + (consumAC[u.id] || 0);
+      costPerUnitate[u.id] = consumTotal * pretUnitar;
+    });
+
+    // Render rezultate
+    const unitatiCuConsum = _unitati.filter(u => u.utilizeaza_enel && (consumPerUnitate[u.id] > 0 || (consumIluminat[u.id]||0) > 0 || (consumAC[u.id]||0) > 0));
+    unitatiCuConsum.sort((a,b) => (costPerUnitate[b.id]||0) - (costPerUnitate[a.id]||0));
+
+    let totalCostUnitati = 0;
+    const rows = unitatiCuConsum.map(u => {
+      const cInd = consumPerUnitate[u.id] || 0;
+      const cIlum = consumIluminat[u.id] || 0;
+      const cAC = consumAC[u.id] || 0;
+      const cTot = cInd + cIlum + cAC;
+      const costTot = costPerUnitate[u.id] || 0;
+      totalCostUnitati += costTot;
+      return `<tr>
+        <td><b>${u.cod}</b><br><small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td class="num">${fmt0(cInd)}</td>
+        <td class="num">${cIlum > 0 ? fmt0(cIlum) : '—'}</td>
+        <td class="num">${cAC > 0 ? fmt0(cAC) : '—'}</td>
+        <td class="num"><b>${fmt0(cTot)}</b></td>
+        <td class="num"><b>${fmt(costTot, 2)}</b></td>
+      </tr>`;
+    }).join('');
+
+    const html = `
+      <div class="kpi-grid" style="margin-bottom:18px">
+        <div class="kpi"><div class="lbl">Total kw factura</div><div class="val">${fmt0(totalKw)}</div><div class="meta">${fmt0(sumaKwDistribuiti)} distribuiti</div></div>
+        <div class="kpi gold"><div class="lbl">Pret unitar</div><div class="val">${fmt(pretUnitar, 4)}</div><div class="meta">RON/kw</div></div>
+        <div class="kpi ${pierderiAlerta?'red':'green'}"><div class="lbl">Pierderi (DOMADAMI)</div><div class="val">${fmt0(pierderiKw)} kw</div><div class="meta">${fmt(pierderiLei, 2)} RON · ${fmt(pierderiPct, 1)}%</div></div>
+        <div class="kpi orange"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalCostUnitati)} RON</div><div class="meta">${unitatiCuConsum.length} unitati</div></div>
+      </div>
+
+      ${pierderiAlerta ? `<div class="alert alert-danger"><span class="ico">🚨</span><div><div class="title">ALERTA: Pierderi peste pragul de ${pragAlerta}%</div>Pierderea curenta de ${fmt(pierderiPct, 1)}% (${fmt0(pierderiKw)} kw / ${fmt(pierderiLei, 2)} RON) depaseste pragul setat. Verifica fiecare contor!</div></div>` : ''}
+
+      ${acStricat ? `<div class="alert alert-warning"><span class="ico">⚠️</span><div><div class="title">AC etaj stricat — forfait fix ${acForfait} kw/firma</div>${etajOcupate.length} firme etaj × ${acForfait} kw = ${etajOcupate.length * acForfait} kw alocati AC (NU se multiplica cu nr luni)</div></div>` : ''}
+
+      <table class="tbl">
+        <thead><tr>
+          <th>Unitate</th>
+          <th style="text-align:right">Consum individual (kw)</th>
+          <th style="text-align:right">Iluminat forfait</th>
+          <th style="text-align:right">AC etaj</th>
+          <th style="text-align:right">TOTAL kw</th>
+          <th style="text-align:right">Cost (RON)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot style="background:#f9fafb;font-weight:800">
+          <tr>
+            <td>TOTAL chiriasi</td>
+            <td class="num">${fmt0(sumaKwIndiv)}</td>
+            <td class="num">${fmt0(sumaIluminatScari + sumaIluminatEtaj)}</td>
+            <td class="num">${fmt0(sumaAC)}</td>
+            <td class="num">${fmt0(sumaKwDistribuiti)}</td>
+            <td class="num">${fmt(totalCostUnitati, 2)}</td>
+          </tr>
+          <tr style="color:var(--red)">
+            <td>+ Pierderi (DOMADAMI)</td>
+            <td class="num" colspan="3">—</td>
+            <td class="num">${fmt0(pierderiKw)}</td>
+            <td class="num">${fmt(pierderiLei, 2)}</td>
+          </tr>
+          <tr style="background:#fef3c7">
+            <td>TOTAL FACTURA</td>
+            <td class="num" colspan="3">—</td>
+            <td class="num">${fmt0(totalKw)}</td>
+            <td class="num">${fmt(totalLei, 2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <button class="btn btn-primary" onclick="calculeazaEnel()" style="margin-top:14px">🔄 Recalculeaza</button>
+    `;
+    document.getElementById('el-rezultat').innerHTML = html;
+    toast('Calcul ENEL finalizat', 'ok');
   } catch (e) {
     toast('Eroare calcul: ' + e.message, 'err');
     console.error(e);
