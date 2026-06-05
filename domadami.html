@@ -299,13 +299,51 @@ body.is-admin .role-admin{display:flex}
         </div>
       </div>
 
-      <!-- RAJA — placeholder -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- RAJA — COMPLET                                       -->
+      <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-raja">
-        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
-          <div style="font-size:64px;margin-bottom:14px">💧</div>
-          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">RAJA — în construire</h3>
-          <p style="color:var(--sub);max-width:500px;margin:0 auto">Modulul va include: factura RAJA (apa rece + caldura inclusa), indexuri pentru 44 contoare (general + 32 apometre garsoniere + 11 parter), forfait toaleta comuna pentru unitatile cu acces, calcul pierderi.</p>
-        </div></div>
+        <div class="card">
+          <div class="card-hdr"><h3>💧 RAJA — Factura lunara (include canalizare)</h3></div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Total factura (RON, include canalizare)</label>
+                <input type="number" id="rj-total-lei" step="0.01" min="0" placeholder="ex: 3245.67">
+              </div>
+              <div class="form-grp">
+                <label>Total mc factura (general)</label>
+                <input type="number" id="rj-total-mc" step="0.001" min="0" placeholder="ex: 145.5">
+                <div class="hint">Pret unitar all-inclusive = total / mc</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Nr. luni acoperite</label>
+                <select id="rj-nr-luni"><option value="1">1 lună (normal)</option><option value="2">2 luni (cumulat — ex apr+mai)</option></select>
+              </div>
+              <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
+                <button class="btn btn-success" onclick="salveazaFacturaRaja()" style="flex:1">💾 Salveaza factura</button>
+                <button class="btn btn-primary" onclick="incarcaCitiriRaja()" style="flex:1">📥 Incarca citiri</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>📊 Indexuri contoare RAJA</h3></div>
+          <div class="card-body" id="rj-citiri">
+            <div class="spinner">Selecteaza luna apoi apasa "Incarca citiri"</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>🧮 Rezultat calcul + Pierderi</h3></div>
+          <div class="card-body" id="rj-rezultat">
+            <div class="empty-msg">Apasa "Recalculeaza" dupa ce introduci factura + indexurile</div>
+            <button class="btn btn-primary" onclick="calculeazaRaja()" style="margin-top:12px">🧮 Recalculeaza</button>
+          </div>
+        </div>
       </div>
 
       <!-- POLARIS — placeholder -->
@@ -537,6 +575,7 @@ function refreshPage(pageId) {
     dashboard: renderDashboard,
     gaze: () => incarcaFacturaGaze(),
     enel: () => incarcaFacturaEnel(),
+    raja: () => incarcaFacturaRaja(),
     chiriasi: renderChiriasi,
     setari: renderSetari,
     utilizatori: renderUtilizatori
@@ -1216,6 +1255,313 @@ async function calculeazaEnel() {
     `;
     document.getElementById('el-rezultat').innerHTML = html;
     toast('Calcul ENEL finalizat', 'ok');
+  } catch (e) {
+    toast('Eroare calcul: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RAJA — Factura, Citiri, Calcul
+// ═══════════════════════════════════════════════════════════════
+async function incarcaFacturaRaja() {
+  const { an, luna } = getLuna();
+  try {
+    const facturi = await api(`/domadami_facturi?modul=eq.RAJA&an=eq.${an}&luna=eq.${luna}&select=*`);
+    if (facturi.length > 0) {
+      const f = facturi[0];
+      document.getElementById('rj-total-lei').value = f.total_factura_lei || '';
+      document.getElementById('rj-total-mc').value = f.total_consum || '';
+      toast(`Factura RAJA ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
+    } else {
+      document.getElementById('rj-total-lei').value = '';
+      document.getElementById('rj-total-mc').value = '';
+    }
+    incarcaCitiriRaja();
+  } catch (e) {
+    toast('Eroare incarcare RAJA: ' + e.message, 'err');
+  }
+}
+
+async function salveazaFacturaRaja() {
+  const { an, luna } = getLuna();
+  const total_lei = parseFloat(document.getElementById('rj-total-lei').value) || 0;
+  const total_mc = parseFloat(document.getElementById('rj-total-mc').value) || 0;
+  if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify({
+        modul: 'RAJA', an, luna,
+        total_factura_lei: total_lei,
+        total_consum: total_mc,
+        unitate_masura: 'mc',
+        introdus_de: currentUser.id
+      })
+    });
+    toast(`Factura RAJA ${LUNI_RO[luna-1]} ${an} salvata`, 'ok');
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare: ' + e.message, 'err');
+  }
+}
+
+async function incarcaCitiriRaja() {
+  const { an, luna } = getLuna();
+  // Toate contoarele RAJA: general + apometre rece + apometre calda (read-only - din GAZE) + individuale parter
+  const contoareRaja = _contoare.filter(c => c.modul === 'RAJA')
+    .sort((a,b) => {
+      // Ordine: general, apometre G1-G8, parter
+      const tipOrd = { general: 0, apometru_apa_rece: 1, apometru_apa_calda: 2, individual: 3 };
+      const ta = tipOrd[a.tip] ?? 4;
+      const tb = tipOrd[b.tip] ?? 4;
+      if (ta !== tb) return ta - tb;
+      const ua = _unitati.find(u => u.id === a.unitate_id);
+      const ub = _unitati.find(u => u.id === b.unitate_id);
+      return (ua?.ordine || 99) - (ub?.ordine || 99) || a.id - b.id;
+    });
+  const idLuna = an*100 + luna;
+  const ids = contoareRaja.map(c => c.id).join(',');
+  try {
+    const citiri = await api(`/domadami_citiri?contor_id=in.(${ids})&select=*`);
+    const mapCur = {}, mapPrev = {};
+    citiri.forEach(c => {
+      if (c.an === an && c.luna === luna) mapCur[c.contor_id] = c;
+      if (c.an*100 + c.luna < idLuna) {
+        if (!mapPrev[c.contor_id] || (mapPrev[c.contor_id].an*100+mapPrev[c.contor_id].luna) < (c.an*100+c.luna)) {
+          mapPrev[c.contor_id] = c;
+        }
+      }
+    });
+
+    let html = `<div class="alert alert-info" style="margin-bottom:14px"><span class="ico">ℹ️</span><div><div class="title">Apometre apa calda</div>Apometrele de apa calda sunt introduse la modul <b>GAZE</b> (acelasi contor fizic). Aici apar read-only. Pretul RAJA se aplica oricum la consumul lor (apa = apa, indiferent ca e calda sau rece).</div></div>`;
+    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Tip</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (mc)</th></tr></thead><tbody>';
+    let lastUnitateId = -1;
+    contoareRaja.forEach(c => {
+      const cur = mapCur[c.id];
+      const prev = mapPrev[c.id];
+      const u = _unitati.find(x => x.id === c.unitate_id);
+      const ix = cur ? cur.index_final : '';
+      const ixPrev = prev ? prev.index_final : '—';
+      const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
+      const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' :
+                        (consum !== '—' && parseFloat(consum) === 0) ? 'color:var(--orange);font-weight:600' : '';
+      const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
+      const isCalda = c.tip === 'apometru_apa_calda';
+      const inputAttr = isCalda ? 'disabled style="background:#f3f4f6;cursor:not-allowed"' : '';
+      const tipBadge = {general:'gray', apometru_apa_rece:'blue', apometru_apa_calda:'orange', individual:'green'}[c.tip] || 'gray';
+      const tipLabel = {general:'GENERAL', apometru_apa_rece:'apa rece', apometru_apa_calda:'apa calda (GAZE)', individual:'individual'}[c.tip] || c.tip;
+      // Separator vizual cand schimba unitatea
+      let sepStyle = '';
+      if (lastUnitateId !== -1 && lastUnitateId !== c.unitate_id) sepStyle = 'border-top:2px solid #e5e7eb';
+      lastUnitateId = c.unitate_id;
+      html += `<tr style="${sepStyle}">
+        <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
+        <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
+        <td><span class="badge b-${tipBadge}">${tipLabel}</span></td>
+        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev, 3) : '—'}</td>
+        <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="rj-input" ${inputAttr}></td>
+        <td class="num" style="${consumCls}">${consum !== '—' ? fmt(consum, 3) : '—'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    html += '<div style="margin-top:14px"><button class="btn btn-success" onclick="salveazaCitiriRaja()">💾 Salveaza citirile (apa rece + general + parter)</button></div>';
+    document.getElementById('rj-citiri').innerHTML = html;
+    document.querySelectorAll('.rj-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const row = inp.closest('tr');
+        const cells = row.querySelectorAll('td.num');
+        const ixPrev = parseFloat(cells[0].textContent.replace(/\./g,'').replace(',','.'));
+        const val = parseFloat(inp.value);
+        if (!isNaN(ixPrev) && !isNaN(val)) {
+          const c = (val - ixPrev).toFixed(3);
+          cells[1].textContent = fmt(c, 3);
+          cells[1].style.cssText = (val - ixPrev) < 0 ? 'color:var(--red);font-weight:700' :
+                                    (val - ixPrev) === 0 ? 'color:var(--orange);font-weight:600' : '';
+        }
+      });
+    });
+  } catch (e) {
+    toast('Eroare incarcare citiri RAJA: ' + e.message, 'err');
+  }
+}
+
+async function salveazaCitiriRaja() {
+  const { an, luna } = getLuna();
+  const inputs = document.querySelectorAll('.rj-input:not(:disabled)');
+  const nrLuni = parseInt(document.getElementById('rj-nr-luni').value) || 1;
+  const payload = [];
+  inputs.forEach(inp => {
+    const val = parseFloat(inp.value);
+    if (!isNaN(val) && val >= 0) {
+      payload.push({
+        contor_id: parseInt(inp.dataset.contorId),
+        an, luna,
+        data_citire: `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`,
+        index_final: val,
+        nr_luni_acoperite: nrLuni,
+        introdus_de: currentUser.id
+      });
+    }
+  });
+  if (payload.length === 0) { toast('Nicio citire de salvat', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify(payload)
+    });
+    toast(`${payload.length} citiri RAJA salvate pentru ${LUNI_RO[luna-1]} ${an}`, 'ok');
+    incarcaCitiriRaja();
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare citiri: ' + e.message, 'err');
+  }
+}
+
+// CALCUL RAJA — algoritmul complet din spec (cu pierderi + toaleta forfait)
+async function calculeazaRaja() {
+  const { an, luna } = getLuna();
+  try {
+    const [facturi, ocupareLst, allCitiri] = await Promise.all([
+      api(`/domadami_facturi?modul=eq.RAJA&an=eq.${an}&luna=eq.${luna}&select=*`),
+      api(`/domadami_ocupare_lunara?an=eq.${an}&luna=eq.${luna}&select=*`),
+      api(`/domadami_citiri?select=*`)
+    ]);
+    if (facturi.length === 0) { toast('Nu exista factura RAJA pentru luna selectata', 'err'); return; }
+    const f = facturi[0];
+    const totalLei = parseFloat(f.total_factura_lei) || 0;
+    const totalMc = parseFloat(f.total_consum) || 0;
+    if (totalMc <= 0) { toast('Total mc factura este 0', 'err'); return; }
+
+    const idLuna = an*100 + luna;
+    const prevForContor = id => {
+      const cand = allCitiri.filter(c => c.contor_id === id && (c.an*100+c.luna) < idLuna);
+      if (cand.length === 0) return null;
+      cand.sort((a,b) => (b.an*100+b.luna) - (a.an*100+a.luna));
+      return cand[0];
+    };
+    const curForContor = id => allCitiri.find(c => c.contor_id === id && c.an === an && c.luna === luna);
+
+    const pretUnitar = totalLei / totalMc;
+    const isOcupat = u => {
+      const o = ocupareLst.find(x => x.unitate_id === u.id);
+      return o ? o.este_ocupata : true;
+    };
+    const forfaitToaleta = parseFloat(_setari.forfait_toaleta_comuna_mc) || 1;
+    const facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna);
+    const nrLuniFactura = facturaRaja?.nr_luni_acoperite || 1;
+
+    // Consum apa rece + apa calda per unitate (din TOATE contoarele RAJA: rece + caldă + individuale)
+    const consumApaPerUnitate = {};
+    const consumToaletaPerUnitate = {};
+    let sumaMcDistribuiti = 0;
+
+    _unitati.forEach(u => {
+      const contoare = _contoare.filter(c => c.modul === 'RAJA' && c.unitate_id === u.id &&
+        (c.tip === 'apometru_apa_rece' || c.tip === 'apometru_apa_calda' || c.tip === 'individual'));
+      let consum = 0;
+      contoare.forEach(ct => {
+        const cur = curForContor(ct.id);
+        const prev = prevForContor(ct.id);
+        if (cur && prev) {
+          const d = parseFloat(cur.index_final) - parseFloat(prev.index_final);
+          if (d > 0) consum += d;  // ignoram consum negativ (erori apometru)
+        }
+      });
+      consumApaPerUnitate[u.id] = consum;
+      sumaMcDistribuiti += consum;
+
+      // Forfait toaleta — doar daca unitatea o utilizeaza si e ocupata
+      if (u.utilizeaza_toaleta_comuna && isOcupat(u)) {
+        const forfait = forfaitToaleta * nrLuniFactura;
+        consumToaletaPerUnitate[u.id] = forfait;
+        sumaMcDistribuiti += forfait;
+      }
+    });
+
+    // Pierderi
+    const pierderiMc = totalMc - sumaMcDistribuiti;
+    const pierderiLei = pierderiMc * pretUnitar;
+    const pierderiPct = totalMc > 0 ? (pierderiMc / totalMc * 100) : 0;
+    const pragAlerta = parseFloat(_setari.prag_alerta_pierderi_pct) || 20;
+    const pierderiAlerta = pierderiPct > pragAlerta;
+
+    // Cost per unitate
+    const costPerUnitate = {};
+    _unitati.forEach(u => {
+      const c = (consumApaPerUnitate[u.id] || 0) + (consumToaletaPerUnitate[u.id] || 0);
+      costPerUnitate[u.id] = c * pretUnitar;
+    });
+
+    // Filtrare unitati cu consum
+    const unitatiCuConsum = _unitati.filter(u =>
+      (u.utilizeaza_raja_rece || u.utilizeaza_raja_calda || u.utilizeaza_toaleta_comuna) &&
+      ((consumApaPerUnitate[u.id]||0) > 0 || (consumToaletaPerUnitate[u.id]||0) > 0)
+    );
+    unitatiCuConsum.sort((a,b) => (costPerUnitate[b.id]||0) - (costPerUnitate[a.id]||0));
+
+    let totalCostUnitati = 0;
+    const rows = unitatiCuConsum.map(u => {
+      const cAp = consumApaPerUnitate[u.id] || 0;
+      const cTo = consumToaletaPerUnitate[u.id] || 0;
+      const cTot = cAp + cTo;
+      const cost = costPerUnitate[u.id] || 0;
+      totalCostUnitati += cost;
+      return `<tr>
+        <td><b>${u.cod}</b><br><small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td class="num">${fmt(cAp, 3)}</td>
+        <td class="num">${cTo > 0 ? fmt(cTo, 3) : '—'}</td>
+        <td class="num"><b>${fmt(cTot, 3)}</b></td>
+        <td class="num"><b>${fmt(cost, 2)}</b></td>
+      </tr>`;
+    }).join('');
+
+    const html = `
+      <div class="kpi-grid" style="margin-bottom:18px">
+        <div class="kpi"><div class="lbl">Total mc factura</div><div class="val">${fmt(totalMc, 2)}</div><div class="meta">${fmt(sumaMcDistribuiti, 2)} distribuiti</div></div>
+        <div class="kpi gold"><div class="lbl">Pret unitar (incl canalizare)</div><div class="val">${fmt(pretUnitar, 4)}</div><div class="meta">RON/mc</div></div>
+        <div class="kpi ${pierderiAlerta?'red':'green'}"><div class="lbl">Pierderi (DOMADAMI)</div><div class="val">${fmt(pierderiMc, 2)} mc</div><div class="meta">${fmt(pierderiLei, 2)} RON · ${fmt(pierderiPct, 1)}%</div></div>
+        <div class="kpi orange"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalCostUnitati)} RON</div><div class="meta">${unitatiCuConsum.length} unitati</div></div>
+      </div>
+
+      ${pierderiAlerta ? `<div class="alert alert-danger"><span class="ico">🚨</span><div><div class="title">ALERTA: Pierderi peste pragul de ${pragAlerta}%</div>Pierderea curenta de ${fmt(pierderiPct, 1)}% (${fmt(pierderiMc, 2)} mc / ${fmt(pierderiLei, 2)} RON) depaseste pragul setat. Verifica fiecare apometru!</div></div>` : ''}
+
+      <table class="tbl">
+        <thead><tr>
+          <th>Unitate</th>
+          <th style="text-align:right">Consum apa (mc)</th>
+          <th style="text-align:right">Forfait toaleta</th>
+          <th style="text-align:right">TOTAL mc</th>
+          <th style="text-align:right">Cost (RON)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot style="background:#f9fafb;font-weight:800">
+          <tr>
+            <td>TOTAL chiriasi</td>
+            <td class="num">${fmt(sumaMcDistribuiti - Object.values(consumToaletaPerUnitate).reduce((a,b)=>a+b,0), 2)}</td>
+            <td class="num">${fmt(Object.values(consumToaletaPerUnitate).reduce((a,b)=>a+b,0), 2)}</td>
+            <td class="num">${fmt(sumaMcDistribuiti, 2)}</td>
+            <td class="num">${fmt(totalCostUnitati, 2)}</td>
+          </tr>
+          <tr style="color:var(--red)">
+            <td>+ Pierderi (DOMADAMI)</td>
+            <td class="num" colspan="2">—</td>
+            <td class="num">${fmt(pierderiMc, 2)}</td>
+            <td class="num">${fmt(pierderiLei, 2)}</td>
+          </tr>
+          <tr style="background:#fef3c7">
+            <td>TOTAL FACTURA</td>
+            <td class="num" colspan="2">—</td>
+            <td class="num">${fmt(totalMc, 2)}</td>
+            <td class="num">${fmt(totalLei, 2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <button class="btn btn-primary" onclick="calculeazaRaja()" style="margin-top:14px">🔄 Recalculeaza</button>
+    `;
+    document.getElementById('rj-rezultat').innerHTML = html;
+    toast('Calcul RAJA finalizat', 'ok');
   } catch (e) {
     toast('Eroare calcul: ' + e.message, 'err');
     console.error(e);
