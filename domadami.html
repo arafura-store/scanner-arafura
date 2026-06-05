@@ -471,6 +471,16 @@ let currentUser = null;
 let _setari = {};
 let _unitati = [];
 let _contoare = [];
+let _chiriasPerUnitate = {};  // { unitate_id: 'Nume chirias' }
+
+function getChiriasNume(unitateId) {
+  return _chiriasPerUnitate[unitateId] || '';
+}
+function unitateCuChirias(u) {
+  // Returnez 'G1 — Anghel Paraschiva' sau doar 'G1' daca nu are chirias
+  const ch = getChiriasNume(u.id);
+  return ch ? `${u.cod} — ${ch}` : u.cod;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // HELPERS
@@ -562,14 +572,26 @@ if (stored) {
 async function bootApp() {
   populeazaLuni();
   try {
-    const [setari, unitati, contoare] = await Promise.all([
+    const [setari, unitati, contoare, contracte, chiriasi] = await Promise.all([
       api('/domadami_setari?select=*'),
       api('/domadami_unitati?select=*&order=ordine.asc'),
-      api('/domadami_contoare?select=*&order=id.asc')
+      api('/domadami_contoare?select=*&order=id.asc'),
+      api('/domadami_contracte_chirie?select=*&data_end=is.null'),
+      api('/domadami_chiriasi?select=id,nume')
     ]);
     _setari = Object.fromEntries(setari.map(s => [s.cheie, s.valoare]));
     _unitati = unitati;
     _contoare = contoare;
+    // Map chirias per unitate (concatenat daca sunt mai multi)
+    const chMap = Object.fromEntries(chiriasi.map(c => [c.id, c.nume]));
+    _chiriasPerUnitate = {};
+    contracte.forEach(c => {
+      const nume = chMap[c.chirias_id];
+      if (!nume) return;
+      _chiriasPerUnitate[c.unitate_id] = _chiriasPerUnitate[c.unitate_id]
+        ? _chiriasPerUnitate[c.unitate_id] + ', ' + nume
+        : nume;
+    });
     renderDashboard();
   } catch (e) {
     toast('Eroare la incarcare: ' + e.message, 'err');
@@ -803,7 +825,7 @@ async function incarcaCitiriGaze() {
         }
       }
     });
-    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Tip</th><th style="text-align:right">Index initial</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum</th></tr></thead><tbody>';
+    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Chirias</th><th>Tip</th><th style="text-align:right">Index initial</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum</th></tr></thead><tbody>';
     contoareGaze.forEach(c => {
       const cur = mapCur[c.id];
       const prev = mapPrev[c.id];
@@ -812,8 +834,10 @@ async function incarcaCitiriGaze() {
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
+      const chiriasNume = getChiriasNume(c.unitate_id) || '<span style="color:var(--sub)">—</span>';
       html += `<tr>
-        <td>${escH(c.denumire)}${obsB}</td>
+        <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
+        <td style="font-size:12px;font-weight:600">${chiriasNume}</td>
         <td><span class="badge b-${c.tip==='general'?'gray':c.tip==='pasant'?'orange':'blue'}">${c.tip}</span></td>
         <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev,3) : '—'}</td>
         <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="gz-input"></td>
@@ -828,6 +852,7 @@ async function incarcaCitiriGaze() {
       inp.addEventListener('input', () => {
         const row = inp.closest('tr');
         const cells = row.querySelectorAll('td.num');
+        // cells[0] = ixPrev, cells[1] = consum (input nu e .num, deci nu apare)
         const ixPrev = parseFloat(cells[0].textContent.replace(/\./g,'').replace(',','.'));
         const val = parseFloat(inp.value);
         if (!isNaN(ixPrev) && !isNaN(val)) {
@@ -955,8 +980,9 @@ async function calculeazaGaze() {
       totalCostCalda += costCalda;
       totalCostCaldura += costCaldura;
       const total = costCalda + costCaldura;
+      const chiriasN = getChiriasNume(parseInt(unitateId));
       rows += `<tr>
-        <td><b>${g.mag}</b></td>
+        <td><b>${g.mag}</b>${chiriasN ? `<br><small style="color:var(--sub);font-weight:600">${escH(chiriasN)}</small>` : ''}</td>
         <td class="num">${fmt(g.consum, 2)}</td>
         <td class="num">${g.elementi}</td>
         <td class="num">${fmt(costCalda, 2)}</td>
@@ -1101,7 +1127,7 @@ async function incarcaCitiriEnel() {
         }
       }
     });
-    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (kw)</th></tr></thead><tbody>';
+    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Chirias</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (kw)</th></tr></thead><tbody>';
     let lastUnitateId = null;
     contoareEnel.forEach(c => {
       const cur = mapCur[c.id];
@@ -1112,6 +1138,7 @@ async function incarcaCitiriEnel() {
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(0) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
+      const chiriasN = getChiriasNume(c.unitate_id) || '<span style="color:var(--sub)">—</span>';
       // Separator vizual cand schimba unitatea
       let sepStyle = '';
       if (lastUnitateId !== null && lastUnitateId !== c.unitate_id) sepStyle = 'border-top:2px solid #e5e7eb';
@@ -1119,6 +1146,7 @@ async function incarcaCitiriEnel() {
       html += `<tr style="${sepStyle}">
         <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
         <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
+        <td style="font-size:12px;font-weight:600">${chiriasN}</td>
         <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt0(ixPrev) : '—'}</td>
         <td><input type="number" step="1" min="0" value="${ix}" data-contor-id="${c.id}" class="el-input"></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt0(consum) : '—'}</td>
@@ -1323,8 +1351,9 @@ async function calculeazaEnel() {
       const cTot = cInd + cIlum + cAC;
       const costTot = costPerUnitate[u.id] || 0;
       totalCostUnitati += costTot;
+      const chiriasN = getChiriasNume(u.id);
       return `<tr>
-        <td><b>${u.cod}</b><br><small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td><b>${u.cod}</b>${chiriasN ? `<br><small style="color:var(--sub);font-weight:600">${escH(chiriasN)}</small>` : `<br><small style="color:var(--sub)">${escH(u.nume)}</small>`}</td>
         <td class="num">${fmt0(cInd)}</td>
         <td class="num">${cIlum > 0 ? fmt0(cIlum) : '—'}</td>
         <td class="num">${cAC > 0 ? fmt0(cAC) : '—'}</td>
@@ -1463,7 +1492,7 @@ async function incarcaCitiriRaja() {
     });
 
     let html = `<div class="alert alert-info" style="margin-bottom:14px"><span class="ico">ℹ️</span><div><div class="title">Apometre apa calda</div>Apometrele de apa calda sunt introduse la modul <b>GAZE</b> (acelasi contor fizic). Aici apar read-only. Pretul RAJA se aplica oricum la consumul lor (apa = apa, indiferent ca e calda sau rece).</div></div>`;
-    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Tip</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (mc)</th></tr></thead><tbody>';
+    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Chirias</th><th>Tip</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (mc)</th></tr></thead><tbody>';
     let lastUnitateId = -1;
     contoareRaja.forEach(c => {
       const cur = mapCur[c.id];
@@ -1479,6 +1508,7 @@ async function incarcaCitiriRaja() {
       const inputAttr = isCalda ? 'disabled style="background:#f3f4f6;cursor:not-allowed"' : '';
       const tipBadge = {general:'gray', apometru_apa_rece:'blue', apometru_apa_calda:'orange', individual:'green'}[c.tip] || 'gray';
       const tipLabel = {general:'GENERAL', apometru_apa_rece:'apa rece', apometru_apa_calda:'apa calda (GAZE)', individual:'individual'}[c.tip] || c.tip;
+      const chiriasN = getChiriasNume(c.unitate_id) || '<span style="color:var(--sub)">—</span>';
       // Separator vizual cand schimba unitatea
       let sepStyle = '';
       if (lastUnitateId !== -1 && lastUnitateId !== c.unitate_id) sepStyle = 'border-top:2px solid #e5e7eb';
@@ -1486,6 +1516,7 @@ async function incarcaCitiriRaja() {
       html += `<tr style="${sepStyle}">
         <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
         <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
+        <td style="font-size:12px;font-weight:600">${chiriasN}</td>
         <td><span class="badge b-${tipBadge}">${tipLabel}</span></td>
         <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev, 3) : '—'}</td>
         <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="rj-input" ${inputAttr}></td>
@@ -1657,8 +1688,9 @@ async function calculeazaRaja() {
       const cTot = cAp + cTo;
       const cost = costPerUnitate[u.id] || 0;
       totalCostUnitati += cost;
+      const chiriasN = getChiriasNume(u.id);
       return `<tr>
-        <td><b>${u.cod}</b><br><small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td><b>${u.cod}</b>${chiriasN ? `<br><small style="color:var(--sub);font-weight:600">${escH(chiriasN)}</small>` : `<br><small style="color:var(--sub)">${escH(u.nume)}</small>`}</td>
         <td class="num">${fmt(cAp, 3)}</td>
         <td class="num">${cTo > 0 ? fmt(cTo, 3) : '—'}</td>
         <td class="num"><b>${fmt(cTot, 3)}</b></td>
@@ -1806,11 +1838,15 @@ async function calculeazaPolaris() {
     });
     salveazaCalcule('POLARIS', an, luna, calculePolaris);
 
+    const fmtCelUnitate = u => {
+      const ch = getChiriasNume(u.id);
+      return `<b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small>${ch ? `<br><small style="color:var(--dark);font-weight:600">${escH(ch)}</small>` : ''}`;
+    };
     // Tabel garsoniere
     let rowsG = garsoniere.map(u => {
       const oc = isOcupat(u);
       return `<tr style="${oc?'':'opacity:0.5'}">
-        <td><b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td>${fmtCelUnitate(u)}</td>
         <td>${oc ? '<span class="badge b-green">OCUPATA</span>' : '<span class="badge b-gray">GOALA</span>'}</td>
         <td class="num">${oc ? fmt(costPerGarsoniera, 2) + ' RON' : '—'}</td>
       </tr>`;
@@ -1820,7 +1856,7 @@ async function calculeazaPolaris() {
     let rowsR = restUnitati.map(u => {
       const oc = isOcupat(u);
       return `<tr style="${oc?'':'opacity:0.5'}">
-        <td><b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td>${fmtCelUnitate(u)}</td>
         <td>${oc ? '<span class="badge b-green">OCUPATA</span>' : '<span class="badge b-gray">GOALA</span>'}</td>
         <td class="num">${oc ? fmt(costPerRest, 2) + ' RON' : '—'}</td>
       </tr>`;
@@ -1828,7 +1864,7 @@ async function calculeazaPolaris() {
 
     // Tabel excluse
     let rowsE = excluse.map(u => `<tr style="opacity:0.55">
-      <td><b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small></td>
+      <td>${fmtCelUnitate(u)}</td>
       <td><span class="badge b-gray">EXCLUSA</span></td>
       <td class="num">— (contract direct)</td>
     </tr>`).join('');
