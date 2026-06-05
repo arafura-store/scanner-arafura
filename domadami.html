@@ -726,6 +726,19 @@ async function renderDashboard() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// HELPER: aplica o data tuturor input-urilor data dintr-un modul
+// (prefix = 'gz' | 'el' | 'rj')
+// ═══════════════════════════════════════════════════════════════
+function aplicaDataToate(prefix) {
+  const dataNoua = document.getElementById(prefix + '-data-toate').value;
+  if (!dataNoua) { toast('Selecteaza o data', 'err'); return; }
+  document.querySelectorAll('.' + prefix + '-data:not(:disabled)').forEach(inp => {
+    inp.value = dataNoua;
+  });
+  toast(`Data ${dataNoua} aplicata pe toate randurile`, 'ok');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // HELPER: salvare calcule in domadami_calcule (UPSERT)
 // ═══════════════════════════════════════════════════════════════
 async function salveazaCalcule(modul, an, luna, calculeArray) {
@@ -825,12 +838,26 @@ async function incarcaCitiriGaze() {
         }
       }
     });
-    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Chirias</th><th>Tip</th><th style="text-align:right">Index initial</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum</th></tr></thead><tbody>';
+    // Calculez data default = ultima zi a lunii selectate
+    const dataDefault = `${an}-${String(luna).padStart(2,'0')}-${String(new Date(an, luna, 0).getDate()).padStart(2,'0')}`;
+    let html = `<div class="alert alert-info" style="margin-bottom:14px">
+      <span class="ico">📅</span>
+      <div style="flex:1">
+        <div class="title">Data citirii per contor</div>
+        Fiecare contor are propria data — modifica direct pe rand. Sau aplica una pentru toate:
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <input type="date" id="gz-data-toate" value="${dataDefault}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-secondary" style="padding:6px 14px" onclick="aplicaDataToate('gz')">Aplica tuturor</button>
+        </div>
+      </div>
+    </div>`;
+    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Chirias</th><th>Tip</th><th style="width:140px">Data citire</th><th style="text-align:right">Index initial</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum</th></tr></thead><tbody>';
     contoareGaze.forEach(c => {
       const cur = mapCur[c.id];
       const prev = mapPrev[c.id];
       const ix = cur ? cur.index_final : '';
       const ixPrev = prev ? prev.index_final : '—';
+      const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
@@ -839,6 +866,7 @@ async function incarcaCitiriGaze() {
         <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
         <td style="font-size:12px;font-weight:600">${chiriasNume}</td>
         <td><span class="badge b-${c.tip==='general'?'gray':c.tip==='pasant'?'orange':'blue'}">${c.tip}</span></td>
+        <td><input type="date" value="${dataCitire}" data-contor-id="${c.id}" class="gz-data" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:130px"></td>
         <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev,3) : '—'}</td>
         <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="gz-input"></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt(consum,3) : '—'}</td>
@@ -875,10 +903,13 @@ async function salveazaCitiriGaze() {
   inputs.forEach(inp => {
     const val = parseFloat(inp.value);
     if (!isNaN(val) && val > 0) {
+      const contorId = parseInt(inp.dataset.contorId);
+      const dataInp = document.querySelector(`.gz-data[data-contor-id="${contorId}"]`);
+      const dataCitire = dataInp?.value || `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`;
       payload.push({
-        contor_id: parseInt(inp.dataset.contorId),
+        contor_id: contorId,
         an, luna,
-        data_citire: `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`,
+        data_citire: dataCitire,
         index_final: val,
         nr_luni_acoperite: nrLuni,
         introdus_de: currentUser.id
@@ -1127,7 +1158,19 @@ async function incarcaCitiriEnel() {
         }
       }
     });
-    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Chirias</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (kw)</th></tr></thead><tbody>';
+    const dataDefault = `${an}-${String(luna).padStart(2,'0')}-${String(new Date(an, luna, 0).getDate()).padStart(2,'0')}`;
+    let html = `<div class="alert alert-info" style="margin-bottom:14px">
+      <span class="ico">📅</span>
+      <div style="flex:1">
+        <div class="title">Data citirii per contor</div>
+        Fiecare contor are propria data — modifica direct pe rand. Sau aplica una pentru toate:
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <input type="date" id="el-data-toate" value="${dataDefault}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-secondary" style="padding:6px 14px" onclick="aplicaDataToate('el')">Aplica tuturor</button>
+        </div>
+      </div>
+    </div>`;
+    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Chirias</th><th style="width:140px">Data citire</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (kw)</th></tr></thead><tbody>';
     let lastUnitateId = null;
     contoareEnel.forEach(c => {
       const cur = mapCur[c.id];
@@ -1135,6 +1178,7 @@ async function incarcaCitiriEnel() {
       const u = _unitati.find(x => x.id === c.unitate_id);
       const ix = cur ? cur.index_final : '';
       const ixPrev = prev ? prev.index_final : '—';
+      const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(0) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
@@ -1147,6 +1191,7 @@ async function incarcaCitiriEnel() {
         <td style="font-size:12px">${escH(c.denumire)}${obsB}</td>
         <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
         <td style="font-size:12px;font-weight:600">${chiriasN}</td>
+        <td><input type="date" value="${dataCitire}" data-contor-id="${c.id}" class="el-data" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:130px"></td>
         <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt0(ixPrev) : '—'}</td>
         <td><input type="number" step="1" min="0" value="${ix}" data-contor-id="${c.id}" class="el-input"></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt0(consum) : '—'}</td>
@@ -1181,10 +1226,13 @@ async function salveazaCitiriEnel() {
   inputs.forEach(inp => {
     const val = parseFloat(inp.value);
     if (!isNaN(val) && val > 0) {
+      const contorId = parseInt(inp.dataset.contorId);
+      const dataInp = document.querySelector(`.el-data[data-contor-id="${contorId}"]`);
+      const dataCitire = dataInp?.value || `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`;
       payload.push({
-        contor_id: parseInt(inp.dataset.contorId),
+        contor_id: contorId,
         an, luna,
-        data_citire: `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`,
+        data_citire: dataCitire,
         index_final: val,
         nr_luni_acoperite: nrLuni,
         introdus_de: currentUser.id
@@ -1491,8 +1539,20 @@ async function incarcaCitiriRaja() {
       }
     });
 
+    const dataDefault = `${an}-${String(luna).padStart(2,'0')}-${String(new Date(an, luna, 0).getDate()).padStart(2,'0')}`;
     let html = `<div class="alert alert-info" style="margin-bottom:14px"><span class="ico">ℹ️</span><div><div class="title">Apometre apa calda</div>Apometrele de apa calda sunt introduse la modul <b>GAZE</b> (acelasi contor fizic). Aici apar read-only. Pretul RAJA se aplica oricum la consumul lor (apa = apa, indiferent ca e calda sau rece).</div></div>`;
-    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Chirias</th><th>Tip</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (mc)</th></tr></thead><tbody>';
+    html += `<div class="alert alert-info" style="margin-bottom:14px">
+      <span class="ico">📅</span>
+      <div style="flex:1">
+        <div class="title">Data citirii per contor</div>
+        Fiecare contor are propria data — modifica direct pe rand. Sau aplica una pentru toate:
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <input type="date" id="rj-data-toate" value="${dataDefault}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-secondary" style="padding:6px 14px" onclick="aplicaDataToate('rj')">Aplica tuturor</button>
+        </div>
+      </div>
+    </div>`;
+    html += '<table class="tbl"><thead><tr><th>Contor</th><th>Unitate</th><th>Chirias</th><th>Tip</th><th style="width:140px">Data citire</th><th style="text-align:right">Index init</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum (mc)</th></tr></thead><tbody>';
     let lastUnitateId = -1;
     contoareRaja.forEach(c => {
       const cur = mapCur[c.id];
@@ -1500,12 +1560,15 @@ async function incarcaCitiriRaja() {
       const u = _unitati.find(x => x.id === c.unitate_id);
       const ix = cur ? cur.index_final : '';
       const ixPrev = prev ? prev.index_final : '—';
+      const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' :
                         (consum !== '—' && parseFloat(consum) === 0) ? 'color:var(--orange);font-weight:600' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
       const isCalda = c.tip === 'apometru_apa_calda';
       const inputAttr = isCalda ? 'disabled style="background:#f3f4f6;cursor:not-allowed"' : '';
+      const dataAttr = isCalda ? 'disabled style="background:#f3f4f6;cursor:not-allowed;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:130px"' :
+        'style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:130px"';
       const tipBadge = {general:'gray', apometru_apa_rece:'blue', apometru_apa_calda:'orange', individual:'green'}[c.tip] || 'gray';
       const tipLabel = {general:'GENERAL', apometru_apa_rece:'apa rece', apometru_apa_calda:'apa calda (GAZE)', individual:'individual'}[c.tip] || c.tip;
       const chiriasN = getChiriasNume(c.unitate_id) || '<span style="color:var(--sub)">—</span>';
@@ -1518,6 +1581,7 @@ async function incarcaCitiriRaja() {
         <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
         <td style="font-size:12px;font-weight:600">${chiriasN}</td>
         <td><span class="badge b-${tipBadge}">${tipLabel}</span></td>
+        <td><input type="date" value="${dataCitire}" data-contor-id="${c.id}" class="rj-data" ${dataAttr}></td>
         <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev, 3) : '—'}</td>
         <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="rj-input" ${inputAttr}></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt(consum, 3) : '—'}</td>
@@ -1553,10 +1617,13 @@ async function salveazaCitiriRaja() {
   inputs.forEach(inp => {
     const val = parseFloat(inp.value);
     if (!isNaN(val) && val >= 0) {
+      const contorId = parseInt(inp.dataset.contorId);
+      const dataInp = document.querySelector(`.rj-data[data-contor-id="${contorId}"]`);
+      const dataCitire = dataInp?.value || `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`;
       payload.push({
-        contor_id: parseInt(inp.dataset.contorId),
+        contor_id: contorId,
         an, luna,
-        data_citire: `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`,
+        data_citire: dataCitire,
         index_final: val,
         nr_luni_acoperite: nrLuni,
         introdus_de: currentUser.id
