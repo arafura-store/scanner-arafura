@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<title>DOMADAMI — Gestiune Utilitati</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1F3864; --blue:#2563eb; --gold:#FFD700; --red:#C00000; --green:#10b981; --orange:#f59e0b;
+  --bg:#f3f4f6; --border:#e5e7eb; --sub:#6b7280; --dark:#1f2937;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:#1f2937;font-size:14px;line-height:1.5}
+
+/* LOGIN */
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
+.login-box{background:#fff;padding:40px;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,0.2);width:90%;max-width:400px}
+.login-box h1{font-size:28px;color:var(--blue);text-align:center;margin-bottom:6px}
+.login-box .sub{text-align:center;color:var(--sub);margin-bottom:28px;font-size:13px}
+.login-box label{display:block;font-weight:600;font-size:13px;margin-bottom:6px;margin-top:14px;color:var(--dark)}
+.login-box input{width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:8px;font-size:15px;transition:border .15s}
+.login-box input:focus{outline:none;border-color:var(--blue)}
+.login-box button{width:100%;margin-top:20px;padding:12px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
+.login-box button:hover{background:#1d4ed8}
+.login-box .err{color:var(--red);font-size:12px;margin-top:10px;display:none;text-align:center;font-weight:600}
+
+/* APP LAYOUT */
+.app{display:flex;min-height:100vh}
+.sidebar{width:240px;background:var(--dark);color:#fff;padding:18px 0;flex-shrink:0}
+.sidebar h2{font-size:18px;padding:0 20px 18px;border-bottom:1px solid #374151;margin-bottom:10px}
+.sidebar h2 small{display:block;font-size:11px;opacity:0.6;font-weight:400;margin-top:3px}
+.nav-item{padding:11px 20px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:14px;color:#d1d5db;transition:background .12s}
+.nav-item:hover{background:#374151;color:#fff}
+.nav-item.active{background:var(--blue);color:#fff;border-left:3px solid var(--gold)}
+.nav-item .ico{font-size:16px;width:20px;text-align:center}
+.nav-sep{margin:10px 0;border-top:1px solid #374151}
+.nav-sep-lbl{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;padding:8px 20px 4px;font-weight:700}
+.role-admin{display:none}
+body.is-admin .role-admin{display:flex}
+
+.main{flex:1;display:flex;flex-direction:column;overflow-x:hidden}
+.topbar{background:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+.topbar h2{font-size:18px;color:var(--dark)}
+.topbar .right{display:flex;gap:14px;align-items:center}
+.luna-selector{padding:7px 12px;border-radius:6px;background:#f3f4f6;font-weight:600;font-size:13px;cursor:pointer;border:1px solid var(--border)}
+.user-info{display:flex;align-items:center;gap:10px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.user-info b{font-size:13px}.user-info span{font-size:11px;color:var(--sub);display:block}
+.btn{padding:8px 14px;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:#1d4ed8}
+.btn-success{background:var(--green);color:#fff}.btn-success:hover{filter:brightness(1.08)}
+.btn-secondary{background:#e5e7eb;color:var(--dark)}.btn-secondary:hover{background:#d1d5db}
+.btn-danger{background:var(--red);color:#fff}
+.btn:disabled{opacity:0.55;cursor:not-allowed}
+
+.content{padding:24px;flex:1;overflow-y:auto}
+.page{display:none}.page.active{display:block}
+
+/* KPI cards dashboard */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi{background:#fff;border-radius:12px;padding:16px 18px;border-left:4px solid var(--blue);box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+.kpi .lbl{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:0.04em;font-weight:700}
+.kpi .val{font-size:26px;font-weight:800;color:var(--dark);margin:6px 0 2px}
+.kpi .meta{font-size:11px;color:var(--sub)}
+.kpi.green{border-left-color:var(--green)}.kpi.green .val{color:var(--green)}
+.kpi.red{border-left-color:var(--red)}.kpi.red .val{color:var(--red)}
+.kpi.gold{border-left-color:var(--gold)}.kpi.gold .val{color:#856404}
+.kpi.orange{border-left-color:var(--orange)}.kpi.orange .val{color:var(--orange)}
+
+/* Carduri sectiuni */
+.card{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);margin-bottom:18px;overflow:hidden}
+.card-hdr{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:#fafbfc}
+.card-hdr h3{font-size:15px;color:var(--dark)}
+.card-body{padding:18px}
+
+/* Alerte */
+.alert{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:8px;margin-bottom:12px;border-left:4px solid}
+.alert-danger{background:#fef2f2;border-color:var(--red);color:#7f1d1d}
+.alert-warning{background:#fffbeb;border-color:var(--orange);color:#78350f}
+.alert-info{background:#eff6ff;border-color:var(--blue);color:#1e3a8a}
+.alert-success{background:#f0fdf4;border-color:var(--green);color:#14532d}
+.alert .ico{font-size:20px;flex-shrink:0}
+.alert .title{font-weight:700;font-size:13px;margin-bottom:3px}
+
+/* Tabele */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{background:#f9fafb;padding:9px 12px;text-align:left;font-weight:700;font-size:11px;color:var(--sub);text-transform:uppercase;border-bottom:2px solid var(--border)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border)}
+.tbl tr:hover td{background:#f9fafb}
+.tbl input[type=number]{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;text-align:right}
+.tbl input[type=number]:focus{outline:none;border-color:var(--blue)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+
+.spinner{padding:40px;text-align:center;color:var(--navy);font-weight:600}
+.empty-msg{padding:40px;text-align:center;color:var(--sub);font-size:14px}
+
+/* Form layout */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.form-grp label{display:block;font-size:12px;color:var(--sub);font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.03em}
+.form-grp input,.form-grp select{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:6px;font-size:13px}
+.form-grp input:focus,.form-grp select:focus{outline:none;border-color:var(--blue)}
+.form-grp .hint{font-size:11px;color:var(--sub);margin-top:3px;font-style:italic}
+.chk{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:13px;cursor:pointer}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;padding:14px 20px;border-radius:10px;color:#fff;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,0.2);opacity:0;transform:translateY(20px);transition:all .3s;z-index:9999}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{background:var(--green)}.toast.err{background:var(--red)}.toast.info{background:var(--blue)}
+
+/* Badge */
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;text-transform:uppercase}
+.b-red{background:#fee2e2;color:#991b1b}.b-orange{background:#fed7aa;color:#9a3412}
+.b-green{background:#dcfce7;color:#166534}.b-blue{background:#dbeafe;color:#1e40af}
+.b-gold{background:#fef3c7;color:#92400e}.b-gray{background:#e5e7eb;color:#374151}
+
+@media (max-width:900px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .form-row{grid-template-columns:1fr}
+  .sidebar{width:60px;padding:14px 0}
+  .sidebar h2,.nav-item span,.nav-sep-lbl{display:none}
+  .nav-item{justify-content:center;padding:11px 0}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- LOGIN -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="login" id="login-screen">
+  <div class="login-box">
+    <h1>🏢 DOMADAMI</h1>
+    <div class="sub">Gestiune Utilitati — Acces Restrictionat</div>
+    <label>Utilizator</label>
+    <input type="text" id="lg-user" placeholder="bogdan / eugen / contabilitate" autocomplete="username">
+    <label>Parola</label>
+    <input type="password" id="lg-pass" placeholder="parola" autocomplete="current-password" onkeypress="if(event.key==='Enter')login()">
+    <div class="err" id="lg-err">Utilizator sau parola incorecte</div>
+    <button onclick="login()">Intra in Aplicatie</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- APP -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="app" id="app" style="display:none">
+  <aside class="sidebar">
+    <h2>🏢 DOMADAMI<small>Gestiune Utilitati</small></h2>
+    <div class="nav-item active" data-page="dashboard" onclick="goPage('dashboard',this)"><span class="ico">📊</span><span>Dashboard</span></div>
+    <div class="nav-sep-lbl">MODULE FURNIZORI</div>
+    <div class="nav-item" data-page="gaze" onclick="goPage('gaze',this)"><span class="ico">🔥</span><span>GAZE</span></div>
+    <div class="nav-item" data-page="enel" onclick="goPage('enel',this)"><span class="ico">⚡</span><span>ENEL</span></div>
+    <div class="nav-item" data-page="raja" onclick="goPage('raja',this)"><span class="ico">💧</span><span>RAJA</span></div>
+    <div class="nav-item" data-page="polaris" onclick="goPage('polaris',this)"><span class="ico">🗑️</span><span>POLARIS</span></div>
+    <div class="nav-sep-lbl">RAPOARTE</div>
+    <div class="nav-item" data-page="centralizator" onclick="goPage('centralizator',this)"><span class="ico">📋</span><span>Centralizator</span></div>
+    <div class="nav-item" data-page="chiriasi" onclick="goPage('chiriasi',this)"><span class="ico">👥</span><span>Chiriasi & Unitati</span></div>
+    <div class="nav-sep-lbl">ADMINISTRARE</div>
+    <div class="nav-item role-admin" data-page="setari" onclick="goPage('setari',this)"><span class="ico">⚙️</span><span>Setari</span></div>
+    <div class="nav-item role-admin" data-page="utilizatori" onclick="goPage('utilizatori',this)"><span class="ico">🔐</span><span>Utilizatori</span></div>
+    <div class="nav-sep"></div>
+    <div class="nav-item" onclick="logout()"><span class="ico">🚪</span><span>Iesire</span></div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <h2 id="page-title">Dashboard</h2>
+      <div class="right">
+        <select class="luna-selector" id="luna-globala" onchange="onLunaChange()"></select>
+        <div class="user-info">
+          <div class="avatar" id="u-avatar">?</div>
+          <div><b id="u-nume">—</b><span id="u-rol">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- DASHBOARD                                            -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page active" id="page-dashboard">
+        <div class="kpi-grid">
+          <div class="kpi"><div class="lbl">Luna activa</div><div class="val" id="kpi-luna">—</div><div class="meta" id="kpi-luna-meta">—</div></div>
+          <div class="kpi green"><div class="lbl">Citiri introduse</div><div class="val" id="kpi-citiri">—</div><div class="meta" id="kpi-citiri-meta">din 77 contoare</div></div>
+          <div class="kpi orange"><div class="lbl">Facturi introduse</div><div class="val" id="kpi-facturi">—</div><div class="meta">din 4 furnizori</div></div>
+          <div class="kpi red"><div class="lbl">Alerte active</div><div class="val" id="kpi-alerte">—</div><div class="meta" id="kpi-alerte-meta">situatii speciale</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>🚨 Alerte si situatii speciale</h3></div>
+          <div class="card-body" id="alerte-list">
+            <div class="spinner">Se incarca...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>📅 Status introducere date — luna selectata</h3></div>
+          <div class="card-body" id="status-modul">
+            <div class="spinner">Se incarca...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- GAZE — COMPLET                                       -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-gaze">
+        <div class="card">
+          <div class="card-hdr"><h3>🔥 GAZE — Factura lunara</h3></div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Total factura (RON)</label>
+                <input type="number" id="gz-total-lei" step="0.01" min="0" placeholder="ex: 12345.67">
+              </div>
+              <div class="form-grp">
+                <label>Total mc factura</label>
+                <input type="number" id="gz-total-mc" step="0.001" min="0" placeholder="ex: 870.32">
+                <div class="hint">Pretul unitar = total / mc (calculat automat)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label class="chk"><input type="checkbox" id="gz-incalzire"> Lună cu încălzire (DA = se aplică algoritm cu elemenți calorifer)</label>
+              </div>
+              <div class="form-grp">
+                <label>Nr. luni acoperite</label>
+                <select id="gz-nr-luni"><option value="1">1 lună (normal)</option><option value="2">2 luni (cumulat)</option></select>
+              </div>
+            </div>
+            <button class="btn btn-success" onclick="salveazaFacturaGaze()">💾 Salveaza factura</button>
+            <button class="btn btn-primary" onclick="incarcaCitiriGaze()" style="margin-left:8px">📥 Incarca / refresh citiri</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>📊 Indexuri contoare GAZE</h3></div>
+          <div class="card-body" id="gz-citiri">
+            <div class="spinner">Selecteaza luna apoi apasa "Incarca citiri"</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>🧮 Rezultat calcul</h3></div>
+          <div class="card-body" id="gz-rezultat">
+            <div class="empty-msg">Apasa "Recalculeaza" dupa ce introduci factura + indexurile</div>
+            <button class="btn btn-primary" onclick="calculeazaGaze()" style="margin-top:12px">🧮 Recalculeaza</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- ENEL — placeholder                                   -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-enel">
+        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
+          <div style="font-size:64px;margin-bottom:14px">⚡</div>
+          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">ENEL — în construire</h3>
+          <p style="color:var(--sub);max-width:500px;margin:0 auto">Modulul va fi disponibil in sesiunea urmatoare. Va include: introducere factura ENEL, indexuri pentru cele 31 contoare individuale, alocarea consumului AC etaj forfait (cat timp e stricat), calcul pierderi cu alerta anti-frauda.</p>
+        </div></div>
+      </div>
+
+      <!-- RAJA — placeholder -->
+      <div class="page" id="page-raja">
+        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
+          <div style="font-size:64px;margin-bottom:14px">💧</div>
+          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">RAJA — în construire</h3>
+          <p style="color:var(--sub);max-width:500px;margin:0 auto">Modulul va include: factura RAJA (apa rece + caldura inclusa), indexuri pentru 44 contoare (general + 32 apometre garsoniere + 11 parter), forfait toaleta comuna pentru unitatile cu acces, calcul pierderi.</p>
+        </div></div>
+      </div>
+
+      <!-- POLARIS — placeholder -->
+      <div class="page" id="page-polaris">
+        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
+          <div style="font-size:64px;margin-bottom:14px">🗑️</div>
+          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">POLARIS — în construire</h3>
+          <p style="color:var(--sub);max-width:500px;margin:0 auto">Modulul: introducere factura POLARIS, alocare automata 160 RON garsoniere fix + restul impartit la unitatile "rest" ocupate. Profi/Milion/Farmacia excluse (contracte directe).</p>
+        </div></div>
+      </div>
+
+      <!-- CENTRALIZATOR — placeholder -->
+      <div class="page" id="page-centralizator">
+        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
+          <div style="font-size:64px;margin-bottom:14px">📋</div>
+          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">Centralizator lunar — în construire</h3>
+          <p style="color:var(--sub);max-width:500px;margin:0 auto">Matrice 24 chiriasi × 4 module + TOTAL. Export PDF/Excel pentru contabilitate. Filtrare, sortare, fisa individuala chirias (transparenta calcul).</p>
+        </div></div>
+      </div>
+
+      <!-- CHIRIASI -->
+      <div class="page" id="page-chiriasi">
+        <div class="card">
+          <div class="card-hdr"><h3>👥 Chiriasi si Unitati</h3></div>
+          <div class="card-body">
+            <div id="lista-chiriasi" class="spinner">Se incarca...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETARI (admin) -->
+      <div class="page" id="page-setari">
+        <div class="card">
+          <div class="card-hdr"><h3>⚙️ Setari aplicatie</h3></div>
+          <div class="card-body">
+            <table class="tbl" id="setari-tbl">
+              <thead><tr><th>Cheie</th><th>Valoare</th><th>Descriere</th></tr></thead>
+              <tbody><tr><td colspan="3" class="spinner">Se incarca...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- UTILIZATORI (admin) -->
+      <div class="page" id="page-utilizatori">
+        <div class="card">
+          <div class="card-hdr"><h3>🔐 Utilizatori sistem</h3></div>
+          <div class="card-body">
+            <table class="tbl" id="utilizatori-tbl">
+              <thead><tr><th>Username</th><th>Nume afisat</th><th>Rol</th><th>Email</th><th>Status</th><th>Ultim login</th></tr></thead>
+              <tbody><tr><td colspan="6" class="spinner">Se incarca...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG SUPABASE
+// ═══════════════════════════════════════════════════════════════
+const SUPA_URL = 'https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1';
+const SUPA_KEY = 'sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw';
+const HEADERS  = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY };
+const HEADERS_WRITE = { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
+
+const LUNI_RO = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
+const LUNI_SCRT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct','Nov','Dec'];
+
+let currentUser = null;
+let _setari = {};
+let _unitati = [];
+let _contoare = [];
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+const fmt = (n, d=2) => (n==null||isNaN(n)?'—':(+n).toLocaleString('ro-RO', {minimumFractionDigits:d, maximumFractionDigits:d}));
+const fmt0 = n => (n==null||isNaN(n)?'—':Math.round(+n).toLocaleString('ro-RO'));
+const escH = s => String(s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+async function sha256(text) {
+  const buf = new TextEncoder().encode(text);
+  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function toast(msg, type='info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function api(path, opts={}) {
+  const r = await fetch(SUPA_URL + path, { headers: HEADERS, ...opts });
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error(`HTTP ${r.status}: ${txt.substring(0,200)}`);
+  }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════════════════════
+async function login() {
+  const u = document.getElementById('lg-user').value.trim().toLowerCase();
+  const p = document.getElementById('lg-pass').value;
+  const err = document.getElementById('lg-err');
+  err.style.display = 'none';
+  if (!u || !p) { err.textContent='Completeaza utilizator si parola'; err.style.display='block'; return; }
+  try {
+    const hash = await sha256(p);
+    const rows = await api(`/domadami_utilizatori?username=eq.${encodeURIComponent(u)}&password_hash=eq.${hash}&activ=eq.true&select=id,username,rol,nume_afisat,email`);
+    if (rows.length === 0) { err.textContent='Utilizator sau parola incorecte'; err.style.display='block'; return; }
+    currentUser = rows[0];
+    sessionStorage.setItem('dm_user', JSON.stringify(currentUser));
+    // update ultim_login (best-effort, nu blocheaza)
+    fetch(`${SUPA_URL}/domadami_utilizatori?id=eq.${currentUser.id}`, {
+      method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
+      body: JSON.stringify({ ultim_login: new Date().toISOString() })
+    }).catch(() => {});
+    showApp();
+  } catch (e) {
+    err.textContent='Eroare: ' + e.message; err.style.display='block';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem('dm_user');
+  currentUser = null;
+  document.body.classList.remove('is-admin');
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('lg-pass').value='';
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('u-avatar').textContent = currentUser.nume_afisat.charAt(0).toUpperCase();
+  document.getElementById('u-nume').textContent = currentUser.nume_afisat;
+  document.getElementById('u-rol').textContent = currentUser.rol.charAt(0).toUpperCase() + currentUser.rol.slice(1);
+  if (currentUser.rol === 'admin') document.body.classList.add('is-admin');
+  bootApp();
+}
+
+// Resume session
+const stored = sessionStorage.getItem('dm_user');
+if (stored) {
+  try {
+    currentUser = JSON.parse(stored);
+    showApp();
+  } catch {}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BOOT APP — incarca date initiale
+// ═══════════════════════════════════════════════════════════════
+async function bootApp() {
+  populeazaLuni();
+  try {
+    const [setari, unitati, contoare] = await Promise.all([
+      api('/domadami_setari?select=*'),
+      api('/domadami_unitati?select=*&order=ordine.asc'),
+      api('/domadami_contoare?select=*&order=id.asc')
+    ]);
+    _setari = Object.fromEntries(setari.map(s => [s.cheie, s.valoare]));
+    _unitati = unitati;
+    _contoare = contoare;
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare la incarcare: ' + e.message, 'err');
+  }
+}
+
+function populeazaLuni() {
+  const sel = document.getElementById('luna-globala');
+  const now = new Date(); // today = 2026-05-19
+  // Lista luni: ultimele 18 luni (inclusiv viitoare 2)
+  const opts = [];
+  for (let i=18; i>=-1; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    opts.push({ an: d.getFullYear(), luna: d.getMonth()+1 });
+  }
+  sel.innerHTML = opts.map(o => {
+    const val = o.an*100 + o.luna;
+    const sel = (o.an === now.getFullYear() && o.luna === now.getMonth()+1) ? 'selected' : '';
+    return `<option value="${val}" ${sel}>${LUNI_RO[o.luna-1]} ${o.an}</option>`;
+  }).join('');
+}
+
+function getLuna() {
+  const v = parseInt(document.getElementById('luna-globala').value);
+  return { an: Math.floor(v/100), luna: v%100 };
+}
+
+function onLunaChange() {
+  const pageId = document.querySelector('.nav-item.active')?.dataset.page || 'dashboard';
+  refreshPage(pageId);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+const PAGE_TITLES = {
+  dashboard:'Dashboard', gaze:'🔥 GAZE — Gaz Natural', enel:'⚡ ENEL — Energie Electrica',
+  raja:'💧 RAJA — Apa', polaris:'🗑️ POLARIS — Salubritate',
+  centralizator:'📋 Centralizator lunar', chiriasi:'👥 Chiriasi si Unitati',
+  setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
+};
+function goPage(pageId, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + pageId).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+  document.getElementById('page-title').textContent = PAGE_TITLES[pageId] || pageId;
+  refreshPage(pageId);
+}
+function refreshPage(pageId) {
+  const handlers = {
+    dashboard: renderDashboard,
+    gaze: () => incarcaFacturaGaze(),
+    chiriasi: renderChiriasi,
+    setari: renderSetari,
+    utilizatori: renderUtilizatori
+  };
+  if (handlers[pageId]) handlers[pageId]();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+async function renderDashboard() {
+  const { an, luna } = getLuna();
+  document.getElementById('kpi-luna').textContent = LUNI_RO[luna-1];
+  document.getElementById('kpi-luna-meta').textContent = an + ' · ' + (currentUser?.nume_afisat || '');
+
+  try {
+    const [citiri, facturi] = await Promise.all([
+      api(`/domadami_citiri?an=eq.${an}&luna=eq.${luna}&select=contor_id`),
+      api(`/domadami_facturi?an=eq.${an}&luna=eq.${luna}&select=modul,total_factura_lei`)
+    ]);
+    document.getElementById('kpi-citiri').textContent = citiri.length;
+    document.getElementById('kpi-citiri-meta').textContent = 'din 77 contoare';
+    document.getElementById('kpi-facturi').textContent = facturi.length + '/4';
+
+    // Alerte
+    const alerte = [];
+    if (_setari.contor_ac_etaj_stricat === 'true') {
+      alerte.push({tip:'danger', titlu:'Contor AC etaj STRICAT', text:'Se aplica forfait fix de '+(_setari.contor_ac_etaj_forfait_kw||'40')+' kw/firma. Inlocuire programata iunie 2026.'});
+    }
+    const blocate = _contoare.filter(c => (c.observatii||'').includes('BLOCAT'));
+    if (blocate.length > 0) {
+      alerte.push({tip:'warning', titlu:`Apometre BLOCATE: ${blocate.length}`, text:blocate.map(c=>c.denumire).join(', ') + ' — citiri ESTIMATE'});
+    }
+    if (citiri.length === 0) {
+      alerte.push({tip:'info', titlu:'Nicio citire luna asta', text:'Mergi la modulul GAZE/ENEL/RAJA pentru a introduce indexurile'});
+    }
+    document.getElementById('kpi-alerte').textContent = alerte.length;
+    document.getElementById('alerte-list').innerHTML = alerte.length === 0 ?
+      '<div class="alert alert-success"><span class="ico">✓</span><div><div class="title">Totul in regula</div>Nicio alerta activa.</div></div>' :
+      alerte.map(a => `<div class="alert alert-${a.tip}"><span class="ico">${a.tip==='danger'?'🚨':a.tip==='warning'?'⚠️':'ℹ️'}</span><div><div class="title">${a.titlu}</div>${a.text}</div></div>`).join('');
+
+    // Status per modul
+    const modCnt = {GAZE:0, ENEL:0, RAJA:0, POLARIS:0};
+    const facturiCnt = {GAZE:false, ENEL:false, RAJA:false, POLARIS:false};
+    facturi.forEach(f => facturiCnt[f.modul] = true);
+    citiri.forEach(c => {
+      const ct = _contoare.find(x => x.id === c.contor_id);
+      if (ct) modCnt[ct.modul] = (modCnt[ct.modul]||0) + 1;
+    });
+    // Apometrele apa calda sunt modul=RAJA dar contribuie si la GAZE
+    const apometreCalde = _contoare.filter(c => c.tip === 'apometru_apa_calda');
+    const citiriCalde = citiri.filter(c => apometreCalde.some(a => a.id === c.contor_id)).length;
+    modCnt.GAZE += citiriCalde;
+    const targetCnt = {GAZE: 2 + apometreCalde.length, ENEL: 31, RAJA: 44};
+
+    document.getElementById('status-modul').innerHTML = `
+      <div class="kpi-grid" style="margin:0">
+        ${['GAZE','ENEL','RAJA','POLARIS'].map(m => {
+          const ic = {GAZE:'🔥',ENEL:'⚡',RAJA:'💧',POLARIS:'🗑️'}[m];
+          const fcOk = facturiCnt[m];
+          const ctNr = modCnt[m] || 0;
+          const ctTotal = targetCnt[m] || 0;
+          const ctOk = m === 'POLARIS' || (ctTotal > 0 && ctNr >= ctTotal*0.8);
+          return `<div class="kpi ${fcOk && ctOk ? 'green' : 'orange'}">
+            <div class="lbl">${ic} ${m}</div>
+            <div class="val" style="font-size:18px">${fcOk ? '✓ Factura' : '⏳ Factura'}</div>
+            <div class="meta">${m === 'POLARIS' ? 'fara contoare' : `${ctNr}/${ctTotal} citiri`}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+  } catch (e) {
+    toast('Eroare dashboard: ' + e.message, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GAZE
+// ═══════════════════════════════════════════════════════════════
+async function incarcaFacturaGaze() {
+  const { an, luna } = getLuna();
+  try {
+    const facturi = await api(`/domadami_facturi?modul=eq.GAZE&an=eq.${an}&luna=eq.${luna}&select=*`);
+    if (facturi.length > 0) {
+      const f = facturi[0];
+      document.getElementById('gz-total-lei').value = f.total_factura_lei || '';
+      document.getElementById('gz-total-mc').value = f.total_consum || '';
+      document.getElementById('gz-incalzire').checked = f.luna_cu_incalzire === true;
+      document.getElementById('gz-nr-luni').value = '1'; // gestionat la citiri
+      toast(`Factura GAZE ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
+    } else {
+      document.getElementById('gz-total-lei').value = '';
+      document.getElementById('gz-total-mc').value = '';
+      document.getElementById('gz-incalzire').checked = false;
+    }
+    incarcaCitiriGaze();
+  } catch (e) {
+    toast('Eroare incarcare GAZE: ' + e.message, 'err');
+  }
+}
+
+async function salveazaFacturaGaze() {
+  const { an, luna } = getLuna();
+  const total_lei = parseFloat(document.getElementById('gz-total-lei').value) || 0;
+  const total_mc = parseFloat(document.getElementById('gz-total-mc').value) || 0;
+  if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify({
+        modul: 'GAZE', an, luna,
+        total_factura_lei: total_lei,
+        total_consum: total_mc,
+        unitate_masura: 'mc',
+        luna_cu_incalzire: document.getElementById('gz-incalzire').checked,
+        introdus_de: currentUser.id
+      })
+    });
+    toast(`Factura GAZE ${LUNI_RO[luna-1]} ${an} salvata`, 'ok');
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare: ' + e.message, 'err');
+  }
+}
+
+async function incarcaCitiriGaze() {
+  const { an, luna } = getLuna();
+  // Contoare aplicabile la GAZE: modul=GAZE (2) + tip=apometru_apa_calda (16) = 18
+  const contoareGaze = _contoare.filter(c => c.modul === 'GAZE' || c.tip === 'apometru_apa_calda');
+  // Indexuri actuale + anterioare
+  const idLuna = an*100 + luna;
+  const lunaPrev = luna === 1 ? {an: an-1, luna: 12} : {an, luna: luna-1};
+  const ids = contoareGaze.map(c => c.id).join(',');
+  try {
+    const citiri = await api(`/domadami_citiri?contor_id=in.(${ids})&select=*`);
+    const mapCur = {};
+    const mapPrev = {};
+    citiri.forEach(c => {
+      if (c.an === an && c.luna === luna) mapCur[c.contor_id] = c;
+      // Index anterior = ultima citire ANTERIOARA datei curente
+      if (c.an*100 + c.luna < idLuna) {
+        if (!mapPrev[c.contor_id] || (mapPrev[c.contor_id].an*100+mapPrev[c.contor_id].luna) < (c.an*100+c.luna)) {
+          mapPrev[c.contor_id] = c;
+        }
+      }
+    });
+    let html = '<table class="tbl"><thead><tr><th>Contor</th><th>Tip</th><th style="text-align:right">Index initial</th><th style="text-align:right">Index final</th><th style="text-align:right">Consum</th></tr></thead><tbody>';
+    contoareGaze.forEach(c => {
+      const cur = mapCur[c.id];
+      const prev = mapPrev[c.id];
+      const ix = cur ? cur.index_final : '';
+      const ixPrev = prev ? prev.index_final : '—';
+      const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
+      const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
+      const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
+      html += `<tr>
+        <td>${escH(c.denumire)}${obsB}</td>
+        <td><span class="badge b-${c.tip==='general'?'gray':c.tip==='pasant'?'orange':'blue'}">${c.tip}</span></td>
+        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev,3) : '—'}</td>
+        <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="gz-input"></td>
+        <td class="num" style="${consumCls}">${consum !== '—' ? fmt(consum,3) : '—'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    html += '<div style="margin-top:14px"><button class="btn btn-success" onclick="salveazaCitiriGaze()">💾 Salveaza toate citirile</button></div>';
+    document.getElementById('gz-citiri').innerHTML = html;
+    // Re-calc consum on change
+    document.querySelectorAll('.gz-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const row = inp.closest('tr');
+        const cells = row.querySelectorAll('td.num');
+        const ixPrev = parseFloat(cells[0].textContent.replace(/\./g,'').replace(',','.'));
+        const val = parseFloat(inp.value);
+        if (!isNaN(ixPrev) && !isNaN(val)) {
+          const c = (val - ixPrev).toFixed(3);
+          cells[1].textContent = fmt(c, 3);
+          cells[1].style.cssText = (val - ixPrev) < 0 ? 'color:var(--red);font-weight:700' : '';
+        }
+      });
+    });
+  } catch (e) {
+    toast('Eroare incarcare citiri: ' + e.message, 'err');
+  }
+}
+
+async function salveazaCitiriGaze() {
+  const { an, luna } = getLuna();
+  const inputs = document.querySelectorAll('.gz-input');
+  const nrLuni = parseInt(document.getElementById('gz-nr-luni').value) || 1;
+  const payload = [];
+  inputs.forEach(inp => {
+    const val = parseFloat(inp.value);
+    if (!isNaN(val) && val > 0) {
+      payload.push({
+        contor_id: parseInt(inp.dataset.contorId),
+        an, luna,
+        data_citire: `${an}-${String(luna).padStart(2,'0')}-${new Date(an, luna, 0).getDate()}`,
+        index_final: val,
+        nr_luni_acoperite: nrLuni,
+        introdus_de: currentUser.id
+      });
+    }
+  });
+  if (payload.length === 0) { toast('Nicio citire de salvat', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify(payload)
+    });
+    toast(`${payload.length} citiri GAZE salvate pentru ${LUNI_RO[luna-1]} ${an}`, 'ok');
+    incarcaCitiriGaze();
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare citiri: ' + e.message, 'err');
+  }
+}
+
+// CALCUL GAZE — algoritmul din spec
+async function calculeazaGaze() {
+  const { an, luna } = getLuna();
+  try {
+    const [facturi, citiriRaw] = await Promise.all([
+      api(`/domadami_facturi?modul=eq.GAZE&an=eq.${an}&luna=eq.${luna}&select=*`),
+      api(`/domadami_citiri?an=eq.${an}&luna=eq.${luna}&select=*`)
+    ]);
+    if (facturi.length === 0) { toast('Nu exista factura GAZE pentru luna selectata', 'err'); return; }
+    const f = facturi[0];
+    const totalLei = parseFloat(f.total_factura_lei) || 0;
+    const totalMc  = parseFloat(f.total_consum) || 0;
+    const cuIncalzire = f.luna_cu_incalzire === true;
+    if (totalMc <= 0) { toast('Total mc factura este 0 — completeaza factura', 'err'); return; }
+
+    // Indexuri anterioare (luna sau ultima cunoscuta)
+    const idLuna = an*100 + luna;
+    const allCitiri = await api(`/domadami_citiri?select=*`);
+    const prevForContor = id => {
+      const candidates = allCitiri.filter(c => c.contor_id === id && (c.an*100+c.luna) < idLuna);
+      if (candidates.length === 0) return null;
+      candidates.sort((a,b) => (b.an*100+b.luna) - (a.an*100+a.luna));
+      return candidates[0];
+    };
+
+    // Contor general + pasant
+    const contorGen = _contoare.find(c => c.modul === 'GAZE' && c.tip === 'general');
+    const contorPas = _contoare.find(c => c.modul === 'GAZE' && c.tip === 'pasant');
+    if (!contorGen || !contorPas) { toast('Nu gasesc contor general sau pasant', 'err'); return; }
+    const cGen = citiriRaw.find(c => c.contor_id === contorGen.id);
+    const cPas = citiriRaw.find(c => c.contor_id === contorPas.id);
+    if (!cGen || !cPas) { toast('Lipsesc citiri general/pasant pentru luna selectata', 'err'); return; }
+    const pGen = prevForContor(contorGen.id);
+    const pPas = prevForContor(contorPas.id);
+    if (!pGen || !pPas) { toast('Lipsesc indexuri ANTERIOARE pentru general/pasant', 'err'); return; }
+
+    const consumGen   = parseFloat(cGen.index_final) - parseFloat(pGen.index_final);
+    const consumPas   = parseFloat(cPas.index_final) - parseFloat(pPas.index_final);
+    const consumRamas = consumGen - consumPas;
+    const pretUnitar  = totalLei / consumGen;
+    const costPas     = consumPas * pretUnitar;
+    const costRamas   = totalLei - costPas;
+
+    // Apometre apa calda — per garsoniera (G1-G8)
+    const garsoniere = _unitati.filter(u => u.tip === 'garsoniera').sort((a,b)=>a.ordine-b.ordine);
+    const apomCalde = _contoare.filter(c => c.tip === 'apometru_apa_calda');
+    const consumPerG = {};
+    let totalApaCalda = 0;
+    garsoniere.forEach(g => {
+      consumPerG[g.id] = { mag: g.cod, consum: 0, elementi: g.nr_elementi_calorifer || 0 };
+      apomCalde.filter(a => a.unitate_id === g.id).forEach(a => {
+        const cur = citiriRaw.find(c => c.contor_id === a.id);
+        const prev = prevForContor(a.id);
+        if (cur && prev) {
+          const c = parseFloat(cur.index_final) - parseFloat(prev.index_final);
+          consumPerG[g.id].consum += c;
+          totalApaCalda += c;
+        }
+      });
+    });
+
+    const totalElementi = Object.values(consumPerG).reduce((s,g) => s + g.elementi, 0);
+    const pretRefApaCalda = parseFloat(_setari.pret_referinta_apa_calda) || 3.11;
+
+    // Calcul per garsoniera
+    let rows = '';
+    let totalCostCalda = 0, totalCostCaldura = 0;
+    Object.values(consumPerG).forEach(g => {
+      let costCalda, costCaldura = 0;
+      if (cuIncalzire) {
+        // Iarna: cost apa calda = consum × pret referinta; restul = caldura impartita pe elementi
+        costCalda = g.consum * pretRefApaCalda;
+        costCaldura = totalElementi > 0 ? (g.elementi / totalElementi) * (costRamas - totalApaCalda * pretRefApaCalda) : 0;
+      } else {
+        // Vara: tot costul rămas se imparte proportional cu consumul apa calda
+        costCalda = totalApaCalda > 0 ? (g.consum / totalApaCalda) * costRamas : 0;
+      }
+      totalCostCalda += costCalda;
+      totalCostCaldura += costCaldura;
+      const total = costCalda + costCaldura;
+      rows += `<tr>
+        <td><b>${g.mag}</b></td>
+        <td class="num">${fmt(g.consum, 2)}</td>
+        <td class="num">${g.elementi}</td>
+        <td class="num">${fmt(costCalda, 2)}</td>
+        <td class="num">${cuIncalzire ? fmt(costCaldura, 2) : '—'}</td>
+        <td class="num"><b>${fmt(total, 2)}</b></td>
+      </tr>`;
+    });
+
+    const html = `
+      <div class="kpi-grid" style="margin-bottom:18px">
+        <div class="kpi"><div class="lbl">Consum general</div><div class="val">${fmt(consumGen,2)} <small style="font-size:14px;color:var(--sub)">mc</small></div></div>
+        <div class="kpi orange"><div class="lbl">Consum Farmacie (pasant)</div><div class="val">${fmt(consumPas,2)} <small style="font-size:14px;color:var(--sub)">mc</small></div></div>
+        <div class="kpi gold"><div class="lbl">Pret unitar gaz</div><div class="val">${fmt(pretUnitar,4)} <small style="font-size:14px;color:var(--sub)">RON/mc</small></div></div>
+        <div class="kpi green"><div class="lbl">Cost ramas (garsoniere)</div><div class="val">${fmt0(costRamas)} <small style="font-size:14px;color:var(--sub)">RON</small></div></div>
+      </div>
+      <table class="tbl">
+        <thead><tr>
+          <th>Garsoniera</th>
+          <th style="text-align:right">Consum apa calda (mc)</th>
+          <th style="text-align:right">Elementi calorifer</th>
+          <th style="text-align:right">Cost apa calda (RON)</th>
+          <th style="text-align:right">Cost caldura (RON)</th>
+          <th style="text-align:right">TOTAL (RON)</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot style="background:#f9fafb;font-weight:800">
+          <tr>
+            <td>TOTAL</td>
+            <td class="num">${fmt(totalApaCalda,2)}</td>
+            <td class="num">${totalElementi}</td>
+            <td class="num">${fmt(totalCostCalda,2)}</td>
+            <td class="num">${cuIncalzire ? fmt(totalCostCaldura,2) : '—'}</td>
+            <td class="num">${fmt(totalCostCalda + totalCostCaldura, 2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <div class="alert alert-info" style="margin-top:14px">
+        <span class="ico">ℹ️</span>
+        <div>
+          <div class="title">${cuIncalzire ? 'Calcul cu incalzire (iarna)' : 'Calcul fara incalzire (vara)'}</div>
+          ${cuIncalzire ?
+            `Pret apa calda: ${fmt(pretRefApaCalda,2)} RON/mc (setare). Caldura = (elementi garsoniera / ${totalElementi} total) × cost ramas dupa apa calda.` :
+            `Cost rămas (${fmt0(costRamas)} RON) se imparte proportional cu consumul apa calda per garsoniera.`}
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="calculeazaGaze()" style="margin-top:14px">🔄 Recalculeaza</button>
+    `;
+    document.getElementById('gz-rezultat').innerHTML = html;
+    toast('Calcul GAZE finalizat', 'ok');
+  } catch (e) {
+    toast('Eroare calcul: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHIRIASI
+// ═══════════════════════════════════════════════════════════════
+async function renderChiriasi() {
+  try {
+    const [chiriasi, contracte] = await Promise.all([
+      api('/domadami_chiriasi?select=*&order=nume.asc'),
+      api('/domadami_contracte_chirie?select=*,domadami_unitati(cod,nume)')
+    ]);
+    const mapUn = {};
+    contracte.forEach(c => {
+      if (!mapUn[c.chirias_id]) mapUn[c.chirias_id] = [];
+      mapUn[c.chirias_id].push(c.domadami_unitati);
+    });
+    let html = '<table class="tbl"><thead><tr><th>Nume</th><th>Tip</th><th>Unitate(i)</th><th>Observatii</th></tr></thead><tbody>';
+    chiriasi.forEach(c => {
+      const uni = (mapUn[c.id] || []).map(u => `<span class="badge b-blue">${u.cod}</span>`).join(' ');
+      html += `<tr>
+        <td><b>${escH(c.nume)}</b></td>
+        <td><span class="badge b-${c.tip==='firma'?'gold':'gray'}">${c.tip||'—'}</span></td>
+        <td>${uni || '<span style="color:var(--sub)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--sub)">${escH(c.observatii||'')}</td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('lista-chiriasi').innerHTML = html;
+  } catch (e) {
+    document.getElementById('lista-chiriasi').innerHTML = '<div class="alert alert-danger">Eroare: '+e.message+'</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETARI
+// ═══════════════════════════════════════════════════════════════
+async function renderSetari() {
+  try {
+    const setari = await api('/domadami_setari?select=*&order=cheie.asc');
+    const tbody = document.querySelector('#setari-tbl tbody');
+    const canEdit = currentUser.rol === 'admin';
+    tbody.innerHTML = setari.map(s => `<tr>
+      <td><code style="font-size:12px;color:var(--blue);font-weight:600">${escH(s.cheie)}</code></td>
+      <td>${canEdit ?
+        `<input type="text" value="${escH(s.valoare)}" data-cheie="${escH(s.cheie)}" class="setare-inp" style="width:120px;padding:5px 8px;border:1px solid var(--border);border-radius:4px">` :
+        `<b>${escH(s.valoare)}</b>`}</td>
+      <td style="font-size:12px;color:var(--sub)">${escH(s.descriere||'')}</td>
+    </tr>`).join('');
+    if (canEdit) {
+      tbody.innerHTML += `<tr><td colspan="3" style="padding-top:14px"><button class="btn btn-success" onclick="salveazaSetari()">💾 Salveaza modificari</button></td></tr>`;
+    }
+  } catch (e) {
+    document.querySelector('#setari-tbl tbody').innerHTML = `<tr><td colspan="3" style="color:var(--red)">Eroare: ${e.message}</td></tr>`;
+  }
+}
+
+async function salveazaSetari() {
+  const inputs = document.querySelectorAll('.setare-inp');
+  let n = 0;
+  for (const inp of inputs) {
+    try {
+      await fetch(`${SUPA_URL}/domadami_setari?cheie=eq.${encodeURIComponent(inp.dataset.cheie)}`, {
+        method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
+        body: JSON.stringify({ valoare: inp.value, modificat_la: new Date().toISOString(), modificat_de: currentUser.id })
+      });
+      n++;
+    } catch {}
+  }
+  toast(`${n} setari salvate`, 'ok');
+  bootApp(); // reincarca _setari cache
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILIZATORI
+// ═══════════════════════════════════════════════════════════════
+async function renderUtilizatori() {
+  try {
+    const users = await api('/domadami_utilizatori?select=*&order=rol.asc,username.asc');
+    document.querySelector('#utilizatori-tbl tbody').innerHTML = users.map(u => `<tr>
+      <td><b>${escH(u.username)}</b></td>
+      <td>${escH(u.nume_afisat)}</td>
+      <td><span class="badge b-${u.rol==='admin'?'red':u.rol==='operator'?'gold':'blue'}">${u.rol}</span></td>
+      <td>${escH(u.email||'—')}</td>
+      <td>${u.activ ? '<span class="badge b-green">ACTIV</span>' : '<span class="badge b-gray">DEZACTIV</span>'}</td>
+      <td style="font-size:12px;color:var(--sub)">${u.ultim_login ? new Date(u.ultim_login).toLocaleString('ro-RO') : '—'}</td>
+    </tr>`).join('');
+  } catch (e) {
+    document.querySelector('#utilizatori-tbl tbody').innerHTML = `<tr><td colspan="6" style="color:var(--red)">Eroare: ${e.message}</td></tr>`;
+  }
+}
+</script>
+</body>
+</html>
