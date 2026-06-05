@@ -383,13 +383,34 @@ body.is-admin .role-admin{display:flex}
         </div>
       </div>
 
-      <!-- CENTRALIZATOR — placeholder -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- CENTRALIZATOR — matrice 24 × 4 + export              -->
+      <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-centralizator">
-        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
-          <div style="font-size:64px;margin-bottom:14px">📋</div>
-          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">Centralizator lunar — în construire</h3>
-          <p style="color:var(--sub);max-width:500px;margin:0 auto">Matrice 24 chiriasi × 4 module + TOTAL. Export PDF/Excel pentru contabilitate. Filtrare, sortare, fisa individuala chirias (transparenta calcul).</p>
-        </div></div>
+        <div class="card">
+          <div class="card-hdr">
+            <h3>📋 Centralizator lunar — matrice chiriasi × module</h3>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
+              <button class="btn btn-secondary" onclick="window.print()">🖨️ Print</button>
+              <button class="btn btn-primary" onclick="renderCentralizator()">🔄 Refresh</button>
+            </div>
+          </div>
+          <div class="card-body" id="centralizator-body">
+            <div class="spinner">Se incarca centralizatorul...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Fisa individuala chirias -->
+      <div id="fisa-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;overflow-y:auto" onclick="if(event.target===this)closeFisa()">
+        <div style="background:#fff;border-radius:12px;max-width:900px;margin:30px auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+          <div style="background:var(--dark);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center">
+            <h3 id="fisa-titlu" style="font-size:16px">Fisa individuala</h3>
+            <button onclick="closeFisa()" style="background:transparent;border:1px solid #fff;color:#fff;padding:5px 14px;border-radius:6px;cursor:pointer;font-weight:700">✕ Inchide</button>
+          </div>
+          <div id="fisa-body" style="padding:20px;max-height:75vh;overflow-y:auto"></div>
+        </div>
       </div>
 
       <!-- CHIRIASI -->
@@ -605,6 +626,7 @@ function refreshPage(pageId) {
     enel: () => incarcaFacturaEnel(),
     raja: () => incarcaFacturaRaja(),
     polaris: () => incarcaFacturaPolaris(),
+    centralizator: renderCentralizator,
     chiriasi: renderChiriasi,
     setari: renderSetari,
     utilizatori: renderUtilizatori
@@ -678,6 +700,36 @@ async function renderDashboard() {
     `;
   } catch (e) {
     toast('Eroare dashboard: ' + e.message, 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPER: salvare calcule in domadami_calcule (UPSERT)
+// ═══════════════════════════════════════════════════════════════
+async function salveazaCalcule(modul, an, luna, calculeArray) {
+  if (!calculeArray || calculeArray.length === 0) return;
+  // Curat: setez status preliminar la toate
+  const payload = calculeArray.map(c => ({
+    unitate_id: c.unitate_id,
+    modul, an, luna,
+    consum_principal: c.consum_principal || 0,
+    consum_secundar: c.consum_secundar || 0,
+    consum_forfait: c.consum_forfait || 0,
+    pret_unitar: c.pret_unitar || null,
+    cost_consum: c.cost_consum || 0,
+    cost_forfait: c.cost_forfait || 0,
+    cost_total: c.cost_total || 0,
+    breakdown_json: c.breakdown_json || null,
+    status: 'preliminar',
+    calculat_la: new Date().toISOString()
+  }));
+  try {
+    await fetch(`${SUPA_URL}/domadami_calcule?on_conflict=unitate_id,modul,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {
+    console.error('Eroare salvare calcule:', e);
   }
 }
 
@@ -889,14 +941,15 @@ async function calculeazaGaze() {
     // Calcul per garsoniera
     let rows = '';
     let totalCostCalda = 0, totalCostCaldura = 0;
-    Object.values(consumPerG).forEach(g => {
+    const calculePentruSalvare = [];
+    // Reverse-lookup id unitate
+    const garsByCod = Object.fromEntries(garsoniere.map(g => [g.cod, g]));
+    Object.entries(consumPerG).forEach(([unitateId, g]) => {
       let costCalda, costCaldura = 0;
       if (cuIncalzire) {
-        // Iarna: cost apa calda = consum × pret referinta; restul = caldura impartita pe elementi
         costCalda = g.consum * pretRefApaCalda;
         costCaldura = totalElementi > 0 ? (g.elementi / totalElementi) * (costRamas - totalApaCalda * pretRefApaCalda) : 0;
       } else {
-        // Vara: tot costul rămas se imparte proportional cu consumul apa calda
         costCalda = totalApaCalda > 0 ? (g.consum / totalApaCalda) * costRamas : 0;
       }
       totalCostCalda += costCalda;
@@ -910,7 +963,29 @@ async function calculeazaGaze() {
         <td class="num">${cuIncalzire ? fmt(costCaldura, 2) : '—'}</td>
         <td class="num"><b>${fmt(total, 2)}</b></td>
       </tr>`;
+      calculePentruSalvare.push({
+        unitate_id: parseInt(unitateId),
+        consum_principal: g.consum,
+        consum_forfait: 0,
+        pret_unitar: pretUnitar,
+        cost_consum: costCalda,
+        cost_forfait: costCaldura,
+        cost_total: total,
+        breakdown_json: {
+          tip: cuIncalzire ? 'iarna' : 'vara',
+          consum_apa_calda_mc: g.consum,
+          elementi_calorifer: g.elementi,
+          pret_referinta_apa_calda: pretRefApaCalda,
+          cost_apa_calda: costCalda,
+          cost_caldura: costCaldura,
+          total_elementi_firma: totalElementi,
+          total_apa_calda_firma: totalApaCalda,
+          cost_ramas_firma: costRamas
+        }
+      });
     });
+    // Salvez calculele in baza
+    salveazaCalcule('GAZE', an, luna, calculePentruSalvare);
 
     const html = `
       <div class="kpi-grid" style="margin-bottom:18px">
@@ -1207,10 +1282,34 @@ async function calculeazaEnel() {
     const pierderiAlerta = pierderiPct > pragAlerta;
 
     // Cost final per unitate
+    const calculePentruSalvareEnel = [];
     _unitati.forEach(u => {
-      const consumTotal = (consumPerUnitate[u.id] || 0) + (consumIluminat[u.id] || 0) + (consumAC[u.id] || 0);
+      const consumInd = consumPerUnitate[u.id] || 0;
+      const consumIlum = consumIluminat[u.id] || 0;
+      const consumAcU = consumAC[u.id] || 0;
+      const consumTotal = consumInd + consumIlum + consumAcU;
       costPerUnitate[u.id] = consumTotal * pretUnitar;
+      if (u.utilizeaza_enel && consumTotal > 0) {
+        calculePentruSalvareEnel.push({
+          unitate_id: u.id,
+          consum_principal: consumInd,
+          consum_forfait: consumIlum + consumAcU,
+          pret_unitar: pretUnitar,
+          cost_consum: consumInd * pretUnitar,
+          cost_forfait: (consumIlum + consumAcU) * pretUnitar,
+          cost_total: costPerUnitate[u.id],
+          breakdown_json: {
+            consum_individual_kw: consumInd,
+            iluminat_kw: consumIlum,
+            ac_kw: consumAcU,
+            ac_forfait_aplicat: acStricat,
+            pret_unitar: pretUnitar,
+            nr_luni_factura: nrLuniFactura
+          }
+        });
+      }
     });
+    salveazaCalcule('ENEL', an, luna, calculePentruSalvareEnel);
 
     // Render rezultate
     const unitatiCuConsum = _unitati.filter(u => u.utilizeaza_enel && (consumPerUnitate[u.id] > 0 || (consumIluminat[u.id]||0) > 0 || (consumAC[u.id]||0) > 0));
@@ -1517,10 +1616,32 @@ async function calculeazaRaja() {
 
     // Cost per unitate
     const costPerUnitate = {};
+    const calculePentruSalvareRaja = [];
     _unitati.forEach(u => {
-      const c = (consumApaPerUnitate[u.id] || 0) + (consumToaletaPerUnitate[u.id] || 0);
-      costPerUnitate[u.id] = c * pretUnitar;
+      const cAp = consumApaPerUnitate[u.id] || 0;
+      const cTo = consumToaletaPerUnitate[u.id] || 0;
+      const cTot = cAp + cTo;
+      costPerUnitate[u.id] = cTot * pretUnitar;
+      if ((u.utilizeaza_raja_rece || u.utilizeaza_raja_calda || u.utilizeaza_toaleta_comuna) && cTot > 0) {
+        calculePentruSalvareRaja.push({
+          unitate_id: u.id,
+          consum_principal: cAp,
+          consum_forfait: cTo,
+          pret_unitar: pretUnitar,
+          cost_consum: cAp * pretUnitar,
+          cost_forfait: cTo * pretUnitar,
+          cost_total: costPerUnitate[u.id],
+          breakdown_json: {
+            consum_apa_total_mc: cAp,
+            consum_toaleta_forfait_mc: cTo,
+            pret_unitar: pretUnitar,
+            forfait_toaleta_per_luna: forfaitToaleta,
+            nr_luni_factura: nrLuniFactura
+          }
+        });
+      }
     });
+    salveazaCalcule('RAJA', an, luna, calculePentruSalvareRaja);
 
     // Filtrare unitati cu consum
     const unitatiCuConsum = _unitati.filter(u =>
@@ -1667,6 +1788,24 @@ async function calculeazaPolaris() {
     const diferenta = totalLei - sumaGarsonierePolaris;
     const costPerRest = restOcupate.length > 0 ? diferenta / restOcupate.length : 0;
 
+    // Salvez calcule POLARIS in baza
+    const calculePolaris = [];
+    garsOcupate.forEach(u => {
+      calculePolaris.push({
+        unitate_id: u.id, cost_total: costPerGarsoniera,
+        cost_forfait: costPerGarsoniera,
+        breakdown_json: { tip: 'garsoniera_fix', suma_grup_total: sumaGarsonierePolaris, nr_in_grup: garsOcupate.length }
+      });
+    });
+    restOcupate.forEach(u => {
+      calculePolaris.push({
+        unitate_id: u.id, cost_total: costPerRest,
+        cost_forfait: costPerRest,
+        breakdown_json: { tip: 'rest_impart', suma_grup_total: diferenta, nr_in_grup: restOcupate.length, total_factura: totalLei }
+      });
+    });
+    salveazaCalcule('POLARIS', an, luna, calculePolaris);
+
     // Tabel garsoniere
     let rowsG = garsoniere.map(u => {
       const oc = isOcupat(u);
@@ -1732,6 +1871,208 @@ async function calculeazaPolaris() {
     console.error(e);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// CENTRALIZATOR — matrice 24 chiriasi × 4 module + export + fisa
+// ═══════════════════════════════════════════════════════════════
+let _centralizatorData = null;
+
+async function renderCentralizator() {
+  const { an, luna } = getLuna();
+  document.getElementById('centralizator-body').innerHTML = '<div class="spinner">Se calculeaza...</div>';
+  try {
+    const [calcule, chiriasi, contracte, facturi] = await Promise.all([
+      api(`/domadami_calcule?an=eq.${an}&luna=eq.${luna}&select=*`),
+      api('/domadami_chiriasi?select=*'),
+      api('/domadami_contracte_chirie?select=*&data_end=is.null'),
+      api(`/domadami_facturi?an=eq.${an}&luna=eq.${luna}&select=modul,total_factura_lei`)
+    ]);
+
+    // Map: unitate_id -> { GAZE, ENEL, RAJA, POLARIS } costuri
+    const matrix = {};
+    _unitati.forEach(u => {
+      matrix[u.id] = { GAZE:0, ENEL:0, RAJA:0, POLARIS:0, breakdown:{} };
+    });
+    calcule.forEach(c => {
+      if (matrix[c.unitate_id]) {
+        matrix[c.unitate_id][c.modul] = parseFloat(c.cost_total) || 0;
+        matrix[c.unitate_id].breakdown[c.modul] = c.breakdown_json;
+      }
+    });
+
+    // Chirias per unitate (din contracte active)
+    const chiriasPerUnitate = {};
+    contracte.forEach(c => {
+      const ch = chiriasi.find(x => x.id === c.chirias_id);
+      if (ch) {
+        if (!chiriasPerUnitate[c.unitate_id]) chiriasPerUnitate[c.unitate_id] = [];
+        chiriasPerUnitate[c.unitate_id].push(ch);
+      }
+    });
+
+    // Sumar totaluri firma
+    const totalFactura = facturi.reduce((s,f) => s + (parseFloat(f.total_factura_lei)||0), 0);
+    let totalFacturat = 0;
+    const totalPerModul = { GAZE:0, ENEL:0, RAJA:0, POLARIS:0 };
+    _unitati.forEach(u => {
+      ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
+        totalPerModul[m] += matrix[u.id][m];
+      });
+      totalFacturat += matrix[u.id].GAZE + matrix[u.id].ENEL + matrix[u.id].RAJA + matrix[u.id].POLARIS;
+    });
+    const pierderiFirma = totalFactura - totalFacturat;
+
+    // Cache pentru export
+    _centralizatorData = { matrix, chiriasPerUnitate, an, luna, totalFactura, totalFacturat, totalPerModul };
+
+    // Render
+    let html = `<div class="kpi-grid" style="margin-bottom:16px">
+      <div class="kpi"><div class="lbl">Luna</div><div class="val">${LUNI_RO[luna-1]} ${an}</div><div class="meta">Centralizator</div></div>
+      <div class="kpi gold"><div class="lbl">Total facturi furnizori</div><div class="val">${fmt0(totalFactura)} RON</div><div class="meta">${facturi.length}/4 introduse</div></div>
+      <div class="kpi green"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalFacturat)} RON</div><div class="meta">${Object.values(matrix).filter(r => r.GAZE+r.ENEL+r.RAJA+r.POLARIS > 0).length} unitati</div></div>
+      <div class="kpi ${pierderiFirma>50?'red':'green'}"><div class="lbl">Diferenta (pierderi DOMADAMI)</div><div class="val">${fmt0(pierderiFirma)} RON</div><div class="meta">${totalFactura > 0 ? fmt(pierderiFirma/totalFactura*100, 1) : 0}%</div></div>
+    </div>`;
+
+    if (Object.values(matrix).every(r => r.GAZE+r.ENEL+r.RAJA+r.POLARIS === 0)) {
+      html += '<div class="alert alert-warning"><span class="ico">⚠️</span><div><div class="title">Nu exista calcule salvate</div>Mergi pe fiecare modul (GAZE, ENEL, RAJA, POLARIS), introduce factura + indexurile si apasa "Recalculeaza". Calculele se salveaza automat aici.</div></div>';
+      document.getElementById('centralizator-body').innerHTML = html;
+      return;
+    }
+
+    html += `<div style="overflow-x:auto"><table class="tbl" id="cent-tbl">
+      <thead><tr>
+        <th>Unitate</th>
+        <th>Chirias</th>
+        <th style="text-align:right">🔥 GAZE</th>
+        <th style="text-align:right">⚡ ENEL</th>
+        <th style="text-align:right">💧 RAJA</th>
+        <th style="text-align:right">🗑️ POLARIS</th>
+        <th style="text-align:right;background:#fef3c7">TOTAL (RON)</th>
+        <th style="text-align:center">Detalii</th>
+      </tr></thead>
+      <tbody>`;
+
+    _unitati.forEach(u => {
+      const r = matrix[u.id];
+      const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
+      if (total === 0) return; // skip unitati fara cost
+      const ch = (chiriasPerUnitate[u.id] || []).map(c => c.nume).join(', ') || '—';
+      html += `<tr>
+        <td><b style="color:var(--dark)">${u.cod}</b><br><small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td style="font-size:12px">${escH(ch)}</td>
+        <td class="num">${r.GAZE > 0 ? fmt(r.GAZE, 2) : '—'}</td>
+        <td class="num">${r.ENEL > 0 ? fmt(r.ENEL, 2) : '—'}</td>
+        <td class="num">${r.RAJA > 0 ? fmt(r.RAJA, 2) : '—'}</td>
+        <td class="num">${r.POLARIS > 0 ? fmt(r.POLARIS, 2) : '—'}</td>
+        <td class="num" style="background:#fef3c7;font-weight:800">${fmt(total, 2)}</td>
+        <td style="text-align:center"><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="openFisa(${u.id})">Fisa</button></td>
+      </tr>`;
+    });
+
+    html += `</tbody><tfoot style="background:#f9fafb;font-weight:800">
+      <tr>
+        <td colspan="2">TOTAL FIRMA</td>
+        <td class="num">${fmt(totalPerModul.GAZE, 2)}</td>
+        <td class="num">${fmt(totalPerModul.ENEL, 2)}</td>
+        <td class="num">${fmt(totalPerModul.RAJA, 2)}</td>
+        <td class="num">${fmt(totalPerModul.POLARIS, 2)}</td>
+        <td class="num" style="background:#fef3c7">${fmt(totalFacturat, 2)}</td>
+        <td></td>
+      </tr>
+      <tr style="color:var(--red)">
+        <td colspan="6">+ Pierderi DOMADAMI (apa + electric)</td>
+        <td class="num" style="background:#fee2e2">${fmt(pierderiFirma, 2)}</td>
+        <td></td>
+      </tr>
+      <tr style="background:#dbeafe">
+        <td colspan="6">TOTAL FACTURI FURNIZORI</td>
+        <td class="num" style="background:#1e40af;color:#fff">${fmt(totalFactura, 2)}</td>
+        <td></td>
+      </tr>
+    </tfoot></table></div>`;
+
+    document.getElementById('centralizator-body').innerHTML = html;
+  } catch (e) {
+    document.getElementById('centralizator-body').innerHTML = `<div class="alert alert-danger">Eroare: ${e.message}</div>`;
+  }
+}
+
+function openFisa(unitateId) {
+  const u = _unitati.find(x => x.id === unitateId);
+  if (!u || !_centralizatorData) return;
+  const r = _centralizatorData.matrix[unitateId];
+  const ch = (_centralizatorData.chiriasPerUnitate[unitateId] || []).map(c => c.nume).join(', ');
+  const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
+  const { an, luna } = _centralizatorData;
+  document.getElementById('fisa-titlu').textContent = `📄 Fisa ${u.cod} — ${ch || u.nume} — ${LUNI_RO[luna-1]} ${an}`;
+
+  let html = `<div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:18px">
+    <div class="kpi gold"><div class="lbl">TOTAL DE PLATA</div><div class="val">${fmt(total, 2)} RON</div></div>
+    <div class="kpi"><div class="lbl">Luna</div><div class="val" style="font-size:20px">${LUNI_RO[luna-1]} ${an}</div></div>
+  </div>`;
+
+  ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
+    if (r[m] <= 0) return;
+    const ic = {GAZE:'🔥',ENEL:'⚡',RAJA:'💧',POLARIS:'🗑️'}[m];
+    const bd = r.breakdown[m] || {};
+    let detalii = '';
+    if (m === 'GAZE') {
+      detalii = `Tip: ${bd.tip||'—'} · Consum apa calda: ${fmt(bd.consum_apa_calda_mc||0, 2)} mc<br>
+        Cost apa calda: ${fmt(bd.cost_apa_calda||0, 2)} RON (${fmt(bd.pret_referinta_apa_calda||0, 2)} RON/mc × ${fmt(bd.consum_apa_calda_mc||0, 2)} mc)<br>
+        ${bd.tip==='iarna' ? `Cost caldura: ${fmt(bd.cost_caldura||0, 2)} RON (${bd.elementi_calorifer||0}/${bd.total_elementi_firma||0} elementi × cost ramas)` : ''}`;
+    } else if (m === 'ENEL') {
+      detalii = `Consum individual: ${fmt0(bd.consum_individual_kw||0)} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt((bd.consum_individual_kw||0)*(bd.pret_unitar||0), 2)} RON<br>
+        ${bd.iluminat_kw > 0 ? `Iluminat forfait: ${bd.iluminat_kw} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.iluminat_kw*bd.pret_unitar, 2)} RON<br>` : ''}
+        ${bd.ac_kw > 0 ? `AC etaj ${bd.ac_forfait_aplicat?'(forfait)':'(real)'}: ${fmt(bd.ac_kw, 2)} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.ac_kw*bd.pret_unitar, 2)} RON` : ''}`;
+    } else if (m === 'RAJA') {
+      detalii = `Consum apa: ${fmt(bd.consum_apa_total_mc||0, 3)} mc × ${fmt(bd.pret_unitar||0, 4)} = ${fmt((bd.consum_apa_total_mc||0)*(bd.pret_unitar||0), 2)} RON<br>
+        ${bd.consum_toaleta_forfait_mc > 0 ? `Toaleta forfait: ${fmt(bd.consum_toaleta_forfait_mc, 2)} mc × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.consum_toaleta_forfait_mc*bd.pret_unitar, 2)} RON` : ''}`;
+    } else if (m === 'POLARIS') {
+      detalii = bd.tip === 'garsoniera_fix' ?
+        `Grup garsoniere: ${fmt(bd.suma_grup_total||0, 2)} RON / ${bd.nr_in_grup||0} ocupate = ${fmt((bd.suma_grup_total||0)/(bd.nr_in_grup||1), 2)} RON` :
+        `Grup "rest": (Factura ${fmt(bd.total_factura||0, 2)} − 160 grup garsoniere) / ${bd.nr_in_grup||0} ocupate = ${fmt(bd.suma_grup_total/(bd.nr_in_grup||1), 2)} RON`;
+    }
+    html += `<div class="card" style="margin-bottom:14px">
+      <div class="card-hdr"><h3>${ic} ${m} — ${fmt(r[m], 2)} RON</h3></div>
+      <div class="card-body" style="font-size:13px;line-height:1.7">${detalii || '(fara detalii)'}</div>
+    </div>`;
+  });
+
+  document.getElementById('fisa-body').innerHTML = html;
+  document.getElementById('fisa-modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+function closeFisa() {
+  document.getElementById('fisa-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function exportCSV() {
+  if (!_centralizatorData) { toast('Apasa Refresh intai', 'err'); return; }
+  const { matrix, chiriasPerUnitate, an, luna } = _centralizatorData;
+  let csv = 'Cod;Nume unitate;Chirias;GAZE;ENEL;RAJA;POLARIS;TOTAL\n';
+  _unitati.forEach(u => {
+    const r = matrix[u.id];
+    const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
+    if (total === 0) return;
+    const ch = (chiriasPerUnitate[u.id] || []).map(c => c.nume).join(', ');
+    csv += `${u.cod};${u.nume};${ch};${r.GAZE.toFixed(2)};${r.ENEL.toFixed(2)};${r.RAJA.toFixed(2)};${r.POLARIS.toFixed(2)};${total.toFixed(2)}\n`;
+  });
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `DOMADAMI_centralizator_${an}-${String(luna).padStart(2,'0')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exportat', 'ok');
+}
+
+// ESC inchide modal
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('fisa-modal').style.display === 'block') closeFisa();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // CHIRIASI
