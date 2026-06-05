@@ -346,13 +346,41 @@ body.is-admin .role-admin{display:flex}
         </div>
       </div>
 
-      <!-- POLARIS — placeholder -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- POLARIS — COMPLET                                    -->
+      <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-polaris">
-        <div class="card"><div class="card-body" style="text-align:center;padding:60px">
-          <div style="font-size:64px;margin-bottom:14px">🗑️</div>
-          <h3 style="font-size:20px;color:var(--dark);margin-bottom:8px">POLARIS — în construire</h3>
-          <p style="color:var(--sub);max-width:500px;margin:0 auto">Modulul: introducere factura POLARIS, alocare automata 160 RON garsoniere fix + restul impartit la unitatile "rest" ocupate. Profi/Milion/Farmacia excluse (contracte directe).</p>
-        </div></div>
+        <div class="card">
+          <div class="card-hdr"><h3>🗑️ POLARIS — Factura lunara</h3></div>
+          <div class="card-body">
+            <div class="alert alert-info" style="margin-bottom:14px">
+              <span class="ico">ℹ️</span>
+              <div>
+                <div class="title">Alocare automata</div>
+                Garsonierele ocupate platesc fix <b>160 RON</b> total (impartit egal intre cele ocupate).<br>
+                Restul facturii (Total − 160) se imparte egal la unitatile "rest" ocupate (PATISERIE, LEGUME, CARMANGERIE, VIZO, BRANZA, NAHIL, ETAJ 1-6, ETAJ MOBILA).<br>
+                <b>Excluse:</b> PROFI, MILION, FARMACIA — au contracte directe cu POLARIS.
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Total factura (RON)</label>
+                <input type="number" id="pl-total-lei" step="0.01" min="0" placeholder="ex: 487.50">
+              </div>
+              <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
+                <button class="btn btn-success" onclick="salveazaFacturaPolaris()" style="flex:1">💾 Salveaza factura</button>
+                <button class="btn btn-primary" onclick="calculeazaPolaris()" style="flex:1">🧮 Calculeaza</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>🧮 Rezultat alocare</h3></div>
+          <div class="card-body" id="pl-rezultat">
+            <div class="empty-msg">Apasa "Calculeaza" dupa ce salvezi factura</div>
+          </div>
+        </div>
       </div>
 
       <!-- CENTRALIZATOR — placeholder -->
@@ -576,6 +604,7 @@ function refreshPage(pageId) {
     gaze: () => incarcaFacturaGaze(),
     enel: () => incarcaFacturaEnel(),
     raja: () => incarcaFacturaRaja(),
+    polaris: () => incarcaFacturaPolaris(),
     chiriasi: renderChiriasi,
     setari: renderSetari,
     utilizatori: renderUtilizatori
@@ -1562,6 +1591,142 @@ async function calculeazaRaja() {
     `;
     document.getElementById('rj-rezultat').innerHTML = html;
     toast('Calcul RAJA finalizat', 'ok');
+  } catch (e) {
+    toast('Eroare calcul: ' + e.message, 'err');
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POLARIS — Factura, Calcul (fara contoare)
+// ═══════════════════════════════════════════════════════════════
+async function incarcaFacturaPolaris() {
+  const { an, luna } = getLuna();
+  try {
+    const facturi = await api(`/domadami_facturi?modul=eq.POLARIS&an=eq.${an}&luna=eq.${luna}&select=*`);
+    if (facturi.length > 0) {
+      document.getElementById('pl-total-lei').value = facturi[0].total_factura_lei || '';
+      toast(`Factura POLARIS ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
+    } else {
+      document.getElementById('pl-total-lei').value = '';
+    }
+  } catch (e) {
+    toast('Eroare incarcare POLARIS: ' + e.message, 'err');
+  }
+}
+
+async function salveazaFacturaPolaris() {
+  const { an, luna } = getLuna();
+  const total_lei = parseFloat(document.getElementById('pl-total-lei').value) || 0;
+  if (total_lei <= 0) { toast('Completeaza total factura', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE,
+      body: JSON.stringify({
+        modul: 'POLARIS', an, luna,
+        total_factura_lei: total_lei,
+        unitate_masura: 'forfait',
+        introdus_de: currentUser.id
+      })
+    });
+    toast(`Factura POLARIS ${LUNI_RO[luna-1]} ${an} salvata`, 'ok');
+    renderDashboard();
+  } catch (e) {
+    toast('Eroare salvare: ' + e.message, 'err');
+  }
+}
+
+async function calculeazaPolaris() {
+  const { an, luna } = getLuna();
+  try {
+    const [facturi, ocupareLst] = await Promise.all([
+      api(`/domadami_facturi?modul=eq.POLARIS&an=eq.${an}&luna=eq.${luna}&select=*`),
+      api(`/domadami_ocupare_lunara?an=eq.${an}&luna=eq.${luna}&select=*`)
+    ]);
+    if (facturi.length === 0) { toast('Nu exista factura POLARIS pentru luna selectata', 'err'); return; }
+    const totalLei = parseFloat(facturi[0].total_factura_lei) || 0;
+    if (totalLei <= 0) { toast('Total factura este 0', 'err'); return; }
+
+    const isOcupat = u => {
+      const o = ocupareLst.find(x => x.unitate_id === u.id);
+      return o ? o.este_ocupata : true;
+    };
+
+    const sumaGarsonierePolaris = parseFloat(_setari.polaris_garsoniere_total_ron) || 160;
+
+    // Garsoniere ocupate (polaris_grup='garsoniera_fix')
+    const garsoniere = _unitati.filter(u => u.polaris_grup === 'garsoniera_fix' && u.utilizeaza_polaris);
+    const garsOcupate = garsoniere.filter(isOcupat);
+    // Rest ocupate (polaris_grup='rest_impart')
+    const restUnitati = _unitati.filter(u => u.polaris_grup === 'rest_impart' && u.utilizeaza_polaris);
+    const restOcupate = restUnitati.filter(isOcupat);
+    // Excluse (polaris_grup='exclusa')
+    const excluse = _unitati.filter(u => u.polaris_grup === 'exclusa');
+
+    const costPerGarsoniera = garsOcupate.length > 0 ? sumaGarsonierePolaris / garsOcupate.length : 0;
+    const diferenta = totalLei - sumaGarsonierePolaris;
+    const costPerRest = restOcupate.length > 0 ? diferenta / restOcupate.length : 0;
+
+    // Tabel garsoniere
+    let rowsG = garsoniere.map(u => {
+      const oc = isOcupat(u);
+      return `<tr style="${oc?'':'opacity:0.5'}">
+        <td><b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td>${oc ? '<span class="badge b-green">OCUPATA</span>' : '<span class="badge b-gray">GOALA</span>'}</td>
+        <td class="num">${oc ? fmt(costPerGarsoniera, 2) + ' RON' : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    // Tabel rest
+    let rowsR = restUnitati.map(u => {
+      const oc = isOcupat(u);
+      return `<tr style="${oc?'':'opacity:0.5'}">
+        <td><b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small></td>
+        <td>${oc ? '<span class="badge b-green">OCUPATA</span>' : '<span class="badge b-gray">GOALA</span>'}</td>
+        <td class="num">${oc ? fmt(costPerRest, 2) + ' RON' : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    // Tabel excluse
+    let rowsE = excluse.map(u => `<tr style="opacity:0.55">
+      <td><b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small></td>
+      <td><span class="badge b-gray">EXCLUSA</span></td>
+      <td class="num">— (contract direct)</td>
+    </tr>`).join('');
+
+    const totalFacturat = (garsOcupate.length * costPerGarsoniera) + (restOcupate.length * costPerRest);
+    const diff = totalLei - totalFacturat;
+
+    const html = `
+      <div class="kpi-grid" style="margin-bottom:18px">
+        <div class="kpi"><div class="lbl">Total factura</div><div class="val">${fmt(totalLei, 2)} <small style="font-size:14px">RON</small></div></div>
+        <div class="kpi gold"><div class="lbl">Garsoniere ocupate</div><div class="val">${garsOcupate.length}/8</div><div class="meta">${fmt(costPerGarsoniera, 2)} RON fiecare</div></div>
+        <div class="kpi green"><div class="lbl">Rest ocupate</div><div class="val">${restOcupate.length}/${restUnitati.length}</div><div class="meta">${fmt(costPerRest, 2)} RON fiecare</div></div>
+        <div class="kpi ${Math.abs(diff)<0.01?'green':'red'}"><div class="lbl">Verificare</div><div class="val">${fmt(totalFacturat, 2)}</div><div class="meta">diferenta vs total: ${fmt(diff, 2)}</div></div>
+      </div>
+
+      <h4 style="color:var(--dark);margin:14px 0 8px">🏠 Garsoniere (fix ${sumaGarsonierePolaris} RON total)</h4>
+      <table class="tbl">
+        <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost POLARIS</th></tr></thead>
+        <tbody>${rowsG}</tbody>
+      </table>
+
+      <h4 style="color:var(--dark);margin:24px 0 8px">🏪 Unitati "rest" (impart ${fmt(diferenta, 2)} RON)</h4>
+      <table class="tbl">
+        <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost POLARIS</th></tr></thead>
+        <tbody>${rowsR}</tbody>
+      </table>
+
+      <h4 style="color:var(--dark);margin:24px 0 8px">❌ Unitati excluse (contract direct POLARIS)</h4>
+      <table class="tbl">
+        <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost</th></tr></thead>
+        <tbody>${rowsE}</tbody>
+      </table>
+
+      <button class="btn btn-primary" onclick="calculeazaPolaris()" style="margin-top:14px">🔄 Recalculeaza</button>
+    `;
+    document.getElementById('pl-rezultat').innerHTML = html;
+    toast('Calcul POLARIS finalizat', 'ok');
   } catch (e) {
     toast('Eroare calcul: ' + e.message, 'err');
     console.error(e);
