@@ -2217,27 +2217,141 @@ async function renderChiriasi() {
   try {
     const [chiriasi, contracte] = await Promise.all([
       api('/domadami_chiriasi?select=*&order=nume.asc'),
-      api('/domadami_contracte_chirie?select=*,domadami_unitati(cod,nume)')
+      api('/domadami_contracte_chirie?select=*,domadami_unitati(id,cod,nume,tip,ordine)&data_end=is.null')
     ]);
+    // Map: chirias_id -> [unitati]
     const mapUn = {};
     contracte.forEach(c => {
+      if (!c.domadami_unitati) return;
       if (!mapUn[c.chirias_id]) mapUn[c.chirias_id] = [];
       mapUn[c.chirias_id].push(c.domadami_unitati);
     });
-    let html = '<table class="tbl"><thead><tr><th>Nume</th><th>Tip</th><th>Unitate(i)</th><th>Observatii</th></tr></thead><tbody>';
+
+    // Grupez chiriasii dupa tipul unitatii (din prima unitate atasata)
+    const grupe = { garsoniera: [], comercial_parter: [], etaj: [], fara_unitate: [] };
     chiriasi.forEach(c => {
-      const uni = (mapUn[c.id] || []).map(u => `<span class="badge b-blue">${u.cod}</span>`).join(' ');
-      html += `<tr>
-        <td><b>${escH(c.nume)}</b></td>
-        <td><span class="badge b-${c.tip==='firma'?'gold':'gray'}">${c.tip||'—'}</span></td>
-        <td>${uni || '<span style="color:var(--sub)">—</span>'}</td>
-        <td style="font-size:12px;color:var(--sub)">${escH(c.observatii||'')}</td>
-      </tr>`;
+      const uni = mapUn[c.id] || [];
+      if (uni.length === 0) grupe.fara_unitate.push({ c, uni });
+      else {
+        const tipUnit = uni[0].tip;
+        grupe[tipUnit].push({ c, uni });
+      }
     });
-    html += '</tbody></table>';
+    // Sortez fiecare grupa dupa ordinea unitatii
+    Object.keys(grupe).forEach(k => grupe[k].sort((a,b) => (a.uni[0]?.ordine||99) - (b.uni[0]?.ordine||99)));
+
+    const nrFirme = chiriasi.filter(c => c.tip === 'firma').length;
+    const nrPF = chiriasi.filter(c => c.tip === 'persoana_fizica').length;
+    const nrActivi = chiriasi.filter(c => c.activ).length;
+    const canEditNow = !document.body.classList.contains('is-readonly');
+
+    let html = `<div class="kpi-grid" style="margin-bottom:16px">
+      <div class="kpi"><div class="lbl">Total chiriasi</div><div class="val">${chiriasi.length}</div><div class="meta">${nrActivi} activi</div></div>
+      <div class="kpi gold"><div class="lbl">Firme</div><div class="val">${nrFirme}</div><div class="meta">persoane juridice</div></div>
+      <div class="kpi green"><div class="lbl">Persoane fizice</div><div class="val">${nrPF}</div><div class="meta">garsoniere + etaj</div></div>
+      <div class="kpi orange"><div class="lbl">Unitati ocupate</div><div class="val">${Object.values(mapUn).length}</div><div class="meta">din ${_unitati.length}</div></div>
+    </div>`;
+
+    const renderGrupa = (titlu, icon, lista) => {
+      if (lista.length === 0) return '';
+      let s = `<div class="card"><div class="card-hdr"><h3>${icon} ${titlu} <span style="background:var(--blue);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;margin-left:6px">${lista.length}</span></h3></div><div class="card-body" style="padding:0"><table class="tbl"><thead><tr><th style="width:50px">#</th><th>Nume chirias</th><th>Tip</th><th>Unitate(i)</th><th>Contact</th><th>Observatii</th>${canEditNow?'<th style="width:80px">Actiuni</th>':''}</tr></thead><tbody>`;
+      lista.forEach((row, idx) => {
+        const c = row.c;
+        const ico = c.tip === 'firma' ? '🏢' : '🏠';
+        const uni = row.uni.map(u => `<span class="badge b-blue">${u.cod}</span>`).join(' ');
+        const contact = [c.telefon, c.email].filter(Boolean).join(' · ') || '<span style="color:var(--sub)">—</span>';
+        s += `<tr ${!c.activ?'style="opacity:0.5"':''}>
+          <td style="color:var(--sub);font-weight:600">${idx+1}</td>
+          <td><b style="font-size:14px">${ico} ${escH(c.nume)}</b>${!c.activ?' <span class="badge b-gray">INACTIV</span>':''}</td>
+          <td><span class="badge b-${c.tip==='firma'?'gold':'gray'}">${c.tip==='firma'?'firmă':'persoana fizica'}</span></td>
+          <td>${uni || '<span style="color:var(--sub)">—</span>'}</td>
+          <td style="font-size:12px">${contact}</td>
+          <td style="font-size:12px;color:var(--sub)">${escH(c.observatii||'')}</td>
+          ${canEditNow?`<td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editChirias(${c.id})">✏️ Edit</button></td>`:''}
+        </tr>`;
+      });
+      s += '</tbody></table></div></div>';
+      return s;
+    };
+
+    html += renderGrupa('Garsoniere', '🏠', grupe.garsoniera);
+    html += renderGrupa('Spatii comerciale parter', '🏪', grupe.comercial_parter);
+    html += renderGrupa('Etaj', '🏬', grupe.etaj);
+    if (grupe.fara_unitate.length > 0) {
+      html += renderGrupa('Fara unitate atribuita', '⚠️', grupe.fara_unitate);
+    }
+
     document.getElementById('lista-chiriasi').innerHTML = html;
   } catch (e) {
     document.getElementById('lista-chiriasi').innerHTML = '<div class="alert alert-danger">Eroare: '+e.message+'</div>';
+  }
+}
+
+// EDIT chirias — modal
+async function editChirias(id) {
+  if (!canEdit()) return;
+  try {
+    const rows = await api(`/domadami_chiriasi?id=eq.${id}&select=*`);
+    if (rows.length === 0) return;
+    const c = rows[0];
+    const html = `
+      <div style="background:rgba(0,0,0,0.6);position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;display:flex;align-items:center;justify-content:center" id="edit-overlay" onclick="if(event.target===this)document.getElementById('edit-overlay').remove()">
+        <div style="background:#fff;border-radius:12px;width:90%;max-width:560px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+          <div style="background:var(--dark);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
+            <h3 style="font-size:15px">✏️ Editeaza chirias</h3>
+            <button onclick="document.getElementById('edit-overlay').remove()" style="background:transparent;border:1px solid #fff;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:700">✕ Inchide</button>
+          </div>
+          <div style="padding:20px">
+            <div class="form-grp" style="margin-bottom:14px"><label>Nume</label><input type="text" id="ed-nume" value="${escH(c.nume||'')}"></div>
+            <div class="form-row">
+              <div class="form-grp"><label>Tip</label><select id="ed-tip"><option value="persoana_fizica" ${c.tip==='persoana_fizica'?'selected':''}>Persoana fizica</option><option value="firma" ${c.tip==='firma'?'selected':''}>Firma</option></select></div>
+              <div class="form-grp"><label>CUI / CNP</label><input type="text" id="ed-cui" value="${escH(c.cui_cnp||'')}"></div>
+            </div>
+            <div class="form-grp" style="margin-bottom:14px"><label>Persoana de contact (pentru firme)</label><input type="text" id="ed-contact" value="${escH(c.persoana_contact||'')}"></div>
+            <div class="form-row">
+              <div class="form-grp"><label>Telefon</label><input type="text" id="ed-tel" value="${escH(c.telefon||'')}"></div>
+              <div class="form-grp"><label>Email</label><input type="email" id="ed-email" value="${escH(c.email||'')}"></div>
+            </div>
+            <div class="form-grp" style="margin-bottom:14px"><label>Observatii</label><input type="text" id="ed-obs" value="${escH(c.observatii||'')}"></div>
+            <div class="form-grp"><label class="chk"><input type="checkbox" id="ed-activ" ${c.activ?'checked':''}> Chirias activ</label></div>
+            <div style="text-align:right;margin-top:18px;display:flex;gap:8px;justify-content:flex-end">
+              <button class="btn btn-secondary" onclick="document.getElementById('edit-overlay').remove()">Anuleaza</button>
+              <button class="btn btn-success" onclick="salveazaChiriasEdit(${id})">💾 Salveaza</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+  } catch (e) {
+    toast('Eroare: ' + e.message, 'err');
+  }
+}
+
+async function salveazaChiriasEdit(id) {
+  if (!canEdit()) return;
+  const payload = {
+    nume: document.getElementById('ed-nume').value.trim(),
+    tip: document.getElementById('ed-tip').value,
+    cui_cnp: document.getElementById('ed-cui').value.trim() || null,
+    persoana_contact: document.getElementById('ed-contact').value.trim() || null,
+    telefon: document.getElementById('ed-tel').value.trim() || null,
+    email: document.getElementById('ed-email').value.trim() || null,
+    observatii: document.getElementById('ed-obs').value.trim() || null,
+    activ: document.getElementById('ed-activ').checked
+  };
+  if (!payload.nume) { toast('Numele e obligatoriu', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_chiriasi?id=eq.${id}`, {
+      method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
+      body: JSON.stringify(payload)
+    });
+    toast('Chirias actualizat', 'ok');
+    document.getElementById('edit-overlay').remove();
+    // Refresh cache _chiriasPerUnitate
+    bootApp();
+    setTimeout(renderChiriasi, 300);
+  } catch (e) {
+    toast('Eroare salvare: ' + e.message, 'err');
   }
 }
 
