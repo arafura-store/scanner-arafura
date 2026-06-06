@@ -2253,10 +2253,11 @@ async function salveazaSetari() {
 async function renderUtilizatori() {
   try {
     const users = await api('/domadami_utilizatori?select=*&order=rol.asc,username.asc');
+    const rolColor = { admin: 'red', operator: 'gold', manager: 'gold', viewer: 'blue', contabilitate: 'blue' };
     document.querySelector('#utilizatori-tbl tbody').innerHTML = users.map(u => `<tr>
       <td><b>${escH(u.username)}</b></td>
       <td>${escH(u.nume_afisat)}</td>
-      <td><span class="badge b-${u.rol==='admin'?'red':u.rol==='operator'?'gold':'blue'}">${u.rol}</span></td>
+      <td><span class="badge b-${rolColor[u.rol] || 'gray'}">${u.rol}</span></td>
       <td>${escH(u.email||'—')}</td>
       <td>${u.activ ? '<span class="badge b-green">ACTIV</span>' : '<span class="badge b-gray">DEZACTIV</span>'}</td>
       <td style="font-size:12px;color:var(--sub)">${u.ultim_login ? new Date(u.ultim_login).toLocaleString('ro-RO') : '—'}</td>
