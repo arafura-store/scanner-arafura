@@ -260,7 +260,8 @@ body.is-readonly .readonly-banner{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label class="chk"><input type="checkbox" id="gz-incalzire"> Lună cu încălzire (DA = se aplică algoritm cu elemenți calorifer)</label>
+                <label class="chk"><input type="checkbox" id="gz-incalzire"> 🔥 Lună cu încălzire</label>
+                <div class="hint">DA = costul căldurii se împarte după <b>nr. elemenți calorifer</b> per garsonieră (iarna)<br>NU = costul rămas se împarte <b>proporțional cu consumul de apă caldă</b> (vara)</div>
               </div>
               <div class="form-grp">
                 <label>Nr. luni acoperite</label>
@@ -276,6 +277,13 @@ body.is-readonly .readonly-banner{display:block}
           <div class="card-hdr"><h3>📊 Indexuri contoare GAZE</h3></div>
           <div class="card-body" id="gz-citiri">
             <div class="spinner">Selecteaza luna apoi apasa "Incarca citiri"</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-hdr"><h3>📋 Configurare garsoniere - Elemenți calorifer</h3></div>
+          <div class="card-body" id="gz-config-elementi">
+            <div class="spinner">Se incarca...</div>
           </div>
         </div>
 
@@ -934,8 +942,59 @@ async function salveazaFacturaGaze() {
   }
 }
 
+function renderConfigElementi() {
+  const garsoniere = _unitati.filter(u => u.tip === 'garsoniera').sort((a,b)=>a.ordine-b.ordine);
+  const totalElementi = garsoniere.reduce((s,g) => s + (g.nr_elementi_calorifer || 0), 0);
+  const canEditNow = !document.body.classList.contains('is-readonly');
+  let html = `<div class="alert alert-info" style="margin-bottom:12px"><span class="ico">ℹ️</span><div>
+    Elementii caloriferului se folosesc <b>doar la lunile cu încălzire</b> (când bifezi sus). Cost căldură per garsonieră = (nr. elementi garsonieră / total elementi firmă) × cost rămas dupa apa caldă.
+  </div></div>
+  <table class="tbl"><thead><tr><th>Garsoniera</th><th>Chirias</th><th style="text-align:right">Nr. elemenți</th><th style="text-align:right">Pondere (%)</th>${canEditNow?'<th style="width:80px">Editeaza</th>':''}</tr></thead><tbody>`;
+  garsoniere.forEach(g => {
+    const ne = g.nr_elementi_calorifer || 0;
+    const ch = getChiriasNume(g.id) || '<span style="color:var(--sub)">—</span>';
+    const pondere = totalElementi > 0 ? (ne / totalElementi * 100) : 0;
+    html += `<tr>
+      <td><b>${g.cod}</b></td>
+      <td style="font-size:12px;font-weight:600">${ch}</td>
+      <td class="num"><b style="font-size:15px">${ne}</b></td>
+      <td class="num" style="color:var(--sub)">${fmt(pondere, 1)}%</td>
+      ${canEditNow?`<td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editElementi(${g.id}, ${ne})">✏️ Edit</button></td>`:''}
+    </tr>`;
+  });
+  html += `</tbody><tfoot style="background:#f9fafb;font-weight:800"><tr>
+    <td colspan="2">TOTAL firmă</td>
+    <td class="num"><b style="font-size:16px;color:var(--blue)">${totalElementi}</b></td>
+    <td class="num">100%</td>
+    ${canEditNow?'<td></td>':''}
+  </tr></tfoot></table>`;
+  document.getElementById('gz-config-elementi').innerHTML = html;
+}
+
+async function editElementi(unitateId, valoareCurenta) {
+  if (!canEdit()) return;
+  const nou = prompt(`Nr. elemenți calorifer pentru această garsonieră:`, valoareCurenta);
+  if (nou === null) return;
+  const n = parseInt(nou);
+  if (isNaN(n) || n < 0) { toast('Valoare invalida', 'err'); return; }
+  try {
+    await fetch(`${SUPA_URL}/domadami_unitati?id=eq.${unitateId}`, {
+      method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
+      body: JSON.stringify({ nr_elementi_calorifer: n })
+    });
+    // Update cache
+    const u = _unitati.find(x => x.id === unitateId);
+    if (u) u.nr_elementi_calorifer = n;
+    renderConfigElementi();
+    toast(`Nr. elemenți actualizat: ${n}`, 'ok');
+  } catch (e) {
+    toast('Eroare: ' + e.message, 'err');
+  }
+}
+
 async function incarcaCitiriGaze() {
   const { an, luna } = getLuna();
+  renderConfigElementi();
   // Contoare aplicabile la GAZE: modul=GAZE (2) + tip=apometru_apa_calda (16) = 18
   const contoareGaze = _contoare.filter(c => c.modul === 'GAZE' || c.tip === 'apometru_apa_calda');
   // Indexuri actuale + anterioare
