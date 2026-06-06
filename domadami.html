@@ -2217,57 +2217,60 @@ async function renderChiriasi() {
   try {
     const [chiriasi, contracte] = await Promise.all([
       api('/domadami_chiriasi?select=*&order=nume.asc'),
-      api('/domadami_contracte_chirie?select=*,domadami_unitati(id,cod,nume,tip,ordine)&data_end=is.null')
+      api('/domadami_contracte_chirie?select=*,domadami_chiriasi(id,nume,tip,observatii,activ,telefon,email)&data_end=is.null')
     ]);
-    // Map: chirias_id -> [unitati]
-    const mapUn = {};
+
+    // Map: unitate_id -> chirias (din contractele active)
+    const chiriasPentruUnit = {};
     contracte.forEach(c => {
-      if (!c.domadami_unitati) return;
-      if (!mapUn[c.chirias_id]) mapUn[c.chirias_id] = [];
-      mapUn[c.chirias_id].push(c.domadami_unitati);
+      if (c.domadami_chiriasi) chiriasPentruUnit[c.unitate_id] = c.domadami_chiriasi;
     });
 
-    // Grupez chiriasii dupa tipul unitatii (din prima unitate atasata)
-    const grupe = { garsoniera: [], comercial_parter: [], etaj: [], fara_unitate: [] };
-    chiriasi.forEach(c => {
-      const uni = mapUn[c.id] || [];
-      if (uni.length === 0) grupe.fara_unitate.push({ c, uni });
-      else {
-        const tipUnit = uni[0].tip;
-        grupe[tipUnit].push({ c, uni });
-      }
+    // Iterez prin TOATE unitatile, grupat pe tip
+    const grupe = { garsoniera: [], comercial_parter: [], etaj: [] };
+    _unitati.forEach(u => {
+      if (u.activ === false) return;
+      const chirias = chiriasPentruUnit[u.id] || null;
+      grupe[u.tip]?.push({ u, chirias });
     });
     // Sortez fiecare grupa dupa ordinea unitatii
-    Object.keys(grupe).forEach(k => grupe[k].sort((a,b) => (a.uni[0]?.ordine||99) - (b.uni[0]?.ordine||99)));
+    Object.keys(grupe).forEach(k => grupe[k].sort((a,b) => (a.u.ordine||99) - (b.u.ordine||99)));
 
+    const nrTotalUnit = _unitati.filter(u => u.activ !== false).length;
+    const nrUnitOcupate = Object.keys(chiriasPentruUnit).length;
+    const nrUnitGoale = nrTotalUnit - nrUnitOcupate;
     const nrFirme = chiriasi.filter(c => c.tip === 'firma').length;
     const nrPF = chiriasi.filter(c => c.tip === 'persoana_fizica').length;
-    const nrActivi = chiriasi.filter(c => c.activ).length;
     const canEditNow = !document.body.classList.contains('is-readonly');
 
     let html = `<div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="lbl">Total chiriasi</div><div class="val">${chiriasi.length}</div><div class="meta">${nrActivi} activi</div></div>
-      <div class="kpi gold"><div class="lbl">Firme</div><div class="val">${nrFirme}</div><div class="meta">persoane juridice</div></div>
-      <div class="kpi green"><div class="lbl">Persoane fizice</div><div class="val">${nrPF}</div><div class="meta">garsoniere + etaj</div></div>
-      <div class="kpi orange"><div class="lbl">Unitati ocupate</div><div class="val">${Object.values(mapUn).length}</div><div class="meta">din ${_unitati.length}</div></div>
+      <div class="kpi"><div class="lbl">Total unitati</div><div class="val">${nrTotalUnit}</div><div class="meta">in cladire</div></div>
+      <div class="kpi green"><div class="lbl">Cu chirias</div><div class="val">${nrUnitOcupate}</div><div class="meta">${nrFirme} firme + ${nrPF} pers. fizice</div></div>
+      <div class="kpi ${nrUnitGoale>0?'red':'gold'}"><div class="lbl">FARA chirias</div><div class="val">${nrUnitGoale}</div><div class="meta">${nrUnitGoale > 0 ? 'libere — contoare se citesc' : 'toate ocupate'}</div></div>
+      <div class="kpi"><div class="lbl">Total chiriasi</div><div class="val">${chiriasi.length}</div><div class="meta">${chiriasi.filter(c=>c.activ).length} activi</div></div>
     </div>`;
 
     const renderGrupa = (titlu, icon, lista) => {
       if (lista.length === 0) return '';
-      let s = `<div class="card"><div class="card-hdr"><h3>${icon} ${titlu} <span style="background:var(--blue);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;margin-left:6px">${lista.length}</span></h3></div><div class="card-body" style="padding:0"><table class="tbl"><thead><tr><th style="width:50px">#</th><th>Nume chirias</th><th>Tip</th><th>Unitate(i)</th><th>Contact</th><th>Observatii</th>${canEditNow?'<th style="width:80px">Actiuni</th>':''}</tr></thead><tbody>`;
+      const nrFara = lista.filter(r => !r.chirias).length;
+      let s = `<div class="card"><div class="card-hdr"><h3>${icon} ${titlu} <span style="background:var(--blue);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;margin-left:6px">${lista.length}</span>${nrFara > 0 ? ` <span style="background:var(--red);color:#fff;padding:2px 10px;border-radius:10px;font-size:11px;margin-left:6px">${nrFara} fara chirias</span>` : ''}</h3></div><div class="card-body" style="padding:0"><table class="tbl"><thead><tr><th style="width:50px">#</th><th>Unitate</th><th>Chirias</th><th>Tip</th><th>Contact</th><th>Observatii</th>${canEditNow?'<th style="width:80px">Actiuni</th>':''}</tr></thead><tbody>`;
       lista.forEach((row, idx) => {
-        const c = row.c;
-        const ico = c.tip === 'firma' ? '🏢' : '🏠';
-        const uni = row.uni.map(u => `<span class="badge b-blue">${u.cod}</span>`).join(' ');
-        const contact = [c.telefon, c.email].filter(Boolean).join(' · ') || '<span style="color:var(--sub)">—</span>';
-        s += `<tr ${!c.activ?'style="opacity:0.5"':''}>
+        const u = row.u;
+        const c = row.chirias;
+        const isGol = !c;
+        const ico = c ? (c.tip === 'firma' ? '🏢' : '🏠') : '⬜';
+        const contact = c ? ([c.telefon, c.email].filter(Boolean).join(' · ') || '<span style="color:var(--sub)">—</span>') : '<span style="color:var(--sub)">—</span>';
+        const rowBg = isGol ? 'background:#fffbeb' : '';
+        s += `<tr style="${rowBg}">
           <td style="color:var(--sub);font-weight:600">${idx+1}</td>
-          <td><b style="font-size:14px">${ico} ${escH(c.nume)}</b>${!c.activ?' <span class="badge b-gray">INACTIV</span>':''}</td>
-          <td><span class="badge b-${c.tip==='firma'?'gold':'gray'}">${c.tip==='firma'?'firmă':'persoana fizica'}</span></td>
-          <td>${uni || '<span style="color:var(--sub)">—</span>'}</td>
+          <td><b style="color:var(--dark)">${u.cod}</b><br><small style="color:var(--sub)">${escH(u.nume)}</small></td>
+          <td>${isGol ?
+            `<span class="badge b-red" style="font-size:12px;padding:4px 10px">⚠️ FARA CHIRIAS</span>` :
+            `<b style="font-size:13px">${ico} ${escH(c.nume)}</b>${!c.activ?' <span class="badge b-gray">INACTIV</span>':''}`}</td>
+          <td>${isGol ? '<span style="color:var(--sub)">—</span>' : `<span class="badge b-${c.tip==='firma'?'gold':'gray'}">${c.tip==='firma'?'firmă':'persoana fizica'}</span>`}</td>
           <td style="font-size:12px">${contact}</td>
-          <td style="font-size:12px;color:var(--sub)">${escH(c.observatii||'')}</td>
-          ${canEditNow?`<td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editChirias(${c.id})">✏️ Edit</button></td>`:''}
+          <td style="font-size:12px;color:var(--sub)">${isGol ? 'Spatiu liber — Bogdan citeste contoarele' : escH(c.observatii||'')}</td>
+          ${canEditNow?`<td>${c ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editChirias(${c.id})">✏️ Edit</button>` : '<span style="color:var(--sub);font-size:11px">—</span>'}</td>`:''}
         </tr>`;
       });
       s += '</tbody></table></div></div>';
@@ -2277,9 +2280,6 @@ async function renderChiriasi() {
     html += renderGrupa('Garsoniere', '🏠', grupe.garsoniera);
     html += renderGrupa('Spatii comerciale parter', '🏪', grupe.comercial_parter);
     html += renderGrupa('Etaj', '🏬', grupe.etaj);
-    if (grupe.fara_unitate.length > 0) {
-      html += renderGrupa('Fara unitate atribuita', '⚠️', grupe.fara_unitate);
-    }
 
     document.getElementById('lista-chiriasi').innerHTML = html;
   } catch (e) {
