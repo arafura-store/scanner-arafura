@@ -239,6 +239,27 @@ body.is-readonly .readonly-banner{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
+                <label>Perioada facturată — DE LA</label>
+                <input type="date" id="gz-perioada-de">
+              </div>
+              <div class="form-grp">
+                <label>Perioada facturată — PÂNĂ LA</label>
+                <input type="date" id="gz-perioada-pana">
+                <div class="hint">Datele de pe factura furnizorului (ex: 01.05.2026 → 31.05.2026)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Nr. factură</label>
+                <input type="text" id="gz-nr-factura" placeholder="ex: 12345678">
+              </div>
+              <div class="form-grp">
+                <label>Data emiterii facturii</label>
+                <input type="date" id="gz-data-factura">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
                 <label class="chk"><input type="checkbox" id="gz-incalzire"> Lună cu încălzire (DA = se aplică algoritm cu elemenți calorifer)</label>
               </div>
               <div class="form-grp">
@@ -806,11 +827,14 @@ async function incarcaFacturaGaze() {
       document.getElementById('gz-total-lei').value = f.total_factura_lei || '';
       document.getElementById('gz-total-mc').value = f.total_consum || '';
       document.getElementById('gz-incalzire').checked = f.luna_cu_incalzire === true;
-      document.getElementById('gz-nr-luni').value = '1'; // gestionat la citiri
+      document.getElementById('gz-nr-luni').value = '1';
+      document.getElementById('gz-perioada-de').value = f.perioada_de || '';
+      document.getElementById('gz-perioada-pana').value = f.perioada_pana_la || '';
+      document.getElementById('gz-nr-factura').value = f.numar_factura || '';
+      document.getElementById('gz-data-factura').value = f.data_factura || '';
       toast(`Factura GAZE ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      document.getElementById('gz-total-lei').value = '';
-      document.getElementById('gz-total-mc').value = '';
+      ['gz-total-lei','gz-total-mc','gz-perioada-de','gz-perioada-pana','gz-nr-factura','gz-data-factura'].forEach(id => document.getElementById(id).value = '');
       document.getElementById('gz-incalzire').checked = false;
     }
     incarcaCitiriGaze();
@@ -834,6 +858,10 @@ async function salveazaFacturaGaze() {
         total_consum: total_mc,
         unitate_masura: 'mc',
         luna_cu_incalzire: document.getElementById('gz-incalzire').checked,
+        perioada_de: document.getElementById('gz-perioada-de').value || null,
+        perioada_pana_la: document.getElementById('gz-perioada-pana').value || null,
+        numar_factura: document.getElementById('gz-nr-factura').value.trim() || null,
+        data_factura: document.getElementById('gz-data-factura').value || null,
         introdus_de: currentUser.id
       })
     });
