@@ -975,6 +975,7 @@ async function incarcaCitiriGaze() {
       const ix = cur ? cur.index_final : '';
       const ixPrev = prev ? prev.index_final : '—';
       const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
+      const dataPrev = (prev && prev.data_citire) ? new Date(prev.data_citire).toLocaleDateString('ro-RO') : '—';
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
@@ -984,7 +985,7 @@ async function incarcaCitiriGaze() {
         <td style="font-size:12px;font-weight:600">${chiriasNume}</td>
         <td><span class="badge b-${c.tip==='general'?'gray':c.tip==='pasant'?'orange':'blue'}">${c.tip}</span></td>
         <td><input type="date" value="${dataCitire}" data-contor-id="${c.id}" class="gz-data" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:130px"></td>
-        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev,3) : '—'}</td>
+        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev,3) : '—'}${prev?`<br><small style="font-weight:400;font-size:10px;font-style:italic">citit ${dataPrev}</small>`:''}</td>
         <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="gz-input"></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt(consum,3) : '—'}</td>
       </tr>`;
@@ -1305,6 +1306,7 @@ async function incarcaCitiriEnel() {
       const ix = cur ? cur.index_final : '';
       const ixPrev = prev ? prev.index_final : '—';
       const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
+      const dataPrev = (prev && prev.data_citire) ? new Date(prev.data_citire).toLocaleDateString('ro-RO') : '—';
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(0) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' : '';
       const obsB = c.observatii ? ` <span class="badge b-gold" title="${escH(c.observatii)}">!</span>` : '';
@@ -1318,7 +1320,7 @@ async function incarcaCitiriEnel() {
         <td><span class="badge b-blue">${u?.cod || '—'}</span></td>
         <td style="font-size:12px;font-weight:600">${chiriasN}</td>
         <td><input type="date" value="${dataCitire}" data-contor-id="${c.id}" class="el-data" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;width:130px"></td>
-        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt0(ixPrev) : '—'}</td>
+        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt0(ixPrev) : '—'}${prev?`<br><small style="font-weight:400;font-size:10px;font-style:italic">citit ${dataPrev}</small>`:''}</td>
         <td><input type="number" step="1" min="0" value="${ix}" data-contor-id="${c.id}" class="el-input"></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt0(consum) : '—'}</td>
       </tr>`;
@@ -1696,6 +1698,7 @@ async function incarcaCitiriRaja() {
       const ix = cur ? cur.index_final : '';
       const ixPrev = prev ? prev.index_final : '—';
       const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
+      const dataPrev = (prev && prev.data_citire) ? new Date(prev.data_citire).toLocaleDateString('ro-RO') : '—';
       const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)).toFixed(3) : '—';
       const consumCls = (consum !== '—' && parseFloat(consum) < 0) ? 'color:var(--red);font-weight:700' :
                         (consum !== '—' && parseFloat(consum) === 0) ? 'color:var(--orange);font-weight:600' : '';
@@ -1717,7 +1720,7 @@ async function incarcaCitiriRaja() {
         <td style="font-size:12px;font-weight:600">${chiriasN}</td>
         <td><span class="badge b-${tipBadge}">${tipLabel}</span></td>
         <td><input type="date" value="${dataCitire}" data-contor-id="${c.id}" class="rj-data" ${dataAttr}></td>
-        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev, 3) : '—'}</td>
+        <td class="num" style="color:var(--sub)">${ixPrev !== '—' ? fmt(ixPrev, 3) : '—'}${prev?`<br><small style="font-weight:400;font-size:10px;font-style:italic">citit ${dataPrev}</small>`:''}</td>
         <td><input type="number" step="0.001" min="0" value="${ix}" data-contor-id="${c.id}" class="rj-input" ${inputAttr}></td>
         <td class="num" style="${consumCls}">${consum !== '—' ? fmt(consum, 3) : '—'}</td>
       </tr>`;
