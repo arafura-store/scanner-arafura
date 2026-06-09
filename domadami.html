@@ -284,7 +284,7 @@ body.is-readonly .readonly-banner{display:block}
         </div>
 
         <div class="card">
-          <div class="card-hdr"><h3>📋 Configurare garsoniere - Elemenți calorifer</h3></div>
+          <div class="card-hdr"><h3>📋 Configurare garsoniere - Elemenți calorifer <span style="font-size:11px;font-weight:400;color:var(--sub);margin-left:8px">(valori comune — nu se schimba cu luna)</span></h3></div>
           <div class="card-body" id="gz-config-elementi">
             <div class="spinner">Se incarca...</div>
           </div>
@@ -749,6 +749,15 @@ function getLuna() {
 }
 
 function onLunaChange() {
+  // Resetez cardurile de rezultat (calculul ramane vechi cand schimbi luna)
+  const resetIfExists = (id, label) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<div class="empty-msg">Apasa "Recalculeaza" dupa ce introduci factura + indexurile</div><button class="btn btn-primary" onclick="${label}()" style="margin-top:12px">🧮 Recalculeaza</button>`;
+  };
+  resetIfExists('gz-rezultat', 'calculeazaGaze');
+  resetIfExists('el-rezultat', 'calculeazaEnel');
+  resetIfExists('rj-rezultat', 'calculeazaRaja');
+  resetIfExists('pl-rezultat', 'calculeazaPolaris');
   const pageId = document.querySelector('.nav-item.active')?.dataset.page || 'dashboard';
   refreshPage(pageId);
 }
