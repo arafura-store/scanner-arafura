@@ -509,15 +509,31 @@ body.is-readonly .readonly-banner{display:block}
       <div class="page" id="page-centralizator">
         <div class="card">
           <div class="card-hdr">
-            <h3>📋 Centralizator lunar — matrice chiriasi × module</h3>
+            <h3>📋 Centralizator — facturare combinată chiriași</h3>
             <div style="display:flex;gap:8px">
               <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
               <button class="btn btn-secondary" onclick="window.print()">🖨️ Print</button>
               <button class="btn btn-primary" onclick="renderCentralizator()">🔄 Refresh</button>
             </div>
           </div>
-          <div class="card-body" id="centralizator-body">
-            <div class="spinner">Se incarca centralizatorul...</div>
+          <div class="card-body" style="padding-bottom:0">
+            <div class="alert alert-info" style="margin-bottom:14px">
+              <span class="ico">📅</span>
+              <div>
+                <div class="title">Luna folosită per modul (poți combina luni diferite pe aceeași facturare)</div>
+                Exemplu: ENEL+GAZE pe martie, RAJA+POLARIS pe aprilie. Default = luna globală sus.
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🔥 GAZE</label><select id="cent-luna-GAZE" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">⚡ ENEL</label><select id="cent-luna-ENEL" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">💧 RAJA</label><select id="cent-luna-RAJA" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🗑️ POLARIS</label><select id="cent-luna-POLARIS" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
+                </div>
+                <div style="margin-top:8px;text-align:right"><button class="btn btn-secondary" style="padding:4px 12px;font-size:11px" onclick="resetLuniCentralizator()">↻ Resetează la luna globală</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" id="centralizator-body" style="padding-top:0">
+            <div class="spinner">Selecteaza lunile sus si apasa Refresh</div>
           </div>
         </div>
       </div>
@@ -2224,16 +2240,66 @@ async function calculeazaPolaris() {
 // ═══════════════════════════════════════════════════════════════
 let _centralizatorData = null;
 
+function populeazaSelectoareCentralizator() {
+  const selGlobal = document.getElementById('luna-globala');
+  if (!selGlobal) return;
+  ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
+    const sel = document.getElementById('cent-luna-' + m);
+    if (sel && sel.options.length === 0) {
+      sel.innerHTML = selGlobal.innerHTML;
+      sel.value = selGlobal.value;
+    }
+  });
+}
+
+function resetLuniCentralizator() {
+  const selGlobal = document.getElementById('luna-globala');
+  ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
+    const sel = document.getElementById('cent-luna-' + m);
+    if (sel) sel.value = selGlobal.value;
+  });
+  renderCentralizator();
+}
+
+function getLunaModul(modul) {
+  const sel = document.getElementById('cent-luna-' + modul);
+  if (sel && sel.value) {
+    const v = parseInt(sel.value);
+    return { an: Math.floor(v/100), luna: v%100 };
+  }
+  return getLuna();
+}
+
 async function renderCentralizator() {
-  const { an, luna } = getLuna();
+  populeazaSelectoareCentralizator();
   document.getElementById('centralizator-body').innerHTML = '<div class="spinner">Se calculeaza...</div>';
   try {
-    const [calcule, chiriasi, contracte, facturi] = await Promise.all([
-      api(`/domadami_calcule?an=eq.${an}&luna=eq.${luna}&select=*`),
+    const lunaPerModul = {
+      GAZE:    getLunaModul('GAZE'),
+      ENEL:    getLunaModul('ENEL'),
+      RAJA:    getLunaModul('RAJA'),
+      POLARIS: getLunaModul('POLARIS')
+    };
+    // 4 fetch-uri separate (calcule + facturi) pentru fiecare modul cu luna lui
+    const [calcGAZE, calcENEL, calcRAJA, calcPOLARIS, factGAZE, factENEL, factRAJA, factPOLARIS, chiriasi, contracte] = await Promise.all([
+      api(`/domadami_calcule?modul=eq.GAZE&an=eq.${lunaPerModul.GAZE.an}&luna=eq.${lunaPerModul.GAZE.luna}&select=*`),
+      api(`/domadami_calcule?modul=eq.ENEL&an=eq.${lunaPerModul.ENEL.an}&luna=eq.${lunaPerModul.ENEL.luna}&select=*`),
+      api(`/domadami_calcule?modul=eq.RAJA&an=eq.${lunaPerModul.RAJA.an}&luna=eq.${lunaPerModul.RAJA.luna}&select=*`),
+      api(`/domadami_calcule?modul=eq.POLARIS&an=eq.${lunaPerModul.POLARIS.an}&luna=eq.${lunaPerModul.POLARIS.luna}&select=*`),
+      api(`/domadami_facturi?modul=eq.GAZE&an=eq.${lunaPerModul.GAZE.an}&luna=eq.${lunaPerModul.GAZE.luna}&select=total_factura_lei`),
+      api(`/domadami_facturi?modul=eq.ENEL&an=eq.${lunaPerModul.ENEL.an}&luna=eq.${lunaPerModul.ENEL.luna}&select=total_factura_lei`),
+      api(`/domadami_facturi?modul=eq.RAJA&an=eq.${lunaPerModul.RAJA.an}&luna=eq.${lunaPerModul.RAJA.luna}&select=total_factura_lei`),
+      api(`/domadami_facturi?modul=eq.POLARIS&an=eq.${lunaPerModul.POLARIS.an}&luna=eq.${lunaPerModul.POLARIS.luna}&select=total_factura_lei`),
       api('/domadami_chiriasi?select=*'),
-      api('/domadami_contracte_chirie?select=*&data_end=is.null'),
-      api(`/domadami_facturi?an=eq.${an}&luna=eq.${luna}&select=modul,total_factura_lei`)
+      api('/domadami_contracte_chirie?select=*&data_end=is.null')
     ]);
+    const calcule = [...calcGAZE, ...calcENEL, ...calcRAJA, ...calcPOLARIS];
+    const facturi = [
+      ...factGAZE.map(f => ({...f, modul:'GAZE'})),
+      ...factENEL.map(f => ({...f, modul:'ENEL'})),
+      ...factRAJA.map(f => ({...f, modul:'RAJA'})),
+      ...factPOLARIS.map(f => ({...f, modul:'POLARIS'}))
+    ];
 
     // Map: unitate_id -> { GAZE, ENEL, RAJA, POLARIS } costuri
     const matrix = {};
@@ -2270,11 +2336,12 @@ async function renderCentralizator() {
     const pierderiFirma = totalFactura - totalFacturat;
 
     // Cache pentru export
-    _centralizatorData = { matrix, chiriasPerUnitate, an, luna, totalFactura, totalFacturat, totalPerModul };
+    _centralizatorData = { matrix, chiriasPerUnitate, lunaPerModul, totalFactura, totalFacturat, totalPerModul };
 
-    // Render
+    // Render KPI cu luna per modul
+    const lunaScrt = m => `${LUNI_RO[lunaPerModul[m].luna-1].substring(0,3)} ${lunaPerModul[m].an}`;
     let html = `<div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="lbl">Luna</div><div class="val">${LUNI_RO[luna-1]} ${an}</div><div class="meta">Centralizator</div></div>
+      <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:14px;line-height:1.4">🔥 ${lunaScrt('GAZE')}<br>⚡ ${lunaScrt('ENEL')}<br>💧 ${lunaScrt('RAJA')}<br>🗑️ ${lunaScrt('POLARIS')}</div></div>
       <div class="kpi gold"><div class="lbl">Total facturi furnizori</div><div class="val">${fmt0(totalFactura)} RON</div><div class="meta">${facturi.length}/4 introduse</div></div>
       <div class="kpi green"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalFacturat)} RON</div><div class="meta">${Object.values(matrix).filter(r => r.GAZE+r.ENEL+r.RAJA+r.POLARIS > 0).length} unitati</div></div>
       <div class="kpi ${pierderiFirma>50?'red':'green'}"><div class="lbl">Diferenta (pierderi DOMADAMI)</div><div class="val">${fmt0(pierderiFirma)} RON</div><div class="meta">${totalFactura > 0 ? fmt(pierderiFirma/totalFactura*100, 1) : 0}%</div></div>
@@ -2290,10 +2357,10 @@ async function renderCentralizator() {
       <thead><tr>
         <th>Unitate</th>
         <th>Chirias</th>
-        <th style="text-align:right">🔥 GAZE</th>
-        <th style="text-align:right">⚡ ENEL</th>
-        <th style="text-align:right">💧 RAJA</th>
-        <th style="text-align:right">🗑️ POLARIS</th>
+        <th style="text-align:right">🔥 GAZE<br><small style="font-weight:400;color:#94a3b8">${lunaScrt('GAZE')}</small></th>
+        <th style="text-align:right">⚡ ENEL<br><small style="font-weight:400;color:#94a3b8">${lunaScrt('ENEL')}</small></th>
+        <th style="text-align:right">💧 RAJA<br><small style="font-weight:400;color:#94a3b8">${lunaScrt('RAJA')}</small></th>
+        <th style="text-align:right">🗑️ POLARIS<br><small style="font-weight:400;color:#94a3b8">${lunaScrt('POLARIS')}</small></th>
         <th style="text-align:right;background:#fef3c7">TOTAL (RON)</th>
         <th style="text-align:center">Detalii</th>
       </tr></thead>
@@ -2350,12 +2417,12 @@ function openFisa(unitateId) {
   const r = _centralizatorData.matrix[unitateId];
   const ch = (_centralizatorData.chiriasPerUnitate[unitateId] || []).map(c => c.nume).join(', ');
   const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
-  const { an, luna } = _centralizatorData;
-  document.getElementById('fisa-titlu').textContent = `📄 Fisa ${u.cod} — ${ch || u.nume} — ${LUNI_RO[luna-1]} ${an}`;
+  const lpm = _centralizatorData.lunaPerModul;
+  document.getElementById('fisa-titlu').textContent = `📄 Fisa ${u.cod} — ${ch || u.nume}`;
 
   let html = `<div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:18px">
     <div class="kpi gold"><div class="lbl">TOTAL DE PLATA</div><div class="val">${fmt(total, 2)} RON</div></div>
-    <div class="kpi"><div class="lbl">Luna</div><div class="val" style="font-size:20px">${LUNI_RO[luna-1]} ${an}</div></div>
+    <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:13px;line-height:1.5">🔥 ${LUNI_RO[lpm.GAZE.luna-1]} ${lpm.GAZE.an}<br>⚡ ${LUNI_RO[lpm.ENEL.luna-1]} ${lpm.ENEL.an}<br>💧 ${LUNI_RO[lpm.RAJA.luna-1]} ${lpm.RAJA.an}<br>🗑️ ${LUNI_RO[lpm.POLARIS.luna-1]} ${lpm.POLARIS.an}</div></div>
   </div>`;
 
   ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
@@ -2403,8 +2470,9 @@ function closeFisa() {
 
 function exportCSV() {
   if (!_centralizatorData) { toast('Apasa Refresh intai', 'err'); return; }
-  const { matrix, chiriasPerUnitate, an, luna } = _centralizatorData;
-  let csv = 'Cod;Nume unitate;Chirias;GAZE;ENEL;RAJA;POLARIS;TOTAL\n';
+  const { matrix, chiriasPerUnitate, lunaPerModul } = _centralizatorData;
+  const fname = m => `${LUNI_RO[lunaPerModul[m].luna-1].substring(0,3)} ${lunaPerModul[m].an}`;
+  let csv = `Cod;Nume unitate;Chirias;GAZE (${fname('GAZE')});ENEL (${fname('ENEL')});RAJA (${fname('RAJA')});POLARIS (${fname('POLARIS')});TOTAL\n`;
   _unitati.forEach(u => {
     const r = matrix[u.id];
     const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
@@ -2416,7 +2484,9 @@ function exportCSV() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `DOMADAMI_centralizator_${an}-${String(luna).padStart(2,'0')}.csv`;
+  // Nume fisier: includ lunile distincte folosite
+  const luniDistincte = [...new Set(Object.values(lunaPerModul).map(l => `${l.an}-${String(l.luna).padStart(2,'0')}`))].sort().join('_');
+  a.download = `DOMADAMI_centralizator_${luniDistincte}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   toast('CSV exportat', 'ok');
