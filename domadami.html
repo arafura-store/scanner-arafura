@@ -228,13 +228,26 @@ body.is-readonly .readonly-banner{display:block}
           <div class="card-body">
             <div class="form-row">
               <div class="form-grp">
-                <label>Total factura (RON)</label>
+                <label>Data emiterii facturii</label>
+                <input type="date" id="gz-data-factura">
+              </div>
+              <div class="form-grp">
+                <label>Serie / Nr. factură</label>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="gz-serie-factura" placeholder="Serie" style="flex:0 0 100px">
+                  <input type="text" id="gz-nr-factura" placeholder="Nr. factura" style="flex:1">
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Valoare factură FĂRĂ TVA (RON)</label>
                 <input type="number" id="gz-total-lei" step="0.01" min="0" placeholder="ex: 12345.67">
               </div>
               <div class="form-grp">
-                <label>Total mc factura</label>
+                <label>Cantitate (mc)</label>
                 <input type="number" id="gz-total-mc" step="0.001" min="0" placeholder="ex: 870.32">
-                <div class="hint">Pretul unitar = total / mc (calculat automat)</div>
+                <div class="hint">Pret unitar = valoare fara TVA / cantitate (calculat automat)</div>
               </div>
             </div>
             <div class="form-row">
@@ -246,16 +259,6 @@ body.is-readonly .readonly-banner{display:block}
                 <label>Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="gz-perioada-pana">
                 <div class="hint">Datele de pe factura furnizorului (ex: 01.05.2026 → 31.05.2026)</div>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-grp">
-                <label>Nr. factură</label>
-                <input type="text" id="gz-nr-factura" placeholder="ex: 12345678">
-              </div>
-              <div class="form-grp">
-                <label>Data emiterii facturii</label>
-                <input type="date" id="gz-data-factura">
               </div>
             </div>
             <div class="form-row">
@@ -900,11 +903,12 @@ async function incarcaFacturaGaze() {
       document.getElementById('gz-nr-luni').value = '1';
       document.getElementById('gz-perioada-de').value = f.perioada_de || '';
       document.getElementById('gz-perioada-pana').value = f.perioada_pana_la || '';
+      document.getElementById('gz-serie-factura').value = f.serie_factura || '';
       document.getElementById('gz-nr-factura').value = f.numar_factura || '';
       document.getElementById('gz-data-factura').value = f.data_factura || '';
       toast(`Factura GAZE ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['gz-total-lei','gz-total-mc','gz-perioada-de','gz-perioada-pana','gz-nr-factura','gz-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['gz-total-lei','gz-total-mc','gz-perioada-de','gz-perioada-pana','gz-serie-factura','gz-nr-factura','gz-data-factura'].forEach(id => document.getElementById(id).value = '');
       document.getElementById('gz-incalzire').checked = false;
     }
     incarcaCitiriGaze();
@@ -930,6 +934,7 @@ async function salveazaFacturaGaze() {
         luna_cu_incalzire: document.getElementById('gz-incalzire').checked,
         perioada_de: document.getElementById('gz-perioada-de').value || null,
         perioada_pana_la: document.getElementById('gz-perioada-pana').value || null,
+        serie_factura: document.getElementById('gz-serie-factura').value.trim() || null,
         numar_factura: document.getElementById('gz-nr-factura').value.trim() || null,
         data_factura: document.getElementById('gz-data-factura').value || null,
         introdus_de: currentUser.id
