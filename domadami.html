@@ -453,9 +453,10 @@ body.is-readonly .readonly-banner{display:block}
               <span class="ico">ℹ️</span>
               <div>
                 <div class="title">Alocare automata</div>
-                Garsonierele ocupate platesc fix <b>160 RON</b> total (impartit egal intre cele ocupate).<br>
-                Restul facturii (Total − 160) se imparte egal la unitatile "rest" ocupate (PATISERIE, LEGUME, CARMANGERIE, VIZO, BRANZA, NAHIL, ETAJ 1-6, ETAJ MOBILA).<br>
-                <b>Excluse:</b> PROFI, MILION, FARMACIA — au contracte directe cu POLARIS.
+                <b>Garsoniere</b> (G1-G8): <b>12 RON FIX</b> per garsoniera ocupata.<br>
+                <b>Etaj 1 — magazine cu chirias</b> (MAG_21, 26, 27_28, 29_30, 32_34, 33, 37): <b>20 RON FIX</b> per magazin.<br>
+                <b>Parter "rest"</b> (PATISERIE, LEGUME, CARMANGERIE, VIZO, BRANZA, NAHIL): impart <b>(Total factura − garsoniere − etaj)</b>.<br>
+                <b>Excluse</b> (cost 0): MILION, PROFI, FARMACIA (contract direct) + ETAJ_MOBILA (gol).
               </div>
             </div>
             <div class="form-row">
@@ -2109,35 +2110,42 @@ async function calculeazaPolaris() {
       return o ? o.este_ocupata : true;
     };
 
-    const sumaGarsonierePolaris = parseFloat(_setari.polaris_garsoniere_total_ron) || 160;
+    const costPerGarsoniera = parseFloat(_setari.polaris_per_garsoniera_ron) || 12;
+    const costPerEtaj = parseFloat(_setari.polaris_per_etaj_ron) || 20;
 
-    // Garsoniere ocupate (polaris_grup='garsoniera_fix')
-    const garsoniere = _unitati.filter(u => u.polaris_grup === 'garsoniera_fix' && u.utilizeaza_polaris);
-    const garsOcupate = garsoniere.filter(isOcupat);
-    // Rest ocupate (polaris_grup='rest_impart')
-    const restUnitati = _unitati.filter(u => u.polaris_grup === 'rest_impart' && u.utilizeaza_polaris);
-    const restOcupate = restUnitati.filter(isOcupat);
-    // Excluse (polaris_grup='exclusa')
-    const excluse = _unitati.filter(u => u.polaris_grup === 'exclusa');
+    // Grupare 4 categorii pe baza polaris_grup
+    const garsoniere   = _unitati.filter(u => u.polaris_grup === 'garsoniera_fix');
+    const etajFix      = _unitati.filter(u => u.polaris_grup === 'etaj_fix');
+    const restUnitati  = _unitati.filter(u => u.polaris_grup === 'rest_impart');
+    const excluse      = _unitati.filter(u => u.polaris_grup === 'exclusa');
 
-    const costPerGarsoniera = garsOcupate.length > 0 ? sumaGarsonierePolaris / garsOcupate.length : 0;
-    const diferenta = totalLei - sumaGarsonierePolaris;
-    const costPerRest = restOcupate.length > 0 ? diferenta / restOcupate.length : 0;
+    const garsOcupate  = garsoniere.filter(isOcupat);
+    const etajOcupate  = etajFix.filter(isOcupat);
+    const restOcupate  = restUnitati.filter(isOcupat);
+
+    const costGarsoniere = costPerGarsoniera * garsOcupate.length;
+    const costEtaj       = costPerEtaj * etajOcupate.length;
+    const diferenta      = totalLei - costGarsoniere - costEtaj;
+    const costPerRest    = restOcupate.length > 0 ? diferenta / restOcupate.length : 0;
 
     // Salvez calcule POLARIS in baza
     const calculePolaris = [];
     garsOcupate.forEach(u => {
       calculePolaris.push({
-        unitate_id: u.id, cost_total: costPerGarsoniera,
-        cost_forfait: costPerGarsoniera,
-        breakdown_json: { tip: 'garsoniera_fix', suma_grup_total: sumaGarsonierePolaris, nr_in_grup: garsOcupate.length }
+        unitate_id: u.id, cost_total: costPerGarsoniera, cost_forfait: costPerGarsoniera,
+        breakdown_json: { tip: 'garsoniera_fix', cost_fix: costPerGarsoniera }
+      });
+    });
+    etajOcupate.forEach(u => {
+      calculePolaris.push({
+        unitate_id: u.id, cost_total: costPerEtaj, cost_forfait: costPerEtaj,
+        breakdown_json: { tip: 'etaj_fix', cost_fix: costPerEtaj }
       });
     });
     restOcupate.forEach(u => {
       calculePolaris.push({
-        unitate_id: u.id, cost_total: costPerRest,
-        cost_forfait: costPerRest,
-        breakdown_json: { tip: 'rest_impart', suma_grup_total: diferenta, nr_in_grup: restOcupate.length, total_factura: totalLei }
+        unitate_id: u.id, cost_total: costPerRest, cost_forfait: costPerRest,
+        breakdown_json: { tip: 'rest_impart', diferenta_grup: diferenta, nr_in_grup: restOcupate.length, total_factura: totalLei, cost_garsoniere_grup: costGarsoniere, cost_etaj_grup: costEtaj }
       });
     });
     salveazaCalcule('POLARIS', an, luna, calculePolaris);
@@ -2146,57 +2154,56 @@ async function calculeazaPolaris() {
       const ch = getChiriasNume(u.id);
       return `<b>${u.cod}</b> <small style="color:var(--sub)">${escH(u.nume)}</small>${ch ? `<br><small style="color:var(--dark);font-weight:600">${escH(ch)}</small>` : ''}`;
     };
-    // Tabel garsoniere
-    let rowsG = garsoniere.map(u => {
+    const renderRandStatusCost = (lista, costCalc) => lista.map(u => {
       const oc = isOcupat(u);
       return `<tr style="${oc?'':'opacity:0.5'}">
         <td>${fmtCelUnitate(u)}</td>
         <td>${oc ? '<span class="badge b-green">OCUPATA</span>' : '<span class="badge b-gray">GOALA</span>'}</td>
-        <td class="num">${oc ? fmt(costPerGarsoniera, 2) + ' RON' : '—'}</td>
+        <td class="num">${oc ? fmt(costCalc(u), 2) + ' RON' : '—'}</td>
       </tr>`;
     }).join('');
 
-    // Tabel rest
-    let rowsR = restUnitati.map(u => {
-      const oc = isOcupat(u);
-      return `<tr style="${oc?'':'opacity:0.5'}">
-        <td>${fmtCelUnitate(u)}</td>
-        <td>${oc ? '<span class="badge b-green">OCUPATA</span>' : '<span class="badge b-gray">GOALA</span>'}</td>
-        <td class="num">${oc ? fmt(costPerRest, 2) + ' RON' : '—'}</td>
-      </tr>`;
-    }).join('');
-
-    // Tabel excluse
-    let rowsE = excluse.map(u => `<tr style="opacity:0.55">
+    const rowsG = renderRandStatusCost(garsoniere, () => costPerGarsoniera);
+    const rowsEtj = renderRandStatusCost(etajFix, () => costPerEtaj);
+    const rowsR = renderRandStatusCost(restUnitati, () => costPerRest);
+    const rowsE = excluse.map(u => `<tr style="opacity:0.55">
       <td>${fmtCelUnitate(u)}</td>
       <td><span class="badge b-gray">EXCLUSA</span></td>
-      <td class="num">— (contract direct)</td>
+      <td class="num">— (contract direct / gol)</td>
     </tr>`).join('');
 
-    const totalFacturat = (garsOcupate.length * costPerGarsoniera) + (restOcupate.length * costPerRest);
+    const totalFacturat = costGarsoniere + costEtaj + (restOcupate.length * costPerRest);
     const diff = totalLei - totalFacturat;
 
     const html = `
       <div class="kpi-grid" style="margin-bottom:18px">
         <div class="kpi"><div class="lbl">Total factura</div><div class="val">${fmt(totalLei, 2)} <small style="font-size:14px">RON</small></div></div>
-        <div class="kpi gold"><div class="lbl">Garsoniere ocupate</div><div class="val">${garsOcupate.length}/8</div><div class="meta">${fmt(costPerGarsoniera, 2)} RON fiecare</div></div>
-        <div class="kpi green"><div class="lbl">Rest ocupate</div><div class="val">${restOcupate.length}/${restUnitati.length}</div><div class="meta">${fmt(costPerRest, 2)} RON fiecare</div></div>
-        <div class="kpi ${Math.abs(diff)<0.01?'green':'red'}"><div class="lbl">Verificare</div><div class="val">${fmt(totalFacturat, 2)}</div><div class="meta">diferenta vs total: ${fmt(diff, 2)}</div></div>
+        <div class="kpi gold"><div class="lbl">Garsoniere ocupate</div><div class="val">${garsOcupate.length}/${garsoniere.length}</div><div class="meta">${fmt(costPerGarsoniera, 2)} RON × ${garsOcupate.length} = ${fmt(costGarsoniere, 2)}</div></div>
+        <div class="kpi green"><div class="lbl">Etaj ocupate</div><div class="val">${etajOcupate.length}/${etajFix.length}</div><div class="meta">${fmt(costPerEtaj, 2)} RON × ${etajOcupate.length} = ${fmt(costEtaj, 2)}</div></div>
+        <div class="kpi orange"><div class="lbl">Rest ocupate</div><div class="val">${restOcupate.length}/${restUnitati.length}</div><div class="meta">${fmt(diferenta, 2)} / ${restOcupate.length} = ${fmt(costPerRest, 2)} RON fiecare</div></div>
       </div>
 
-      <h4 style="color:var(--dark);margin:14px 0 8px">🏠 Garsoniere (fix ${sumaGarsonierePolaris} RON total)</h4>
+      <div class="alert ${Math.abs(diff)<0.01?'alert-success':'alert-warning'}"><span class="ico">${Math.abs(diff)<0.01?'✓':'⚠️'}</span><div><div class="title">Verificare totaluri</div>Total facturat chiriasi: <b>${fmt(totalFacturat, 2)} RON</b> · Total factura: <b>${fmt(totalLei, 2)} RON</b> · Diferenta: <b style="color:${Math.abs(diff)<0.01?'var(--green)':'var(--red)'}">${fmt(diff, 2)} RON</b></div></div>
+
+      <h4 style="color:var(--dark);margin:14px 0 8px">🏠 Garsoniere (${fmt(costPerGarsoniera, 2)} RON FIX per garsoniera)</h4>
       <table class="tbl">
         <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost POLARIS</th></tr></thead>
         <tbody>${rowsG}</tbody>
       </table>
 
-      <h4 style="color:var(--dark);margin:24px 0 8px">🏪 Unitati "rest" (impart ${fmt(diferenta, 2)} RON)</h4>
+      <h4 style="color:var(--dark);margin:24px 0 8px">🏬 Etaj 1 — magazine cu chirias (${fmt(costPerEtaj, 2)} RON FIX per magazin)</h4>
+      <table class="tbl">
+        <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost POLARIS</th></tr></thead>
+        <tbody>${rowsEtj}</tbody>
+      </table>
+
+      <h4 style="color:var(--dark);margin:24px 0 8px">🏪 Parter "rest" (impart ${fmt(diferenta, 2)} RON ÷ ${restOcupate.length} = ${fmt(costPerRest, 2)} RON fiecare)</h4>
       <table class="tbl">
         <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost POLARIS</th></tr></thead>
         <tbody>${rowsR}</tbody>
       </table>
 
-      <h4 style="color:var(--dark);margin:24px 0 8px">❌ Unitati excluse (contract direct POLARIS)</h4>
+      <h4 style="color:var(--dark);margin:24px 0 8px">❌ Excluse (contract direct POLARIS / gol)</h4>
       <table class="tbl">
         <thead><tr><th>Unitate</th><th>Status</th><th style="text-align:right">Cost</th></tr></thead>
         <tbody>${rowsE}</tbody>
@@ -2368,9 +2375,15 @@ function openFisa(unitateId) {
       detalii = `Consum apa: ${fmt(bd.consum_apa_total_mc||0, 3)} mc × ${fmt(bd.pret_unitar||0, 4)} = ${fmt((bd.consum_apa_total_mc||0)*(bd.pret_unitar||0), 2)} RON<br>
         ${bd.consum_toaleta_forfait_mc > 0 ? `Toaleta forfait: ${fmt(bd.consum_toaleta_forfait_mc, 2)} mc × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.consum_toaleta_forfait_mc*bd.pret_unitar, 2)} RON` : ''}`;
     } else if (m === 'POLARIS') {
-      detalii = bd.tip === 'garsoniera_fix' ?
-        `Grup garsoniere: ${fmt(bd.suma_grup_total||0, 2)} RON / ${bd.nr_in_grup||0} ocupate = ${fmt((bd.suma_grup_total||0)/(bd.nr_in_grup||1), 2)} RON` :
-        `Grup "rest": (Factura ${fmt(bd.total_factura||0, 2)} − 160 grup garsoniere) / ${bd.nr_in_grup||0} ocupate = ${fmt(bd.suma_grup_total/(bd.nr_in_grup||1), 2)} RON`;
+      if (bd.tip === 'garsoniera_fix') {
+        detalii = `Cost FIX garsoniera: <b>${fmt(bd.cost_fix||0, 2)} RON</b>`;
+      } else if (bd.tip === 'etaj_fix') {
+        detalii = `Cost FIX magazin etaj: <b>${fmt(bd.cost_fix||0, 2)} RON</b>`;
+      } else if (bd.tip === 'rest_impart') {
+        detalii = `Total factura: ${fmt(bd.total_factura||0, 2)} RON<br>
+        Cost garsoniere FIX: ${fmt(bd.cost_garsoniere_grup||0, 2)} RON · Cost etaj FIX: ${fmt(bd.cost_etaj_grup||0, 2)} RON<br>
+        Diferenta = ${fmt(bd.diferenta_grup||0, 2)} RON ÷ ${bd.nr_in_grup||0} unitati "rest" = <b>${fmt(r[m], 2)} RON</b>`;
+      }
     }
     html += `<div class="card" style="margin-bottom:14px">
       <div class="card-hdr"><h3>${ic} ${m} — ${fmt(r[m], 2)} RON</h3></div>
