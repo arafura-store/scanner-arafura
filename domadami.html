@@ -308,13 +308,26 @@ body.is-readonly .readonly-banner{display:block}
           <div class="card-body">
             <div class="form-row">
               <div class="form-grp">
-                <label>Total factura (RON)</label>
+                <label>Data emiterii facturii</label>
+                <input type="date" id="el-data-factura">
+              </div>
+              <div class="form-grp">
+                <label>Serie / Nr. factură</label>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="el-serie-factura" placeholder="Serie" style="flex:0 0 100px">
+                  <input type="text" id="el-nr-factura" placeholder="Nr. factura" style="flex:1">
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Valoare factură FĂRĂ TVA (RON)</label>
                 <input type="number" id="el-total-lei" step="0.01" min="0" placeholder="ex: 8543.21">
               </div>
               <div class="form-grp">
-                <label>Total kw factura</label>
+                <label>Cantitate (kw)</label>
                 <input type="number" id="el-total-kw" step="0.001" min="0" placeholder="ex: 21500">
-                <div class="hint">Pretul unitar = total / kw (calculat automat)</div>
+                <div class="hint">Pret unitar = valoare fara TVA / cantitate (calculat automat)</div>
               </div>
             </div>
             <div class="form-row">
@@ -326,16 +339,6 @@ body.is-readonly .readonly-banner{display:block}
                 <label>Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="el-perioada-pana">
                 <div class="hint">Datele de pe factura furnizorului</div>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-grp">
-                <label>Nr. factură</label>
-                <input type="text" id="el-nr-factura" placeholder="ex: 12345678">
-              </div>
-              <div class="form-grp">
-                <label>Data emiterii facturii</label>
-                <input type="date" id="el-data-factura">
               </div>
             </div>
             <div class="form-row">
@@ -377,13 +380,26 @@ body.is-readonly .readonly-banner{display:block}
           <div class="card-body">
             <div class="form-row">
               <div class="form-grp">
-                <label>Total factura (RON, include canalizare)</label>
+                <label>Data emiterii facturii</label>
+                <input type="date" id="rj-data-factura">
+              </div>
+              <div class="form-grp">
+                <label>Serie / Nr. factură</label>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="rj-serie-factura" placeholder="Serie" style="flex:0 0 100px">
+                  <input type="text" id="rj-nr-factura" placeholder="Nr. factura" style="flex:1">
+                </div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>Valoare factură FĂRĂ TVA (RON, include canalizare)</label>
                 <input type="number" id="rj-total-lei" step="0.01" min="0" placeholder="ex: 3245.67">
               </div>
               <div class="form-grp">
-                <label>Total mc factura (general)</label>
+                <label>Cantitate (mc, contor general)</label>
                 <input type="number" id="rj-total-mc" step="0.001" min="0" placeholder="ex: 145.5">
-                <div class="hint">Pret unitar all-inclusive = total / mc</div>
+                <div class="hint">Pret unitar all-inclusive = valoare fara TVA / cantitate</div>
               </div>
             </div>
             <div class="form-row">
@@ -395,16 +411,6 @@ body.is-readonly .readonly-banner{display:block}
                 <label>Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="rj-perioada-pana">
                 <div class="hint">Datele de pe factura furnizorului</div>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-grp">
-                <label>Nr. factură</label>
-                <input type="text" id="rj-nr-factura" placeholder="ex: 12345678">
-              </div>
-              <div class="form-grp">
-                <label>Data emiterii facturii</label>
-                <input type="date" id="rj-data-factura">
               </div>
             </div>
             <div class="form-row">
@@ -454,28 +460,31 @@ body.is-readonly .readonly-banner{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Total factura (RON)</label>
-                <input type="number" id="pl-total-lei" step="0.01" min="0" placeholder="ex: 487.50">
+                <label>Data emiterii facturii</label>
+                <input type="date" id="pl-data-factura">
               </div>
               <div class="form-grp">
-                <label>Nr. factură</label>
-                <input type="text" id="pl-nr-factura" placeholder="ex: 12345678">
+                <label>Serie / Nr. factură</label>
+                <div style="display:flex;gap:6px">
+                  <input type="text" id="pl-serie-factura" placeholder="Serie" style="flex:0 0 100px">
+                  <input type="text" id="pl-nr-factura" placeholder="Nr. factura" style="flex:1">
+                </div>
               </div>
             </div>
             <div class="form-row">
+              <div class="form-grp">
+                <label>Valoare factură FĂRĂ TVA (RON)</label>
+                <input type="number" id="pl-total-lei" step="0.01" min="0" placeholder="ex: 487.50">
+              </div>
               <div class="form-grp">
                 <label>Perioada facturată — DE LA</label>
                 <input type="date" id="pl-perioada-de">
               </div>
-              <div class="form-grp">
-                <label>Perioada facturată — PÂNĂ LA</label>
-                <input type="date" id="pl-perioada-pana">
-              </div>
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Data emiterii facturii</label>
-                <input type="date" id="pl-data-factura">
+                <label>Perioada facturată — PÂNĂ LA</label>
+                <input type="date" id="pl-perioada-pana">
               </div>
               <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
                 <button class="btn btn-success" onclick="salveazaFacturaPolaris()" style="flex:1">💾 Salveaza factura</button>
@@ -1287,11 +1296,12 @@ async function incarcaFacturaEnel() {
       document.getElementById('el-total-kw').value = f.total_consum || '';
       document.getElementById('el-perioada-de').value = f.perioada_de || '';
       document.getElementById('el-perioada-pana').value = f.perioada_pana_la || '';
+      document.getElementById('el-serie-factura').value = f.serie_factura || '';
       document.getElementById('el-nr-factura').value = f.numar_factura || '';
       document.getElementById('el-data-factura').value = f.data_factura || '';
       toast(`Factura ENEL ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['el-total-lei','el-total-kw','el-perioada-de','el-perioada-pana','el-nr-factura','el-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['el-total-lei','el-total-kw','el-perioada-de','el-perioada-pana','el-serie-factura','el-nr-factura','el-data-factura'].forEach(id => document.getElementById(id).value = '');
     }
     incarcaCitiriEnel();
   } catch (e) {
@@ -1315,6 +1325,7 @@ async function salveazaFacturaEnel() {
         unitate_masura: 'kw',
         perioada_de: document.getElementById('el-perioada-de').value || null,
         perioada_pana_la: document.getElementById('el-perioada-pana').value || null,
+        serie_factura: document.getElementById('el-serie-factura').value.trim() || null,
         numar_factura: document.getElementById('el-nr-factura').value.trim() || null,
         data_factura: document.getElementById('el-data-factura').value || null,
         introdus_de: currentUser.id
@@ -1672,11 +1683,12 @@ async function incarcaFacturaRaja() {
       document.getElementById('rj-total-mc').value = f.total_consum || '';
       document.getElementById('rj-perioada-de').value = f.perioada_de || '';
       document.getElementById('rj-perioada-pana').value = f.perioada_pana_la || '';
+      document.getElementById('rj-serie-factura').value = f.serie_factura || '';
       document.getElementById('rj-nr-factura').value = f.numar_factura || '';
       document.getElementById('rj-data-factura').value = f.data_factura || '';
       toast(`Factura RAJA ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['rj-total-lei','rj-total-mc','rj-perioada-de','rj-perioada-pana','rj-nr-factura','rj-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['rj-total-lei','rj-total-mc','rj-perioada-de','rj-perioada-pana','rj-serie-factura','rj-nr-factura','rj-data-factura'].forEach(id => document.getElementById(id).value = '');
     }
     incarcaCitiriRaja();
   } catch (e) {
@@ -1700,6 +1712,7 @@ async function salveazaFacturaRaja() {
         unitate_masura: 'mc',
         perioada_de: document.getElementById('rj-perioada-de').value || null,
         perioada_pana_la: document.getElementById('rj-perioada-pana').value || null,
+        serie_factura: document.getElementById('rj-serie-factura').value.trim() || null,
         numar_factura: document.getElementById('rj-nr-factura').value.trim() || null,
         data_factura: document.getElementById('rj-data-factura').value || null,
         introdus_de: currentUser.id
@@ -2032,11 +2045,12 @@ async function incarcaFacturaPolaris() {
       document.getElementById('pl-total-lei').value = f.total_factura_lei || '';
       document.getElementById('pl-perioada-de').value = f.perioada_de || '';
       document.getElementById('pl-perioada-pana').value = f.perioada_pana_la || '';
+      document.getElementById('pl-serie-factura').value = f.serie_factura || '';
       document.getElementById('pl-nr-factura').value = f.numar_factura || '';
       document.getElementById('pl-data-factura').value = f.data_factura || '';
       toast(`Factura POLARIS ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['pl-total-lei','pl-perioada-de','pl-perioada-pana','pl-nr-factura','pl-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['pl-total-lei','pl-perioada-de','pl-perioada-pana','pl-serie-factura','pl-nr-factura','pl-data-factura'].forEach(id => document.getElementById(id).value = '');
     }
   } catch (e) {
     toast('Eroare incarcare POLARIS: ' + e.message, 'err');
@@ -2057,6 +2071,7 @@ async function salveazaFacturaPolaris() {
         unitate_masura: 'forfait',
         perioada_de: document.getElementById('pl-perioada-de').value || null,
         perioada_pana_la: document.getElementById('pl-perioada-pana').value || null,
+        serie_factura: document.getElementById('pl-serie-factura').value.trim() || null,
         numar_factura: document.getElementById('pl-nr-factura').value.trim() || null,
         data_factura: document.getElementById('pl-data-factura').value || null,
         introdus_de: currentUser.id
