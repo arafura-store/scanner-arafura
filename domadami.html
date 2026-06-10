@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <title>DOMADAMI — Gestiune Utilitati</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<!-- PWA tags pentru iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DOMADAMI">
+<meta name="theme-color" content="#1f2937">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231f2937'/><text x='50' y='66' font-size='52' text-anchor='middle' fill='%23FFD700'>🏢</text></svg>">
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22DOMADAMI%22%2C%22short_name%22%3A%22DOMADAMI%22%2C%22start_url%22%3A%22.%2Fdomadami.html%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231f2937%22%2C%22theme_color%22%3A%22%231f2937%22%2C%22icons%22%3A%5B%5D%7D">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -151,6 +158,87 @@ body.is-viewer .role-banner.viewer{display:block}
   .sidebar h2,.nav-item span,.nav-sep-lbl{display:none}
   .nav-item{justify-content:center;padding:11px 0}
 }
+
+/* ═══════════════════════════════════════════════════════════ */
+/* MOD TEREN — UI optimizat iPhone pentru Bogdan               */
+/* ═══════════════════════════════════════════════════════════ */
+#page-teren{padding:0;margin:-24px}
+.teren-header{position:sticky;top:0;background:#fff;z-index:100;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.1);border-bottom:1px solid var(--border)}
+.teren-tabs{display:flex;gap:6px;margin-bottom:10px}
+.teren-tab{flex:1;padding:14px 8px;font-size:15px;font-weight:700;border:2px solid var(--border);border-radius:10px;background:#fff;color:var(--sub);cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.teren-tab.active{color:#fff;border-color:transparent}
+.teren-tab.active[data-modul="GAZE"]{background:#FFD700;color:#856404}
+.teren-tab.active[data-modul="ENEL"]{background:#2563eb}
+.teren-tab.active[data-modul="RAJA"]{background:#06b6d4}
+.teren-luna-row{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.teren-luna-row label{font-size:12px;color:var(--sub);font-weight:700;flex-shrink:0}
+.teren-luna-row select{flex:1;padding:10px;font-size:15px;font-weight:600;border:2px solid var(--border);border-radius:8px;background:#fff}
+.teren-progress{background:#f3f4f6;height:8px;border-radius:4px;overflow:hidden;margin-top:8px}
+.teren-progress-bar{height:100%;background:linear-gradient(90deg,var(--green),#34d399);transition:width .3s}
+.teren-progress-text{display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-top:6px;font-weight:600}
+.teren-progress-text b{color:var(--dark)}
+
+.teren-cards{padding:14px}
+.teren-card{background:#fff;margin-bottom:14px;padding:16px;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06);border-left:5px solid var(--blue);transition:all .2s}
+.teren-card.is-saved{border-left-color:var(--green);background:#f0fdf4}
+.teren-card.is-saving{border-left-color:var(--orange)}
+.teren-card.is-error{border-left-color:var(--red);background:#fef2f2}
+.teren-card.is-offline{border-left-color:#9333ea;background:#faf5ff}
+.teren-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px}
+.teren-card-cod{font-size:18px;font-weight:800;color:var(--dark)}
+.teren-card-chirias{font-size:13px;color:var(--blue);font-weight:600}
+.teren-card-name{font-size:13px;color:var(--sub);margin-bottom:14px;font-weight:500}
+.teren-card-prev{background:#f9fafb;border-radius:8px;padding:10px 12px;font-size:13px;color:var(--sub);margin-bottom:12px}
+.teren-card-prev b{color:var(--dark);font-size:16px;font-variant-numeric:tabular-nums}
+.teren-input-wrap{position:relative}
+.teren-input{width:100%;padding:16px 18px;font-size:24px;font-weight:700;border:3px solid var(--blue);border-radius:12px;text-align:right;background:#fff;color:var(--dark);font-variant-numeric:tabular-nums;-webkit-appearance:none}
+.teren-input:focus{border-color:var(--orange);outline:none;box-shadow:0 0 0 4px rgba(245,158,11,0.2)}
+.teren-card.is-saved .teren-input{border-color:var(--green)}
+.teren-data-input{width:100%;padding:10px;font-size:14px;font-weight:600;border:2px solid var(--border);border-radius:8px;margin-top:8px;background:#fff}
+.teren-consum-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px dashed var(--border)}
+.teren-consum-label{font-size:11px;color:var(--sub);text-transform:uppercase;font-weight:700}
+.teren-consum-val{font-size:20px;font-weight:800;color:var(--green)}
+.teren-consum-val.neg{color:var(--red)}
+.teren-status{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;text-transform:uppercase;letter-spacing:0.04em}
+.teren-status.pending{background:#f3f4f6;color:var(--sub)}
+.teren-status.saving{background:#fef3c7;color:#92400e}
+.teren-status.saved{background:#dcfce7;color:#166534}
+.teren-status.error{background:#fee2e2;color:#991b1b}
+.teren-status.offline{background:#f3e8ff;color:#6b21a8}
+.teren-obs{margin-top:8px;font-size:12px;color:var(--orange);background:#fffbeb;padding:8px 10px;border-radius:8px;border-left:3px solid var(--orange)}
+
+.teren-grupa-titlu{padding:14px 6px 6px;font-size:13px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:0.05em}
+.teren-empty{padding:60px 20px;text-align:center;color:var(--sub)}
+.teren-empty .emoji{font-size:64px;margin-bottom:14px}
+
+/* Status network */
+.teren-network-bar{position:fixed;top:0;left:0;right:0;padding:8px 16px;font-size:12px;font-weight:700;text-align:center;z-index:200;color:#fff;transform:translateY(-100%);transition:transform .3s}
+.teren-network-bar.show{transform:translateY(0)}
+.teren-network-bar.offline{background:#9333ea}
+.teren-network-bar.online{background:var(--green)}
+
+@media (max-width:768px){
+  /* Pe iPhone — ascund sidebar complet, doar hamburger */
+  .sidebar{position:fixed;top:0;left:-280px;width:260px;height:100vh;z-index:300;transition:left .25s;padding:14px 0}
+  .sidebar.open{left:0}
+  .sidebar h2,.nav-item span,.nav-sep-lbl{display:block}
+  .nav-item{justify-content:flex-start;padding:11px 20px}
+  .topbar{padding:10px 14px}
+  .topbar h2{font-size:15px}
+  .luna-selector{font-size:11px;padding:6px 8px}
+  .avatar{width:32px;height:32px;font-size:12px}
+  .user-info b{font-size:11px}
+  .user-info span{font-size:10px}
+  /* Hamburger */
+  .topbar::before{content:'☰';font-size:22px;cursor:pointer;margin-right:10px;color:var(--dark)}
+  /* Backdrop pentru sidebar */
+  body.sidebar-open::after{content:'';position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:299}
+  /* Content padding redus */
+  .content{padding:14px 10px}
+  .card{margin-bottom:12px}
+  .card-body{padding:14px}
+  .card-hdr h3{font-size:14px}
+}
 </style>
 </head>
 <body>
@@ -178,6 +266,8 @@ body.is-viewer .role-banner.viewer{display:block}
   <aside class="sidebar">
     <h2>🏢 DOMADAMI<small>Gestiune Utilitati</small></h2>
     <div class="nav-item active" data-page="dashboard" onclick="goPage('dashboard',this)"><span class="ico">📊</span><span>Dashboard</span></div>
+    <div class="nav-sep-lbl">CITIRE PE TEREN</div>
+    <div class="nav-item" data-page="teren" onclick="goPage('teren',this)" style="background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff"><span class="ico">📱</span><span>Citire contoare</span></div>
     <div class="nav-sep-lbl">MODULE FURNIZORI</div>
     <div class="nav-item" data-page="gaze" onclick="goPage('gaze',this)"><span class="ico">🔥</span><span>GAZE</span></div>
     <div class="nav-item" data-page="enel" onclick="goPage('enel',this)"><span class="ico">⚡</span><span>ENEL</span></div>
@@ -210,6 +300,30 @@ body.is-viewer .role-banner.viewer{display:block}
     </div>
 
     <div class="content">
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- MOD TEREN — citire contoare pe iPhone               -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-teren">
+        <div class="teren-network-bar" id="teren-net-bar">⚠️ Offline — citirile se salveaza local si vor fi sincronizate</div>
+        <div class="teren-header">
+          <div class="teren-tabs">
+            <button class="teren-tab active" data-modul="GAZE" onclick="setTerenModul('GAZE')">🔥 GAZE</button>
+            <button class="teren-tab" data-modul="ENEL" onclick="setTerenModul('ENEL')">⚡ ENEL</button>
+            <button class="teren-tab" data-modul="RAJA" onclick="setTerenModul('RAJA')">💧 RAJA</button>
+          </div>
+          <div class="teren-luna-row">
+            <label>📅 LUNA</label>
+            <select id="teren-luna" onchange="renderTerenCards()"></select>
+          </div>
+          <div class="teren-progress"><div class="teren-progress-bar" id="teren-progress-bar" style="width:0"></div></div>
+          <div class="teren-progress-text">
+            <span><b id="teren-progress-done">0</b> / <b id="teren-progress-total">0</b> contoare citite</span>
+            <span id="teren-pending-count" style="color:#9333ea"></span>
+          </div>
+        </div>
+        <div class="teren-cards" id="teren-cards"></div>
+      </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
       <!-- DASHBOARD                                            -->
@@ -636,6 +750,15 @@ body.is-viewer .role-banner.viewer{display:block}
 
 <script>
 // ═══════════════════════════════════════════════════════════════
+// SERVICE WORKER — cache app shell pentru offline
+// ═══════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./domadami-sw.js').catch(() => {});
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CONFIG SUPABASE
 // ═══════════════════════════════════════════════════════════════
 const SUPA_URL = 'https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1';
@@ -841,6 +964,7 @@ function onLunaChange() {
 // NAVIGATION
 // ═══════════════════════════════════════════════════════════════
 const PAGE_TITLES = {
+  teren:'📱 Citire contoare pe teren',
   dashboard:'Dashboard', gaze:'🔥 GAZE — Gaz Natural', enel:'⚡ ENEL — Energie Electrica',
   raja:'💧 RAJA — Apa', polaris:'🗑️ POLARIS — Salubritate',
   centralizator:'📋 Centralizator lunar', analiza:'📈 Analiză furnizori',
@@ -856,6 +980,7 @@ function goPage(pageId, navEl) {
 }
 function refreshPage(pageId) {
   const handlers = {
+    teren: renderTeren,
     dashboard: renderDashboard,
     gaze: () => incarcaFacturaGaze(),
     enel: () => incarcaFacturaEnel(),
@@ -2555,6 +2680,293 @@ function exportCSV() {
 // ESC inchide modal
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('fisa-modal').style.display === 'block') closeFisa();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// MOD TEREN — citire contoare pe iPhone (cu auto-save + offline)
+// ═══════════════════════════════════════════════════════════════
+let _terenModul = 'GAZE';
+let _terenCitiri = {};       // contor_id → citire object (din baza)
+let _terenSaveTimers = {};   // debounce per contor
+let _terenIsOnline = navigator.onLine;
+const TEREN_OFFLINE_KEY = 'domadami_teren_offline_queue';
+
+function getOfflineQueue() {
+  try { return JSON.parse(localStorage.getItem(TEREN_OFFLINE_KEY) || '[]'); } catch { return []; }
+}
+function setOfflineQueue(q) {
+  localStorage.setItem(TEREN_OFFLINE_KEY, JSON.stringify(q));
+  document.getElementById('teren-pending-count').textContent = q.length > 0 ? `⏳ ${q.length} de sincronizat` : '';
+}
+
+window.addEventListener('online', () => { _terenIsOnline = true; updateNetworkBar(); flushOfflineQueue(); });
+window.addEventListener('offline', () => { _terenIsOnline = false; updateNetworkBar(); });
+
+function updateNetworkBar() {
+  const bar = document.getElementById('teren-net-bar');
+  if (!bar) return;
+  if (_terenIsOnline) {
+    bar.className = 'teren-network-bar online show';
+    bar.textContent = '✓ Online — sincronizare reluata';
+    setTimeout(() => bar.classList.remove('show'), 2000);
+  } else {
+    bar.className = 'teren-network-bar offline show';
+    bar.textContent = '⚠️ Offline — citirile se salveaza local, sync cand revine semnal';
+  }
+}
+
+async function flushOfflineQueue() {
+  const q = getOfflineQueue();
+  if (q.length === 0) return;
+  const success = [];
+  for (const item of q) {
+    try {
+      const r = await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+        method:'POST', headers:HEADERS_WRITE, body:JSON.stringify(item)
+      });
+      if (r.ok) success.push(item);
+    } catch { /* nu mai e online */ break; }
+  }
+  if (success.length > 0) {
+    const remaining = q.filter(item => !success.includes(item));
+    setOfflineQueue(remaining);
+    toast(`✓ ${success.length} citiri sincronizate`, 'ok');
+    if (document.getElementById('page-teren')?.classList.contains('active')) renderTerenCards();
+  }
+}
+
+function populeazaSelectorTeren() {
+  const sel = document.getElementById('teren-luna');
+  const selGlobal = document.getElementById('luna-globala');
+  if (sel && selGlobal && sel.options.length === 0) {
+    sel.innerHTML = selGlobal.innerHTML;
+    sel.value = selGlobal.value;
+  }
+}
+
+function setTerenModul(m) {
+  _terenModul = m;
+  document.querySelectorAll('.teren-tab').forEach(t => t.classList.toggle('active', t.dataset.modul === m));
+  renderTerenCards();
+}
+
+function getTerenLuna() {
+  const v = parseInt(document.getElementById('teren-luna').value);
+  return { an: Math.floor(v/100), luna: v%100 };
+}
+
+async function renderTeren() {
+  populeazaSelectorTeren();
+  updateNetworkBar();
+  setOfflineQueue(getOfflineQueue()); // refresh contor pending
+  await renderTerenCards();
+  // Daca online, incerc flush automat
+  if (_terenIsOnline) flushOfflineQueue();
+}
+
+async function renderTerenCards() {
+  const { an, luna } = getTerenLuna();
+  const cards = document.getElementById('teren-cards');
+  cards.innerHTML = '<div class="teren-empty"><div class="emoji">⏳</div>Se incarca contoarele...</div>';
+
+  // Selectie contoare pentru modul curent
+  let contoare;
+  if (_terenModul === 'GAZE') {
+    // GAZE = contoare generale GAZE + apometre apa calda (din RAJA)
+    contoare = _contoare.filter(c => c.modul === 'GAZE' || c.tip === 'apometru_apa_calda');
+  } else if (_terenModul === 'ENEL') {
+    contoare = _contoare.filter(c => c.modul === 'ENEL' && c.tip === 'individual');
+  } else { // RAJA
+    contoare = _contoare.filter(c => c.modul === 'RAJA' && (c.tip === 'individual' || c.tip === 'apometru_apa_rece' || c.tip === 'general'));
+  }
+  // Sortare: pe unitate ordine + denumire
+  contoare.sort((a,b) => {
+    const ua = _unitati.find(u => u.id === a.unitate_id);
+    const ub = _unitati.find(u => u.id === b.unitate_id);
+    return (ua?.ordine || 99) - (ub?.ordine || 99) || a.id - b.id;
+  });
+
+  // Fetch citiri curente + anterioare
+  const idLuna = an*100 + luna;
+  const ids = contoare.map(c => c.id).join(',');
+  try {
+    const citiri = await api(`/domadami_citiri?contor_id=in.(${ids})&select=*`);
+    const mapCur = {}, mapPrev = {};
+    citiri.forEach(c => {
+      if (c.an === an && c.luna === luna) mapCur[c.contor_id] = c;
+      if (c.an*100 + c.luna < idLuna) {
+        if (!mapPrev[c.contor_id] || (mapPrev[c.contor_id].an*100+mapPrev[c.contor_id].luna) < (c.an*100+c.luna)) {
+          mapPrev[c.contor_id] = c;
+        }
+      }
+    });
+    _terenCitiri = mapCur;
+
+    const dataDefault = `${an}-${String(luna).padStart(2,'0')}-${String(new Date(an, luna, 0).getDate()).padStart(2,'0')}`;
+    const offlineKeys = new Set(getOfflineQueue().map(x => `${x.contor_id}-${x.an}-${x.luna}`));
+
+    let html = '';
+    let lastUnitateId = -1;
+    let nrCitite = 0;
+    contoare.forEach(c => {
+      const cur = mapCur[c.id];
+      const prev = mapPrev[c.id];
+      const u = _unitati.find(x => x.id === c.unitate_id);
+      const offlineKey = `${c.id}-${an}-${luna}`;
+      const isOffline = offlineKeys.has(offlineKey);
+      const isSaved = !!cur || isOffline;
+      if (isSaved) nrCitite++;
+
+      // Titlu grupare pe unitate
+      if (u && u.id !== lastUnitateId) {
+        const chN = getChiriasNume(u.id);
+        html += `<div class="teren-grupa-titlu">${u.cod}${chN ? ' — ' + escH(chN) : ''}</div>`;
+        lastUnitateId = u.id;
+      }
+
+      const ix = cur ? cur.index_final : '';
+      const ixPrev = prev ? prev.index_final : null;
+      const dataPrev = prev?.data_citire ? new Date(prev.data_citire).toLocaleDateString('ro-RO') : '—';
+      const dataCitire = (cur && cur.data_citire) ? cur.data_citire.substring(0,10) : dataDefault;
+      const consum = (cur && prev) ? (parseFloat(cur.index_final) - parseFloat(prev.index_final)) : null;
+      const um = c.unitate_masura || 'mc';
+      const obs = c.observatii ? `<div class="teren-obs">⚠️ ${escH(c.observatii)}</div>` : '';
+      const status = isOffline ? '<span class="teren-status offline">offline</span>' : (cur ? '<span class="teren-status saved">✓ salvat</span>' : '<span class="teren-status pending">de citit</span>');
+      const cls = isOffline ? 'is-offline' : (cur ? 'is-saved' : '');
+
+      html += `<div class="teren-card ${cls}" id="tcard-${c.id}">
+        <div class="teren-card-top">
+          <div>
+            <div class="teren-card-cod">${escH(c.denumire)}</div>
+          </div>
+          ${status}
+        </div>
+        ${obs}
+        <div class="teren-card-prev">
+          📊 Index anterior: <b>${ixPrev != null ? fmt(ixPrev, c.modul==='ENEL' ? 0 : 3) : '— (prima citire)'}</b>${prev ? `<br>📅 citit pe ${dataPrev}` : ''}
+        </div>
+        <div class="teren-input-wrap">
+          <input type="number" inputmode="decimal" pattern="[0-9]*" step="${c.modul==='ENEL'?'1':'0.001'}" min="0"
+            class="teren-input"
+            placeholder="Index ${um}"
+            value="${ix}"
+            data-contor-id="${c.id}"
+            data-um="${um}"
+            data-modul="${c.modul}"
+            onfocus="this.select()">
+        </div>
+        <input type="date" class="teren-data-input" data-contor-id="${c.id}" value="${dataCitire}">
+        <div class="teren-consum-row">
+          <span class="teren-consum-label">Consum</span>
+          <span class="teren-consum-val ${consum != null && consum < 0 ? 'neg' : ''}" id="tcons-${c.id}">${consum != null ? fmt(consum, c.modul==='ENEL'?0:3) + ' ' + um : '— ' + um}</span>
+        </div>
+      </div>`;
+    });
+
+    if (contoare.length === 0) {
+      html = '<div class="teren-empty"><div class="emoji">📭</div>Niciun contor pentru modulul selectat</div>';
+    }
+    cards.innerHTML = html;
+
+    // Update progress
+    document.getElementById('teren-progress-total').textContent = contoare.length;
+    document.getElementById('teren-progress-done').textContent = nrCitite;
+    document.getElementById('teren-progress-bar').style.width = contoare.length > 0 ? `${nrCitite/contoare.length*100}%` : '0';
+
+    // Auto-save handlers
+    document.querySelectorAll('#teren-cards .teren-input').forEach(inp => {
+      inp.addEventListener('input', e => {
+        const id = parseInt(inp.dataset.contorId);
+        // Live consum calc
+        const row = inp.closest('.teren-card');
+        const um = inp.dataset.um;
+        const modul = inp.dataset.modul;
+        const prevText = row.querySelector('.teren-card-prev b').textContent.replace(/\./g,'').replace(',','.');
+        const prevVal = parseFloat(prevText);
+        const newVal = parseFloat(inp.value);
+        const consEl = document.getElementById('tcons-'+id);
+        if (!isNaN(prevVal) && !isNaN(newVal)) {
+          const c = newVal - prevVal;
+          consEl.textContent = fmt(c, modul==='ENEL'?0:3) + ' ' + um;
+          consEl.classList.toggle('neg', c < 0);
+        }
+        // Auto-save cu debounce 600ms
+        clearTimeout(_terenSaveTimers[id]);
+        _terenSaveTimers[id] = setTimeout(() => salveazaContorTeren(id), 600);
+      });
+    });
+    document.querySelectorAll('#teren-cards .teren-data-input').forEach(inp => {
+      inp.addEventListener('change', () => {
+        const id = parseInt(inp.dataset.contorId);
+        salveazaContorTeren(id);
+      });
+    });
+  } catch (e) {
+    cards.innerHTML = `<div class="alert alert-danger">Eroare: ${e.message}</div>`;
+  }
+}
+
+async function salveazaContorTeren(contorId) {
+  if (!canEditCitiri()) return;
+  const inp = document.querySelector(`#teren-cards .teren-input[data-contor-id="${contorId}"]`);
+  const dataInp = document.querySelector(`#teren-cards .teren-data-input[data-contor-id="${contorId}"]`);
+  if (!inp) return;
+  const val = parseFloat(inp.value);
+  if (isNaN(val) || val < 0) return;
+  const { an, luna } = getTerenLuna();
+  const card = document.getElementById('tcard-' + contorId);
+  card.className = card.className.replace(/is-(saved|saving|error|offline)/g, '').trim() + ' is-saving';
+  card.querySelector('.teren-status').className = 'teren-status saving';
+  card.querySelector('.teren-status').textContent = '⏳ salvez...';
+
+  const payload = {
+    contor_id: contorId, an, luna,
+    data_citire: dataInp.value || `${an}-${String(luna).padStart(2,'0')}-${new Date(an,luna,0).getDate()}`,
+    index_final: val, nr_luni_acoperite: 1, introdus_de: currentUser.id
+  };
+
+  if (!_terenIsOnline) {
+    // Offline: queue local
+    const q = getOfflineQueue();
+    const exIdx = q.findIndex(x => x.contor_id === contorId && x.an === an && x.luna === luna);
+    if (exIdx >= 0) q[exIdx] = payload; else q.push(payload);
+    setOfflineQueue(q);
+    card.className = card.className.replace(/is-(saved|saving|error)/g, '').trim() + ' is-offline';
+    card.querySelector('.teren-status').className = 'teren-status offline';
+    card.querySelector('.teren-status').textContent = 'offline';
+    return;
+  }
+
+  try {
+    const r = await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+      method: 'POST', headers: HEADERS_WRITE, body: JSON.stringify(payload)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    card.className = card.className.replace(/is-(saving|error|offline)/g, '').trim() + ' is-saved';
+    card.querySelector('.teren-status').className = 'teren-status saved';
+    card.querySelector('.teren-status').textContent = '✓ salvat';
+    // Update progress
+    const nrCitite = document.querySelectorAll('.teren-card.is-saved, .teren-card.is-offline').length;
+    const total = parseInt(document.getElementById('teren-progress-total').textContent) || 1;
+    document.getElementById('teren-progress-done').textContent = nrCitite;
+    document.getElementById('teren-progress-bar').style.width = `${nrCitite/total*100}%`;
+  } catch (e) {
+    // Switch to offline mode
+    _terenIsOnline = false;
+    updateNetworkBar();
+    salveazaContorTeren(contorId); // re-run as offline
+  }
+}
+
+// Hamburger pentru mobile
+document.addEventListener('click', e => {
+  if (e.target.closest('.topbar') && !e.target.closest('button') && !e.target.closest('.luna-selector')) {
+    document.querySelector('.sidebar')?.classList.toggle('open');
+    document.body.classList.toggle('sidebar-open');
+  } else if (e.target.matches('.sidebar.open .nav-item, body.sidebar-open::after')) {
+    document.querySelector('.sidebar')?.classList.remove('open');
+    document.body.classList.remove('sidebar-open');
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════
