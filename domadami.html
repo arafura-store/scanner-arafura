@@ -170,6 +170,7 @@ body.is-readonly .readonly-banner{display:block}
     <div class="nav-item" data-page="polaris" onclick="goPage('polaris',this)"><span class="ico">🗑️</span><span>POLARIS</span></div>
     <div class="nav-sep-lbl">RAPOARTE</div>
     <div class="nav-item" data-page="centralizator" onclick="goPage('centralizator',this)"><span class="ico">📋</span><span>Centralizator</span></div>
+    <div class="nav-item" data-page="analiza" onclick="goPage('analiza',this)"><span class="ico">📈</span><span>Analiza furnizori</span></div>
     <div class="nav-item" data-page="chiriasi" onclick="goPage('chiriasi',this)"><span class="ico">👥</span><span>Chiriasi & Unitati</span></div>
     <div class="nav-sep-lbl">ADMINISTRARE</div>
     <div class="nav-item role-admin" data-page="setari" onclick="goPage('setari',this)"><span class="ico">⚙️</span><span>Setari</span></div>
@@ -549,6 +550,22 @@ body.is-readonly .readonly-banner{display:block}
         </div>
       </div>
 
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- ANALIZA FURNIZORI — perioade citire vs facturare    -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-analiza">
+        <div class="alert alert-info" style="margin-bottom:16px">
+          <span class="ico">📈</span>
+          <div>
+            <div class="title">Comparatie perioade autocitire furnizor vs. citire DOMADAMI</div>
+            Furnizorii folosesc autocitire/telecitire la datele lor. Noi citim contoarele la alte date. Tabloul de mai jos arata diferentele — util pentru a estima pierderi/castiguri.
+          </div>
+        </div>
+        <div id="analiza-body">
+          <div class="spinner">Se incarca analiza...</div>
+        </div>
+      </div>
+
       <!-- CHIRIASI -->
       <div class="page" id="page-chiriasi">
         <div class="card">
@@ -785,8 +802,8 @@ function onLunaChange() {
 const PAGE_TITLES = {
   dashboard:'Dashboard', gaze:'🔥 GAZE — Gaz Natural', enel:'⚡ ENEL — Energie Electrica',
   raja:'💧 RAJA — Apa', polaris:'🗑️ POLARIS — Salubritate',
-  centralizator:'📋 Centralizator lunar', chiriasi:'👥 Chiriasi si Unitati',
-  setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
+  centralizator:'📋 Centralizator lunar', analiza:'📈 Analiză furnizori',
+  chiriasi:'👥 Chiriasi si Unitati', setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
 };
 function goPage(pageId, navEl) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -804,6 +821,7 @@ function refreshPage(pageId) {
     raja: () => incarcaFacturaRaja(),
     polaris: () => incarcaFacturaPolaris(),
     centralizator: renderCentralizator,
+    analiza: renderAnalizaFurnizori,
     chiriasi: renderChiriasi,
     setari: renderSetari,
     utilizatori: renderUtilizatori
@@ -2496,6 +2514,115 @@ function exportCSV() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('fisa-modal').style.display === 'block') closeFisa();
 });
+
+// ═══════════════════════════════════════════════════════════════
+// ANALIZA FURNIZORI — perioade citire vs facturare
+// ═══════════════════════════════════════════════════════════════
+async function renderAnalizaFurnizori() {
+  document.getElementById('analiza-body').innerHTML = '<div class="spinner">Se incarca toate facturile + citirile...</div>';
+  try {
+    const [facturi, citiri] = await Promise.all([
+      api('/domadami_facturi?select=*&order=an.desc,luna.desc'),
+      api('/domadami_citiri?select=contor_id,an,luna,data_citire,index_final,consum_calculat,nr_luni_acoperite,este_estimat,este_forfait&order=data_citire.asc')
+    ]);
+
+    // Pentru fiecare modul + lună: extrag prima/ultima data_citire DOMADAMI
+    // si numarul de citiri / contoare distincte
+    const citiriPerModul = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
+    citiri.forEach(ci => {
+      const ct = _contoare.find(c => c.id === ci.contor_id);
+      if (!ct) return;
+      // Apometrele apa calda (modul=RAJA, tip=apometru_apa_calda) participa SI la GAZE
+      const moduleAplicabile = [ct.modul];
+      if (ct.tip === 'apometru_apa_calda') moduleAplicabile.push('GAZE');
+      moduleAplicabile.forEach(m => {
+        const key = `${ci.an}-${ci.luna}`;
+        if (!citiriPerModul[m]) return;
+        if (!citiriPerModul[m][key]) citiriPerModul[m][key] = { dataMin: null, dataMax: null, nrCitiri: 0, contoareDistincte: new Set() };
+        const c = citiriPerModul[m][key];
+        c.nrCitiri++;
+        c.contoareDistincte.add(ci.contor_id);
+        if (ci.data_citire) {
+          if (!c.dataMin || ci.data_citire < c.dataMin) c.dataMin = ci.data_citire;
+          if (!c.dataMax || ci.data_citire > c.dataMax) c.dataMax = ci.data_citire;
+        }
+      });
+    });
+
+    const fmtDate = d => d ? new Date(d).toLocaleDateString('ro-RO') : '—';
+    const daysBetween = (d1, d2) => {
+      if (!d1 || !d2) return null;
+      return Math.round((new Date(d2) - new Date(d1)) / (1000*60*60*24));
+    };
+
+    const MOD_META = {
+      GAZE:    { ico:'🔥', name:'GAZE', um:'mc', color:'#FFD700' },
+      ENEL:    { ico:'⚡', name:'ENEL', um:'kw', color:'#2563eb' },
+      RAJA:    { ico:'💧', name:'RAJA', um:'mc', color:'#06b6d4' },
+      POLARIS: { ico:'🗑️', name:'POLARIS', um:'forfait', color:'#10b981' }
+    };
+
+    let html = '';
+    ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
+      const fact = facturi.filter(f => f.modul === m);
+      const meta = MOD_META[m];
+      html += `<div class="card" style="margin-bottom:18px;border-top:4px solid ${meta.color}">
+        <div class="card-hdr"><h3>${meta.ico} Furnizor ${meta.name} — ${fact.length} facturi</h3></div>
+        <div class="card-body" style="padding:0;overflow-x:auto">`;
+      if (fact.length === 0) {
+        html += '<div class="empty-msg">Nicio factura introdusa pentru acest furnizor.</div>';
+      } else {
+        html += `<table class="tbl">
+          <thead><tr>
+            <th>Lună</th>
+            <th>Data emit.</th>
+            <th>Serie/Nr</th>
+            <th style="text-align:right">Valoare RON (fără TVA)</th>
+            <th style="text-align:right">Cantitate</th>
+            <th style="text-align:center">UM</th>
+            <th>Perioada FURNIZOR<br><small style="font-weight:400">(autocitire)</small></th>
+            <th>Perioada DOMADAMI<br><small style="font-weight:400">(citire propriu)</small></th>
+            <th style="text-align:center">Decalaj</th>
+            <th style="text-align:right">Contoare</th>
+          </tr></thead><tbody>`;
+        fact.forEach(f => {
+          const key = `${f.an}-${f.luna}`;
+          const c = citiriPerModul[m][key] || { dataMin:null, dataMax:null, nrCitiri:0, contoareDistincte:new Set() };
+          const periodaFurnizor = f.perioada_de && f.perioada_pana_la ? `${fmtDate(f.perioada_de)} → ${fmtDate(f.perioada_pana_la)}` : '<span style="color:var(--sub)">—</span>';
+          const periodaDomadami = c.dataMin && c.dataMax ? (c.dataMin === c.dataMax ? fmtDate(c.dataMin) : `${fmtDate(c.dataMin)} → ${fmtDate(c.dataMax)}`) : '<span style="color:var(--sub)">— nimic citit</span>';
+          // Decalaj zile între perioada_pana_la furnizor și dataMax DOMADAMI
+          let decalajHTML = '<span style="color:var(--sub)">—</span>';
+          if (f.perioada_pana_la && c.dataMax) {
+            const dz = daysBetween(f.perioada_pana_la, c.dataMax);
+            const cls = Math.abs(dz) <= 3 ? 'b-green' : (Math.abs(dz) <= 10 ? 'b-gold' : 'b-red');
+            const sign = dz > 0 ? '+' : '';
+            decalajHTML = `<span class="badge ${cls}">${sign}${dz} zile</span>`;
+          }
+          const serieNr = [f.serie_factura, f.numar_factura].filter(Boolean).join(' / ') || '<span style="color:var(--sub)">—</span>';
+          const lunaName = LUNI_RO[f.luna-1].substring(0,3) + ' ' + f.an;
+          html += `<tr>
+            <td><b>${lunaName}</b>${f.luna_cu_incalzire === true ? ' 🔥' : ''}</td>
+            <td>${fmtDate(f.data_factura)}</td>
+            <td style="font-size:12px">${serieNr}</td>
+            <td class="num"><b>${fmt(f.total_factura_lei, 2)}</b></td>
+            <td class="num">${f.total_consum ? fmt(f.total_consum, 3) : '—'}</td>
+            <td style="text-align:center;font-size:11px;color:var(--sub)">${f.unitate_masura || '—'}</td>
+            <td style="font-size:12px">${periodaFurnizor}</td>
+            <td style="font-size:12px">${periodaDomadami}</td>
+            <td style="text-align:center">${decalajHTML}</td>
+            <td class="num" style="font-size:12px;color:var(--sub)">${c.nrCitiri > 0 ? `${c.contoareDistincte.size} (${c.nrCitiri} citiri)` : '—'}</td>
+          </tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div></div>';
+    });
+
+    document.getElementById('analiza-body').innerHTML = html;
+  } catch (e) {
+    document.getElementById('analiza-body').innerHTML = `<div class="alert alert-danger">Eroare: ${e.message}</div>`;
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // CHIRIASI
