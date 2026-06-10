@@ -828,7 +828,7 @@ async function login() {
     const rows = await api(`/domadami_utilizatori?username=eq.${encodeURIComponent(u)}&password_hash=eq.${hash}&activ=eq.true&select=id,username,rol,nume_afisat,email`);
     if (rows.length === 0) { err.textContent='Utilizator sau parola incorecte'; err.style.display='block'; return; }
     currentUser = rows[0];
-    sessionStorage.setItem('dm_user', JSON.stringify(currentUser));
+    localStorage.setItem('dm_user', JSON.stringify(currentUser));
     // update ultim_login (best-effort, nu blocheaza)
     fetch(`${SUPA_URL}/domadami_utilizatori?id=eq.${currentUser.id}`, {
       method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
@@ -841,6 +841,7 @@ async function login() {
 }
 
 function logout() {
+  localStorage.removeItem('dm_user');
   sessionStorage.removeItem('dm_user');
   currentUser = null;
   document.body.classList.remove('is-admin');
@@ -884,8 +885,8 @@ function canEditSetari() {
 // Compatibilitate cu codul vechi
 function canEdit() { return canEditCitiri(); }
 
-// Resume session
-const stored = sessionStorage.getItem('dm_user');
+// Resume session (localStorage = persistent; sessionStorage = fallback)
+const stored = localStorage.getItem('dm_user') || sessionStorage.getItem('dm_user');
 if (stored) {
   try {
     currentUser = JSON.parse(stored);
