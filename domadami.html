@@ -39,20 +39,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .role-admin{display:none}
 body.is-admin .role-admin{display:flex}
 
-/* READ-ONLY MODE (contabilitate, viewer) */
-body.is-readonly .btn-success{display:none!important}
-body.is-readonly .gz-input,body.is-readonly .gz-data,
-body.is-readonly .el-input,body.is-readonly .el-data,
-body.is-readonly .rj-input,body.is-readonly .rj-data,
-body.is-readonly #gz-total-lei,body.is-readonly #gz-total-mc,body.is-readonly #gz-incalzire,body.is-readonly #gz-nr-luni,
-body.is-readonly #el-total-lei,body.is-readonly #el-total-kw,body.is-readonly #el-nr-luni,
-body.is-readonly #rj-total-lei,body.is-readonly #rj-total-mc,body.is-readonly #rj-nr-luni,
-body.is-readonly #pl-total-lei,
-body.is-readonly .setare-inp{
+/* PERMISIUNI PE ROL */
+/* VIEWER: tot disabled (factura + citiri + setari) */
+body.is-viewer .gz-input,body.is-viewer .gz-data,
+body.is-viewer .el-input,body.is-viewer .el-data,
+body.is-viewer .rj-input,body.is-viewer .rj-data,
+body.is-viewer #gz-total-lei,body.is-viewer #gz-total-mc,body.is-viewer #gz-incalzire,body.is-viewer #gz-nr-luni,body.is-viewer #gz-serie-factura,body.is-viewer #gz-nr-factura,body.is-viewer #gz-data-factura,body.is-viewer #gz-perioada-de,body.is-viewer #gz-perioada-pana,
+body.is-viewer #el-total-lei,body.is-viewer #el-total-kw,body.is-viewer #el-nr-luni,body.is-viewer #el-serie-factura,body.is-viewer #el-nr-factura,body.is-viewer #el-data-factura,body.is-viewer #el-perioada-de,body.is-viewer #el-perioada-pana,
+body.is-viewer #rj-total-lei,body.is-viewer #rj-total-mc,body.is-viewer #rj-nr-luni,body.is-viewer #rj-serie-factura,body.is-viewer #rj-nr-factura,body.is-viewer #rj-data-factura,body.is-viewer #rj-perioada-de,body.is-viewer #rj-perioada-pana,
+body.is-viewer #pl-total-lei,body.is-viewer #pl-serie-factura,body.is-viewer #pl-nr-factura,body.is-viewer #pl-data-factura,body.is-viewer #pl-perioada-de,body.is-viewer #pl-perioada-pana,
+body.is-viewer .setare-inp{
   pointer-events:none!important;background:#f3f4f6!important;opacity:0.75;cursor:not-allowed!important
 }
-.readonly-banner{display:none;background:var(--orange);color:#fff;padding:9px 18px;text-align:center;font-weight:700;font-size:13px}
-body.is-readonly .readonly-banner{display:block}
+body.is-viewer .btn-save-factura,body.is-viewer .btn-save-citiri,body.is-viewer .btn-save-setari,body.is-viewer .btn-edit-elementi{display:none!important}
+
+/* CONTABILITATE: doar citiri + setari disabled (factura RAMANE editabila pentru Vivi) */
+body.is-contabilitate .gz-input,body.is-contabilitate .gz-data,
+body.is-contabilitate .el-input,body.is-contabilitate .el-data,
+body.is-contabilitate .rj-input,body.is-contabilitate .rj-data,
+body.is-contabilitate .setare-inp{
+  pointer-events:none!important;background:#f3f4f6!important;opacity:0.75;cursor:not-allowed!important
+}
+body.is-contabilitate .btn-save-citiri,body.is-contabilitate .btn-save-setari,body.is-contabilitate .btn-edit-elementi{display:none!important}
+
+/* Bannere informative per rol */
+.role-banner{display:none;padding:9px 18px;text-align:center;font-weight:700;font-size:13px;color:#fff}
+.role-banner.contabilitate{background:var(--blue)}
+.role-banner.viewer{background:var(--orange)}
+body.is-contabilitate .role-banner.contabilitate{display:block}
+body.is-viewer .role-banner.viewer{display:block}
 
 .main{flex:1;display:flex;flex-direction:column;overflow-x:hidden}
 .topbar{background:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);box-shadow:0 1px 2px rgba(0,0,0,0.04)}
@@ -173,6 +188,7 @@ body.is-readonly .readonly-banner{display:block}
     <div class="nav-item" data-page="analiza" onclick="goPage('analiza',this)"><span class="ico">📈</span><span>Analiza furnizori</span></div>
     <div class="nav-item" data-page="chiriasi" onclick="goPage('chiriasi',this)"><span class="ico">👥</span><span>Chiriasi & Unitati</span></div>
     <div class="nav-sep-lbl">ADMINISTRARE</div>
+    <div class="nav-item" data-page="fisa" onclick="goPage('fisa',this)"><span class="ico">📜</span><span>Fisa postului</span></div>
     <div class="nav-item role-admin" data-page="setari" onclick="goPage('setari',this)"><span class="ico">⚙️</span><span>Setari</span></div>
     <div class="nav-item role-admin" data-page="utilizatori" onclick="goPage('utilizatori',this)"><span class="ico">🔐</span><span>Utilizatori</span></div>
     <div class="nav-sep"></div>
@@ -180,7 +196,8 @@ body.is-readonly .readonly-banner{display:block}
   </aside>
 
   <div class="main">
-    <div class="readonly-banner">📖 Mod vizualizare — vezi rapoartele, dar nu poti edita contori, indexuri sau facturi</div>
+    <div class="role-banner contabilitate">📝 Mod contabilitate — poți edita datele facturilor furnizorului, dar NU citirile contoarelor</div>
+    <div class="role-banner viewer">📖 Mod vizualizare — vezi rapoartele, dar nu poți edita</div>
     <div class="topbar">
       <h2 id="page-title">Dashboard</h2>
       <div class="right">
@@ -272,7 +289,7 @@ body.is-readonly .readonly-banner{display:block}
                 <select id="gz-nr-luni"><option value="1">1 lună (normal)</option><option value="2">2 luni (cumulat)</option></select>
               </div>
             </div>
-            <button class="btn btn-success" onclick="salveazaFacturaGaze()">💾 Salveaza factura</button>
+            <button class="btn btn-success btn-save-factura" onclick="salveazaFacturaGaze()">💾 Salveaza factura</button>
             <button class="btn btn-primary" onclick="incarcaCitiriGaze()" style="margin-left:8px">📥 Incarca / refresh citiri</button>
           </div>
         </div>
@@ -349,7 +366,7 @@ body.is-readonly .readonly-banner{display:block}
                 <div class="hint">2 luni daca factura acopera ex: aprilie+mai</div>
               </div>
               <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
-                <button class="btn btn-success" onclick="salveazaFacturaEnel()" style="flex:1">💾 Salveaza factura</button>
+                <button class="btn btn-success btn-save-factura" onclick="salveazaFacturaEnel()" style="flex:1">💾 Salveaza factura</button>
                 <button class="btn btn-primary" onclick="incarcaCitiriEnel()" style="flex:1">📥 Incarca citiri</button>
               </div>
             </div>
@@ -420,7 +437,7 @@ body.is-readonly .readonly-banner{display:block}
                 <select id="rj-nr-luni"><option value="1">1 lună (normal)</option><option value="2">2 luni (cumulat — ex apr+mai)</option></select>
               </div>
               <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
-                <button class="btn btn-success" onclick="salveazaFacturaRaja()" style="flex:1">💾 Salveaza factura</button>
+                <button class="btn btn-success btn-save-factura" onclick="salveazaFacturaRaja()" style="flex:1">💾 Salveaza factura</button>
                 <button class="btn btn-primary" onclick="incarcaCitiriRaja()" style="flex:1">📥 Incarca citiri</button>
               </div>
             </div>
@@ -489,7 +506,7 @@ body.is-readonly .readonly-banner{display:block}
                 <input type="date" id="pl-perioada-pana">
               </div>
               <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
-                <button class="btn btn-success" onclick="salveazaFacturaPolaris()" style="flex:1">💾 Salveaza factura</button>
+                <button class="btn btn-success btn-save-factura" onclick="salveazaFacturaPolaris()" style="flex:1">💾 Salveaza factura</button>
                 <button class="btn btn-primary" onclick="calculeazaPolaris()" style="flex:1">🧮 Calculeaza</button>
               </div>
             </div>
@@ -573,6 +590,15 @@ body.is-readonly .readonly-banner{display:block}
           <div class="card-body">
             <div id="lista-chiriasi" class="spinner">Se incarca...</div>
           </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- FISA POSTULUI — rol + atributii                      -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-fisa">
+        <div id="fisa-postului-body">
+          <div class="spinner">Se incarca...</div>
         </div>
       </div>
 
@@ -706,19 +732,34 @@ function showApp() {
   document.getElementById('u-avatar').textContent = currentUser.nume_afisat.charAt(0).toUpperCase();
   document.getElementById('u-nume').textContent = currentUser.nume_afisat;
   document.getElementById('u-rol').textContent = currentUser.rol.charAt(0).toUpperCase() + currentUser.rol.slice(1);
-  document.body.classList.remove('is-admin', 'is-readonly');
+  document.body.classList.remove('is-admin', 'is-readonly', 'is-contabilitate', 'is-viewer');
   if (currentUser.rol === 'admin') document.body.classList.add('is-admin');
-  if (currentUser.rol === 'contabilitate' || currentUser.rol === 'viewer') document.body.classList.add('is-readonly');
+  if (currentUser.rol === 'contabilitate') document.body.classList.add('is-contabilitate');
+  if (currentUser.rol === 'viewer') document.body.classList.add('is-viewer');
   bootApp();
 }
 
-function canEdit() {
-  if (document.body.classList.contains('is-readonly')) {
-    toast('Nu ai drepturi de editare (mod vizualizare)', 'err');
-    return false;
-  }
-  return true;
+// Permisiuni in functie de rol:
+//   admin     : tot
+//   manager   : factura + citiri (operator teren)
+//   contabilitate : factura DA, citiri NU
+//   viewer    : nimic
+function canEditFactura() {
+  const r = currentUser?.rol;
+  if (r === 'admin' || r === 'manager' || r === 'operator' || r === 'contabilitate') return true;
+  toast('Nu ai drepturi sa editezi facturi', 'err'); return false;
 }
+function canEditCitiri() {
+  const r = currentUser?.rol;
+  if (r === 'admin' || r === 'manager' || r === 'operator') return true;
+  toast('Nu ai drepturi sa editezi citiri (doar Bogdan + admin)', 'err'); return false;
+}
+function canEditSetari() {
+  if (currentUser?.rol === 'admin') return true;
+  toast('Doar admin poate edita setarile', 'err'); return false;
+}
+// Compatibilitate cu codul vechi
+function canEdit() { return canEditCitiri(); }
 
 // Resume session
 const stored = sessionStorage.getItem('dm_user');
@@ -803,7 +844,7 @@ const PAGE_TITLES = {
   dashboard:'Dashboard', gaze:'🔥 GAZE — Gaz Natural', enel:'⚡ ENEL — Energie Electrica',
   raja:'💧 RAJA — Apa', polaris:'🗑️ POLARIS — Salubritate',
   centralizator:'📋 Centralizator lunar', analiza:'📈 Analiză furnizori',
-  chiriasi:'👥 Chiriasi si Unitati', setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
+  chiriasi:'👥 Chiriasi si Unitati', fisa:'📜 Fisa postului', setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
 };
 function goPage(pageId, navEl) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -822,6 +863,7 @@ function refreshPage(pageId) {
     polaris: () => incarcaFacturaPolaris(),
     centralizator: renderCentralizator,
     analiza: renderAnalizaFurnizori,
+    fisa: renderFisaPostului,
     chiriasi: renderChiriasi,
     setari: renderSetari,
     utilizatori: renderUtilizatori
@@ -971,7 +1013,7 @@ async function incarcaFacturaGaze() {
 }
 
 async function salveazaFacturaGaze() {
-  if (!canEdit()) return;
+  if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('gz-total-lei').value) || 0;
   const total_mc = parseFloat(document.getElementById('gz-total-mc').value) || 0;
@@ -1003,7 +1045,7 @@ async function salveazaFacturaGaze() {
 function renderConfigElementi() {
   const garsoniere = _unitati.filter(u => u.tip === 'garsoniera').sort((a,b)=>a.ordine-b.ordine);
   const totalElementi = garsoniere.reduce((s,g) => s + (g.nr_elementi_calorifer || 0), 0);
-  const canEditNow = !document.body.classList.contains('is-readonly');
+  const canEditNow = ['admin','manager','operator'].includes(currentUser?.rol);
   let html = `<div class="alert alert-info" style="margin-bottom:12px"><span class="ico">ℹ️</span><div>
     Elementii caloriferului se folosesc <b>doar la lunile cu încălzire</b> (când bifezi sus). Cost căldură per garsonieră = (nr. elementi garsonieră / total elementi firmă) × cost rămas dupa apa caldă.
   </div></div>
@@ -1017,7 +1059,7 @@ function renderConfigElementi() {
       <td style="font-size:12px;font-weight:600">${ch}</td>
       <td class="num"><b style="font-size:15px">${ne}</b></td>
       <td class="num" style="color:var(--sub)">${fmt(pondere, 1)}%</td>
-      ${canEditNow?`<td><button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="editElementi(${g.id}, ${ne})">✏️ Edit</button></td>`:''}
+      ${canEditNow?`<td><button class="btn btn-secondary btn-edit-elementi" style="padding:4px 10px;font-size:11px" onclick="editElementi(${g.id}, ${ne})">✏️ Edit</button></td>`:''}
     </tr>`;
   });
   html += `</tbody><tfoot style="background:#f9fafb;font-weight:800"><tr>
@@ -1108,7 +1150,7 @@ async function incarcaCitiriGaze() {
       </tr>`;
     });
     html += '</tbody></table>';
-    html += '<div style="margin-top:14px"><button class="btn btn-success" onclick="salveazaCitiriGaze()">💾 Salveaza toate citirile</button></div>';
+    html += '<div style="margin-top:14px"><button class="btn btn-success btn-save-citiri" onclick="salveazaCitiriGaze()">💾 Salveaza toate citirile</button></div>';
     document.getElementById('gz-citiri').innerHTML = html;
     // Re-calc consum on change
     document.querySelectorAll('.gz-input').forEach(inp => {
@@ -1131,7 +1173,7 @@ async function incarcaCitiriGaze() {
 }
 
 async function salveazaCitiriGaze() {
-  if (!canEdit()) return;
+  if (!canEditCitiri()) return;
   const { an, luna } = getLuna();
   const inputs = document.querySelectorAll('.gz-input');
   const nrLuni = parseInt(document.getElementById('gz-nr-luni').value) || 1;
@@ -1354,7 +1396,7 @@ async function incarcaFacturaEnel() {
 }
 
 async function salveazaFacturaEnel() {
-  if (!canEdit()) return;
+  if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('el-total-lei').value) || 0;
   const total_kw = parseFloat(document.getElementById('el-total-kw').value) || 0;
@@ -1445,7 +1487,7 @@ async function incarcaCitiriEnel() {
       </tr>`;
     });
     html += '</tbody></table>';
-    html += '<div style="margin-top:14px"><button class="btn btn-success" onclick="salveazaCitiriEnel()">💾 Salveaza toate citirile</button></div>';
+    html += '<div style="margin-top:14px"><button class="btn btn-success btn-save-citiri" onclick="salveazaCitiriEnel()">💾 Salveaza toate citirile</button></div>';
     document.getElementById('el-citiri').innerHTML = html;
     document.querySelectorAll('.el-input').forEach(inp => {
       inp.addEventListener('input', () => {
@@ -1466,7 +1508,7 @@ async function incarcaCitiriEnel() {
 }
 
 async function salveazaCitiriEnel() {
-  if (!canEdit()) return;
+  if (!canEditCitiri()) return;
   const { an, luna } = getLuna();
   const inputs = document.querySelectorAll('.el-input');
   const nrLuni = parseInt(document.getElementById('el-nr-luni').value) || 1;
@@ -1741,7 +1783,7 @@ async function incarcaFacturaRaja() {
 }
 
 async function salveazaFacturaRaja() {
-  if (!canEdit()) return;
+  if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('rj-total-lei').value) || 0;
   const total_mc = parseFloat(document.getElementById('rj-total-mc').value) || 0;
@@ -1847,7 +1889,7 @@ async function incarcaCitiriRaja() {
       </tr>`;
     });
     html += '</tbody></table>';
-    html += '<div style="margin-top:14px"><button class="btn btn-success" onclick="salveazaCitiriRaja()">💾 Salveaza citirile (apa rece + general + parter)</button></div>';
+    html += '<div style="margin-top:14px"><button class="btn btn-success btn-save-citiri" onclick="salveazaCitiriRaja()">💾 Salveaza citirile (apa rece + general + parter)</button></div>';
     document.getElementById('rj-citiri').innerHTML = html;
     document.querySelectorAll('.rj-input').forEach(inp => {
       inp.addEventListener('input', () => {
@@ -1869,7 +1911,7 @@ async function incarcaCitiriRaja() {
 }
 
 async function salveazaCitiriRaja() {
-  if (!canEdit()) return;
+  if (!canEditCitiri()) return;
   const { an, luna } = getLuna();
   const inputs = document.querySelectorAll('.rj-input:not(:disabled)');
   const nrLuni = parseInt(document.getElementById('rj-nr-luni').value) || 1;
@@ -2516,6 +2558,123 @@ document.addEventListener('keydown', e => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// FISA POSTULUI — atributii per rol
+// ═══════════════════════════════════════════════════════════════
+const FISA_ROLURI = {
+  admin: {
+    titlu: 'Administrator (Eugen)',
+    ico: '👑',
+    color: '#C00000',
+    descriere: 'Acces COMPLET la aplicatie. Configureaza utilizatori, setari, rezolva probleme.',
+    atributii: [
+      'Verificare zilnica a Dashboard-ului (alerte, citiri lipsa)',
+      'Configurare utilizatori si parole (sectiunea Utilizatori)',
+      'Modificare setari aplicatie (pret apa calda, forfait-uri, prag alerta pierderi)',
+      'Adaugare/Editare chiriasi si unitati',
+      'Editare numar elementi calorifer per garsoniera',
+      'Recalculare costuri pentru lunile inchise',
+      'Decizie finalizare facturare luna (status preliminar → final → transmis)',
+      'Backup periodic (Supabase face automat)'
+    ]
+  },
+  manager: {
+    titlu: 'Manager (Bogdan Dinescu)',
+    ico: '🛠️',
+    color: '#FFD700',
+    descriere: 'OPERATOR DE TEREN. Citeste contoarele pe tableta, introduce indexurile.',
+    atributii: [
+      'Vizita lunara la imobil pentru citirea TUTUROR contoarelor:',
+      '   - GAZE: contor general + contor pasant Farmacie + 16 apometre apa calda garsoniere',
+      '   - ENEL: 31 contoare individuale (8 garsoniere + 13 parter + 10 etaj). AC etaj STRICAT pana iunie 2026 — forfait 40 kw/firma fix',
+      '   - RAJA: contor general + 16 apometre apa rece garsoniere + 11 contoare parter',
+      '   - POLARIS: nu are citiri (alocare fixa)',
+      'Introducere indexuri in aplicatie cu DATA CITIRII corecta per contor',
+      'Verificare discrepante: consum negativ, apometru blocat (G7 bucatarie), valori anormale',
+      'Marcare unitati ocupate / goale (ETAJ MOBILA acum gol)',
+      'Recalculare costuri pe modul (Recalculeaza) pentru luna citirilor proaspete',
+      'Citirea analizei furnizori (Analiza furnizori) — verificarea decalajului perioadelor'
+    ]
+  },
+  contabilitate: {
+    titlu: 'Contabilitate (Vivi - Vranceanu Viorica)',
+    ico: '📝',
+    color: '#2563eb',
+    descriere: 'GESTIONEAZA FACTURILE primite de la furnizori. Introduce date administrative.',
+    atributii: [
+      'Receptionarea lunara a facturilor de la cei 4 furnizori (GAZE, ENEL, RAJA, POLARIS)',
+      'Introducere in aplicatie a DATELOR DE FACTURA:',
+      '   - Data emiterii facturii',
+      '   - Seria si nr. facturii',
+      '   - Valoare RON FARA TVA',
+      '   - Cantitate (mc / kw) — cea din factura furnizorului',
+      '   - Perioada facturata (DE LA → PANA LA) — perioada autocitire furnizor',
+      'NU introduce indexurile contoarelor (asta-i atributia lui Bogdan)',
+      'Acces la rapoarte: Centralizator, Analiza furnizori, Fisa individuala chirias',
+      'Export CSV / PDF pentru contabilitate proprie firma'
+    ]
+  },
+  viewer: {
+    titlu: 'Vizualizator (alti contabili, audit)',
+    ico: '👁️',
+    color: '#FF6600',
+    descriere: 'Acces READ-ONLY. Vede toate rapoartele dar nu poate edita nimic.',
+    atributii: [
+      'Vizualizare Dashboard, Centralizator, Analiza furnizori, Chiriasi & Unitati',
+      'Vedere indexuri si calcule pentru luni inchise',
+      'Vizualizare istoric facturi',
+      'NU poate edita: nici facturi, nici citiri, nici setari',
+      'Util pentru auditor / proprietar pasiv / inlocuitor temporar'
+    ]
+  }
+};
+
+async function renderFisaPostului() {
+  const r = currentUser?.rol || 'viewer';
+  const me = FISA_ROLURI[r] || FISA_ROLURI.viewer;
+  let html = `
+    <div class="alert" style="background:#eff6ff;border-left:4px solid var(--blue);margin-bottom:20px">
+      <span class="ico" style="font-size:32px">${me.ico}</span>
+      <div>
+        <div style="font-size:11px;color:var(--sub);text-transform:uppercase;font-weight:700">Esti logat ca</div>
+        <div style="font-size:22px;font-weight:800;color:var(--dark);margin:3px 0">${me.titlu}</div>
+        <div style="color:var(--sub);font-size:13px">${me.descriere}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:20px;border-left:5px solid ${me.color}">
+      <div class="card-hdr"><h3>${me.ico} Atributiile TALE in DOMADAMI</h3></div>
+      <div class="card-body">
+        <ol style="margin-left:20px;line-height:2;font-size:14px">
+          ${me.atributii.map(a => `<li>${escH(a)}</li>`).join('')}
+        </ol>
+      </div>
+    </div>
+
+    <h3 style="color:var(--dark);margin:24px 0 10px;font-size:15px">📋 Cele 4 roluri din DOMADAMI</h3>
+  `;
+
+  ['admin','manager','contabilitate','viewer'].forEach(rk => {
+    const info = FISA_ROLURI[rk];
+    const isMe = rk === r;
+    html += `<div class="card" style="margin-bottom:14px;${isMe?`border-left:5px solid ${info.color};box-shadow:0 4px 12px ${info.color}33`:`opacity:0.75`}">
+      <div class="card-hdr" style="${isMe?'background:#eff6ff':''}">
+        <h3>${info.ico} ${info.titlu}${isMe?' <span class="badge b-blue">TU</span>':''}</h3>
+      </div>
+      <div class="card-body">
+        <p style="color:var(--sub);font-size:13px;margin-bottom:10px"><b>Rol:</b> ${info.descriere}</p>
+        <details ${isMe?'open':''}>
+          <summary style="cursor:pointer;color:var(--blue);font-weight:600;font-size:13px">Vezi atributiile (${info.atributii.length})</summary>
+          <ul style="margin:10px 0 0 20px;line-height:1.8;font-size:13px;color:var(--dark)">
+            ${info.atributii.map(a => `<li>${escH(a)}</li>`).join('')}
+          </ul>
+        </details>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('fisa-postului-body').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ANALIZA FURNIZORI — perioade citire vs facturare
 // ═══════════════════════════════════════════════════════════════
 async function renderAnalizaFurnizori() {
@@ -2671,7 +2830,7 @@ async function renderChiriasi() {
     const nrUnitGoale = nrTotalUnit - nrUnitOcupate;
     const nrFirme = chiriasi.filter(c => c.tip === 'firma').length;
     const nrPF = chiriasi.filter(c => c.tip === 'persoana_fizica').length;
-    const canEditNow = !document.body.classList.contains('is-readonly');
+    const canEditNow = ['admin','manager','operator'].includes(currentUser?.rol);
 
     let html = `<div class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="lbl">Total unitati</div><div class="val">${nrTotalUnit}</div><div class="meta">in cladire</div></div>
@@ -2801,7 +2960,7 @@ async function renderSetari() {
       <td style="font-size:12px;color:var(--sub)">${escH(s.descriere||'')}</td>
     </tr>`).join('');
     if (canEdit) {
-      tbody.innerHTML += `<tr><td colspan="3" style="padding-top:14px"><button class="btn btn-success" onclick="salveazaSetari()">💾 Salveaza modificari</button></td></tr>`;
+      tbody.innerHTML += `<tr><td colspan="3" style="padding-top:14px"><button class="btn btn-success btn-save-setari" onclick="salveazaSetari()">💾 Salveaza modificari</button></td></tr>`;
     }
   } catch (e) {
     document.querySelector('#setari-tbl tbody').innerHTML = `<tr><td colspan="3" style="color:var(--red)">Eroare: ${e.message}</td></tr>`;
@@ -2809,7 +2968,7 @@ async function renderSetari() {
 }
 
 async function salveazaSetari() {
-  if (!canEdit()) return;
+  if (!canEditSetari()) return;
   const inputs = document.querySelectorAll('.setare-inp');
   let n = 0;
   for (const inp of inputs) {
