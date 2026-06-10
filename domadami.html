@@ -2526,28 +2526,33 @@ async function renderAnalizaFurnizori() {
       api('/domadami_citiri?select=contor_id,an,luna,data_citire,index_final,consum_calculat,nr_luni_acoperite,este_estimat,este_forfait&order=data_citire.asc')
     ]);
 
-    // Pentru fiecare modul + lună: extrag prima/ultima data_citire DOMADAMI
-    // si numarul de citiri / contoare distincte
-    const citiriPerModul = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
+    // Pentru fiecare modul × lună: grupez citirile pe luna calendaristica (an*100+luna)
+    // Stochez: data_citire MAXIMA + nr citiri + contoare distincte pentru fiecare cheie
+    const dataMaxPerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
+    const nrCitiriPerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
+    const contoarePerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
     citiri.forEach(ci => {
       const ct = _contoare.find(c => c.id === ci.contor_id);
       if (!ct) return;
-      // Apometrele apa calda (modul=RAJA, tip=apometru_apa_calda) participa SI la GAZE
       const moduleAplicabile = [ct.modul];
       if (ct.tip === 'apometru_apa_calda') moduleAplicabile.push('GAZE');
+      const k = ci.an * 100 + ci.luna;
       moduleAplicabile.forEach(m => {
-        const key = `${ci.an}-${ci.luna}`;
-        if (!citiriPerModul[m]) return;
-        if (!citiriPerModul[m][key]) citiriPerModul[m][key] = { dataMin: null, dataMax: null, nrCitiri: 0, contoareDistincte: new Set() };
-        const c = citiriPerModul[m][key];
-        c.nrCitiri++;
-        c.contoareDistincte.add(ci.contor_id);
-        if (ci.data_citire) {
-          if (!c.dataMin || ci.data_citire < c.dataMin) c.dataMin = ci.data_citire;
-          if (!c.dataMax || ci.data_citire > c.dataMax) c.dataMax = ci.data_citire;
+        if (!dataMaxPerLuna[m]) return;
+        if (ci.data_citire && (!dataMaxPerLuna[m][k] || ci.data_citire > dataMaxPerLuna[m][k])) {
+          dataMaxPerLuna[m][k] = ci.data_citire;
         }
+        nrCitiriPerLuna[m][k] = (nrCitiriPerLuna[m][k] || 0) + 1;
+        if (!contoarePerLuna[m][k]) contoarePerLuna[m][k] = new Set();
+        contoarePerLuna[m][k].add(ci.contor_id);
       });
     });
+
+    // Pentru o cheie data k (= an*100+luna), gaseste cea mai recenta cheie < k care are data_citire (= "luna anterioara cu citiri")
+    function lunaAnterioaraCuCitiri(m, k) {
+      const cheiAnterioare = Object.keys(dataMaxPerLuna[m]).map(Number).filter(x => x < k).sort((a,b) => b - a);
+      return cheiAnterioare.length > 0 ? cheiAnterioare[0] : null;
+    }
 
     const fmtDate = d => d ? new Date(d).toLocaleDateString('ro-RO') : '—';
     const daysBetween = (d1, d2) => {
@@ -2586,14 +2591,25 @@ async function renderAnalizaFurnizori() {
             <th style="text-align:right">Contoare</th>
           </tr></thead><tbody>`;
         fact.forEach(f => {
-          const key = `${f.an}-${f.luna}`;
-          const c = citiriPerModul[m][key] || { dataMin:null, dataMax:null, nrCitiri:0, contoareDistincte:new Set() };
+          const k = f.an * 100 + f.luna;
+          const dataMax = dataMaxPerLuna[m][k] || null;
+          const kAnt = lunaAnterioaraCuCitiri(m, k);
+          const dataMin = kAnt ? dataMaxPerLuna[m][kAnt] : null;
+          const nrCt = nrCitiriPerLuna[m][k] || 0;
+          const nrContoare = contoarePerLuna[m][k]?.size || 0;
           const periodaFurnizor = f.perioada_de && f.perioada_pana_la ? `${fmtDate(f.perioada_de)} → ${fmtDate(f.perioada_pana_la)}` : '<span style="color:var(--sub)">—</span>';
-          const periodaDomadami = c.dataMin && c.dataMax ? (c.dataMin === c.dataMax ? fmtDate(c.dataMin) : `${fmtDate(c.dataMin)} → ${fmtDate(c.dataMax)}`) : '<span style="color:var(--sub)">— nimic citit</span>';
+          let periodaDomadami;
+          if (dataMin && dataMax) {
+            periodaDomadami = `${fmtDate(dataMin)} → ${fmtDate(dataMax)}`;
+          } else if (dataMax) {
+            periodaDomadami = `<span style="color:var(--sub)">(fara init)</span> → ${fmtDate(dataMax)}`;
+          } else {
+            periodaDomadami = '<span style="color:var(--sub)">— nimic citit</span>';
+          }
           // Decalaj zile între perioada_pana_la furnizor și dataMax DOMADAMI
           let decalajHTML = '<span style="color:var(--sub)">—</span>';
-          if (f.perioada_pana_la && c.dataMax) {
-            const dz = daysBetween(f.perioada_pana_la, c.dataMax);
+          if (f.perioada_pana_la && dataMax) {
+            const dz = daysBetween(f.perioada_pana_la, dataMax);
             const cls = Math.abs(dz) <= 3 ? 'b-green' : (Math.abs(dz) <= 10 ? 'b-gold' : 'b-red');
             const sign = dz > 0 ? '+' : '';
             decalajHTML = `<span class="badge ${cls}">${sign}${dz} zile</span>`;
@@ -2610,7 +2626,7 @@ async function renderAnalizaFurnizori() {
             <td style="font-size:12px">${periodaFurnizor}</td>
             <td style="font-size:12px">${periodaDomadami}</td>
             <td style="text-align:center">${decalajHTML}</td>
-            <td class="num" style="font-size:12px;color:var(--sub)">${c.nrCitiri > 0 ? `${c.contoareDistincte.size} (${c.nrCitiri} citiri)` : '—'}</td>
+            <td class="num" style="font-size:12px;color:var(--sub)">${nrCt > 0 ? `${nrContoare} (${nrCt} citiri)` : '—'}</td>
           </tr>`;
         });
         html += '</tbody></table>';
