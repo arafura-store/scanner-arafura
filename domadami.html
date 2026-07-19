@@ -120,6 +120,17 @@ body.is-viewer .role-banner.viewer{display:block}
 .alert .ico{font-size:20px;flex-shrink:0}
 .alert .title{font-weight:700;font-size:13px;margin-bottom:3px}
 
+/* BANNER CONTOARE BLOCATE — atentionare mare rosie pulsanta */
+.banner-blocate{background:linear-gradient(135deg,#dc2626 0%,#991b1b 100%);color:#fff;padding:18px 22px;border-radius:12px;margin-bottom:20px;box-shadow:0 4px 12px rgba(220,38,38,0.35);animation:banner-pulse 1.5s ease-in-out infinite;border:3px solid #fca5a5}
+.banner-blocate .banner-title{font-size:20px;font-weight:800;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+.banner-blocate .banner-title .ico{font-size:28px;animation:banner-shake 0.6s ease-in-out infinite}
+.banner-blocate .banner-body{font-size:14px;line-height:1.6}
+.banner-blocate ul{margin:8px 0 0 22px;padding:0}
+.banner-blocate li{padding:3px 0;font-weight:600}
+.banner-blocate .banner-note{margin-top:10px;font-size:12px;font-style:italic;opacity:0.95;padding:8px 12px;background:rgba(0,0,0,0.15);border-radius:6px}
+@keyframes banner-pulse{0%,100%{transform:scale(1);box-shadow:0 4px 12px rgba(220,38,38,0.35)}50%{transform:scale(1.008);box-shadow:0 6px 20px rgba(220,38,38,0.55)}}
+@keyframes banner-shake{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
+
 /* Tabele */
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th{background:#f9fafb;padding:9px 12px;text-align:left;font-weight:700;font-size:11px;color:var(--sub);text-transform:uppercase;border-bottom:2px solid var(--border)}
@@ -300,6 +311,11 @@ body.is-viewer .role-banner.viewer{display:block}
     </div>
 
     <div class="content">
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- BANNER CONTOARE BLOCATE — atentionare permanenta    -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div id="banner-blocate" class="banner-blocate" style="display:none"></div>
 
       <!-- ═══════════════════════════════════════════════════ -->
       <!-- MOD TEREN — citire contoare pe iPhone               -->
@@ -977,6 +993,12 @@ function goPage(pageId, navEl) {
   document.getElementById('page-' + pageId).classList.add('active');
   if (navEl) navEl.classList.add('active');
   document.getElementById('page-title').textContent = PAGE_TITLES[pageId] || pageId;
+  // Banner contoare blocate: ascuns pe pagina TEREN (interfata mobila curata), afisat pe restul
+  const bn = document.getElementById('banner-blocate');
+  if (bn) {
+    if (pageId === 'teren') bn.style.display = 'none';
+    else renderBannerContoareBlocate();
+  }
   refreshPage(pageId);
 }
 function refreshPage(pageId) {
@@ -1000,7 +1022,84 @@ function refreshPage(pageId) {
 // ═══════════════════════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// BANNER CONTOARE BLOCATE — atentionare permanenta pentru
+// apometre suspecte de blocaj (necesita inlocuire fizica)
+// ═══════════════════════════════════════════════════════════════
+async function renderBannerContoareBlocate() {
+  const bn = document.getElementById('banner-blocate');
+  if (!bn) return;
+  try {
+    // Toate citirile ultimelor 6 luni, doar contoare active
+    const citiri = await api('/domadami_citiri?select=contor_id,an,luna,data_citire,index_final,este_estimat,observatii&order=data_citire.desc');
+    // Grupam pe contor
+    const perContor = {};
+    citiri.forEach(c => {
+      if (!perContor[c.contor_id]) perContor[c.contor_id] = [];
+      perContor[c.contor_id].push(c);
+    });
+
+    const probleme = [];
+    Object.entries(perContor).forEach(([cid, lst]) => {
+      const ct = _contoare.find(c => c.id == cid && c.activ);
+      if (!ct) return;
+
+      // Criteriu 1: ultima citire estimata cu observatie "BLOCAT" sau "oficiu"
+      const ultima = lst[0];
+      const obs = (ultima.observatii || '').toLowerCase();
+      const estBlocat = ultima.este_estimat && (obs.includes('blocat') || obs.includes('oficiu'));
+
+      // Criteriu 2: 3+ citiri consecutive cu acelasi index (suspect blocaj)
+      let idxCount = 1;
+      for (let i = 1; i < Math.min(lst.length, 6); i++) {
+        if (parseFloat(lst[i].index_final) === parseFloat(lst[0].index_final)) idxCount++;
+        else break;
+      }
+      const suspectBlocaj = idxCount >= 3;
+
+      if (estBlocat || suspectBlocaj) {
+        const unit = _unitati.find(u => u.id === ct.unitate_id);
+        const numeUnit = unit ? unit.cod : (ct.tip === 'general' ? 'GENERAL' : '—');
+        probleme.push({
+          id: ct.id,
+          modul: ct.modul,
+          unitate: numeUnit,
+          denumire: ct.denumire,
+          index: lst[0].index_final,
+          luniConstante: idxCount,
+          motiv: estBlocat ? 'BLOCAT confirmat' : `Suspect blocaj (${idxCount} luni consecutive index constant ${lst[0].index_final})`
+        });
+      }
+    });
+
+    if (probleme.length === 0) {
+      bn.style.display = 'none';
+      return;
+    }
+
+    // Sortare: RAJA/apometre primul, apoi ENEL/GAZE
+    probleme.sort((a,b) => (a.modul + a.unitate).localeCompare(b.modul + b.unitate));
+
+    const rows = probleme.map(p =>
+      `<li><b>${p.modul} · ${p.unitate}</b> — ${p.denumire}: <span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:4px">${p.motiv}</span></li>`
+    ).join('');
+
+    bn.innerHTML = `
+      <div class="banner-title"><span class="ico">⚠️</span> ATENTIE — ${probleme.length} apometre BLOCATE / SUSPECTE — necesita INLOCUIRE FIZICA</div>
+      <div class="banner-body">
+        <ul>${rows}</ul>
+        <div class="banner-note">📌 Pentru aceste apometre, consumul este ESTIMAT din oficiu. Pentru facturare corecta, contactati un instalator sa inlocuiasca contoarele defecte.</div>
+      </div>
+    `;
+    bn.style.display = 'block';
+  } catch (e) {
+    console.error('Eroare renderBannerContoareBlocate:', e);
+    bn.style.display = 'none';
+  }
+}
+
 async function renderDashboard() {
+  renderBannerContoareBlocate(); // atentionare permanenta contoare blocate
   const { an, luna } = getLuna();
   document.getElementById('kpi-luna').textContent = LUNI_RO[luna-1];
   document.getElementById('kpi-luna-meta').textContent = an + ' · ' + (currentUser?.nume_afisat || '');
