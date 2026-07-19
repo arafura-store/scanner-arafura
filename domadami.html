@@ -993,11 +993,11 @@ function goPage(pageId, navEl) {
   document.getElementById('page-' + pageId).classList.add('active');
   if (navEl) navEl.classList.add('active');
   document.getElementById('page-title').textContent = PAGE_TITLES[pageId] || pageId;
-  // Banner contoare blocate: ascuns pe pagina TEREN (interfata mobila curata), afisat pe restul
+  // Banner contoare blocate: afisat DOAR pe modulul RAJA (apometrele blocate sunt RAJA-only)
   const bn = document.getElementById('banner-blocate');
   if (bn) {
-    if (pageId === 'teren') bn.style.display = 'none';
-    else renderBannerContoareBlocate();
+    if (pageId === 'raja') renderBannerContoareBlocate();
+    else bn.style.display = 'none';
   }
   refreshPage(pageId);
 }
@@ -1099,7 +1099,6 @@ async function renderBannerContoareBlocate() {
 }
 
 async function renderDashboard() {
-  renderBannerContoareBlocate(); // atentionare permanenta contoare blocate
   const { an, luna } = getLuna();
   document.getElementById('kpi-luna').textContent = LUNI_RO[luna-1];
   document.getElementById('kpi-luna-meta').textContent = an + ' · ' + (currentUser?.nume_afisat || '');
