@@ -2374,7 +2374,7 @@ async function incarcaFacturaPolaris() {
 }
 
 async function salveazaFacturaPolaris() {
-  if (!canEdit()) return;
+  if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('pl-total-lei').value) || 0;
   if (total_lei <= 0) { toast('Completeaza total factura', 'err'); return; }
