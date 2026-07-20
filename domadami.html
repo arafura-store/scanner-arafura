@@ -2938,7 +2938,9 @@ async function renderSituatieAnsamblu() {
     // ═══ SECTIUNE INDEXI COMPLETI — matrice contor × data_citire ═══
     // Fetch DOAR citirile REALE (excludem estimarile — Eugen vrea doar ce a citit Bogdan si de pe facturi)
     const toateCitirile = await api('/domadami_citiri?este_estimat=eq.false&select=contor_id,an,luna,data_citire,index_final,este_estimat,observatii&order=data_citire.asc');
-    const contActive = _contoare.filter(c => c.activ).sort((a,b) => a.id - b.id);
+    // Fetch TOATE contoarele (inclusiv INACTIVE) pentru istoric complet
+    const toateContoarele = await api('/domadami_contoare?select=*&order=id');
+    const contActive = toateContoarele.sort((a,b) => a.id - b.id);
 
     // Group citiri per contor
     const perContor = {};
@@ -2990,8 +2992,10 @@ async function renderSituatieAnsamblu() {
         const citiriCt = perContor[ct.id] || [];
         const byDate = {};
         citiriCt.forEach(c => { byDate[c.data_citire] = c; });
-        html += `<tr style="border-bottom:1px solid #f3f4f6">
-          <td style="padding:5px 10px;font-weight:700;color:${meta.color};white-space:nowrap">${u}</td>
+        const rowStyle = ct.activ ? '' : 'background:#f3f4f6;opacity:0.75';
+        const badgeInactiv = ct.activ ? '' : ' <span style="background:#6b7280;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700">INACTIV</span>';
+        html += `<tr style="border-bottom:1px solid #f3f4f6;${rowStyle}">
+          <td style="padding:5px 10px;font-weight:700;color:${meta.color};white-space:nowrap">${u}${badgeInactiv}</td>
           <td style="padding:5px 10px;color:var(--sub);white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${escH(ct.denumire)}">${escH(ct.denumire)}</td>`;
         allDates.forEach(d => {
           const c = byDate[d];
