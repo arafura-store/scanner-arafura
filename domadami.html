@@ -3441,7 +3441,6 @@ async function renderAnalizaFurnizori() {
     // Stochez: data_citire MAXIMA + nr citiri + contoare distincte pentru fiecare cheie
     const dataMaxPerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
     const nrCitiriPerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
-    const nrEstimatePerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
     const contoarePerLuna = { GAZE:{}, ENEL:{}, RAJA:{}, POLARIS:{} };
     citiri.forEach(ci => {
       const ct = _contoare.find(c => c.id === ci.contor_id);
@@ -3455,7 +3454,6 @@ async function renderAnalizaFurnizori() {
           dataMaxPerLuna[m][k] = ci.data_citire;
         }
         nrCitiriPerLuna[m][k] = (nrCitiriPerLuna[m][k] || 0) + 1;
-        if (ci.este_estimat) nrEstimatePerLuna[m][k] = (nrEstimatePerLuna[m][k] || 0) + 1;
         if (!contoarePerLuna[m][k]) contoarePerLuna[m][k] = new Set();
         contoarePerLuna[m][k].add(ci.contor_id);
       });
@@ -3511,25 +3509,13 @@ async function renderAnalizaFurnizori() {
           const kAnt = lunaAnterioaraCuCitiri(m, k);
           const dataMin = kAnt ? dataMaxPerLuna[m][kAnt] : null;
           const nrCt = nrCitiriPerLuna[m][k] || 0;
-          const nrEst = nrEstimatePerLuna[m][k] || 0;
           const nrContoare = contoarePerLuna[m][k]?.size || 0;
-          // Badge estimare
-          let badgeEst = '';
-          if (nrCt > 0 && nrEst > 0) {
-            if (nrEst === nrCt) {
-              badgeEst = ` <span class="badge b-orange" style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-weight:700">⚠️ TOATE ESTIMATE</span>`;
-            } else if (nrEst >= nrCt / 2) {
-              badgeEst = ` <span class="badge" style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-weight:700">⚠️ ${nrEst}/${nrCt} EST</span>`;
-            } else {
-              badgeEst = ` <span class="badge" style="font-size:10px;background:#e0f2fe;color:#075985;padding:1px 6px;border-radius:4px;font-weight:600">${nrEst}/${nrCt} est</span>`;
-            }
-          }
           const periodaFurnizor = f.perioada_de && f.perioada_pana_la ? `${fmtDate(f.perioada_de)} → ${fmtDate(f.perioada_pana_la)}` : '<span style="color:var(--sub)">—</span>';
           let periodaDomadami;
           if (dataMin && dataMax) {
-            periodaDomadami = `${fmtDate(dataMin)} → ${fmtDate(dataMax)}${badgeEst}`;
+            periodaDomadami = `${fmtDate(dataMin)} → ${fmtDate(dataMax)}`;
           } else if (dataMax) {
-            periodaDomadami = `<span style="color:var(--sub)">(fara init)</span> → ${fmtDate(dataMax)}${badgeEst}`;
+            periodaDomadami = `<span style="color:var(--sub)">(fara init)</span> → ${fmtDate(dataMax)}`;
           } else {
             periodaDomadami = '<span style="color:var(--sub)">— nimic citit</span>';
           }
