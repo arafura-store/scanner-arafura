@@ -719,10 +719,34 @@ body.is-viewer .role-banner.viewer{display:block}
                 <div class="title">Luna folosită per modul (poți combina luni diferite pe aceeași facturare)</div>
                 Exemplu: ENEL+GAZE pe martie, RAJA+POLARIS pe aprilie. Default = luna globală sus.
                 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🔥 GAZE</label><select id="cent-luna-GAZE" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">⚡ ENEL</label><select id="cent-luna-ENEL" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">💧 RAJA</label><select id="cent-luna-RAJA" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🗑️ POLARIS</label><select id="cent-luna-POLARIS" onchange="renderCentralizator()" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600"></select></div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🔥 GAZE</label>
+                    <div style="display:flex;gap:4px;align-items:center">
+                      <select id="cent-luna-GAZE-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
+                      <span style="color:var(--sub);font-size:11px">→</span>
+                      <select id="cent-luna-GAZE-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                    </div>
+                  </div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">⚡ ENEL</label>
+                    <div style="display:flex;gap:4px;align-items:center">
+                      <select id="cent-luna-ENEL-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
+                      <span style="color:var(--sub);font-size:11px">→</span>
+                      <select id="cent-luna-ENEL-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                    </div>
+                  </div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">💧 RAJA</label>
+                    <div style="display:flex;gap:4px;align-items:center">
+                      <select id="cent-luna-RAJA-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
+                      <span style="color:var(--sub);font-size:11px">→</span>
+                      <select id="cent-luna-RAJA-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                    </div>
+                  </div>
+                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🗑️ POLARIS</label>
+                    <div style="display:flex;gap:4px;align-items:center">
+                      <select id="cent-luna-POLARIS-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
+                      <span style="color:var(--sub);font-size:11px">→</span>
+                      <select id="cent-luna-POLARIS-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                    </div>
+                  </div>
                 </div>
                 <div style="margin-top:8px;text-align:right"><button class="btn btn-secondary" style="padding:4px 12px;font-size:11px" onclick="resetLuniCentralizator()">↻ Resetează la luna globală</button></div>
               </div>
@@ -2712,52 +2736,104 @@ function populeazaSelectoareCentralizator() {
   const selGlobal = document.getElementById('luna-globala');
   if (!selGlobal) return;
   ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
-    const sel = document.getElementById('cent-luna-' + m);
-    if (sel && sel.options.length === 0) {
-      sel.innerHTML = selGlobal.innerHTML;
-      sel.value = selGlobal.value;
-    }
+    ['de','pana'].forEach(tip => {
+      const sel = document.getElementById('cent-luna-' + m + '-' + tip);
+      if (sel && sel.options.length === 0) {
+        sel.innerHTML = selGlobal.innerHTML;
+        sel.value = selGlobal.value;
+      }
+    });
   });
 }
 
 function resetLuniCentralizator() {
   const selGlobal = document.getElementById('luna-globala');
   ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
-    const sel = document.getElementById('cent-luna-' + m);
-    if (sel) sel.value = selGlobal.value;
+    ['de','pana'].forEach(tip => {
+      const sel = document.getElementById('cent-luna-' + m + '-' + tip);
+      if (sel) sel.value = selGlobal.value;
+    });
   });
   renderCentralizator();
 }
 
-function getLunaModul(modul) {
-  const sel = document.getElementById('cent-luna-' + modul);
-  if (sel && sel.value) {
-    const v = parseInt(sel.value);
-    return { an: Math.floor(v/100), luna: v%100 };
+// Returneaza intervalul [de, pana] pentru un modul — auto-corectat daca pana < de
+function getIntervalModul(modul) {
+  const selDe = document.getElementById('cent-luna-' + modul + '-de');
+  const selPana = document.getElementById('cent-luna-' + modul + '-pana');
+  const vDefault = getLuna();
+  const vDefaultK = vDefault.an * 100 + vDefault.luna;
+  let vDe = (selDe && selDe.value) ? parseInt(selDe.value) : vDefaultK;
+  let vPana = (selPana && selPana.value) ? parseInt(selPana.value) : vDefaultK;
+  // Auto-corectare: pana >= de
+  if (vPana < vDe) {
+    vPana = vDe;
+    if (selPana) selPana.value = String(vDe);
   }
-  return getLuna();
+  // Generez lista de luni in interval
+  const luni = [];
+  let cur = vDe;
+  while (cur <= vPana) {
+    luni.push({ an: Math.floor(cur/100), luna: cur%100 });
+    // Incrementez o luna (12→urmator an luna 1)
+    let l = cur%100, a = Math.floor(cur/100);
+    l++; if (l > 12) { l = 1; a++; }
+    cur = a*100 + l;
+  }
+  return { de: {an: Math.floor(vDe/100), luna: vDe%100}, pana: {an: Math.floor(vPana/100), luna: vPana%100}, luni };
+}
+
+// Compatibilitate: getLunaModul returneaza intervalul (pentru fisa etc.)
+function getLunaModul(modul) {
+  return getIntervalModul(modul).de;
+}
+
+// Debounce pentru refresh centralizator (800ms — user termina de selectat)
+let _centralizatorDebounce = null;
+function onCentralizatorChange() {
+  if (_centralizatorDebounce) clearTimeout(_centralizatorDebounce);
+  _centralizatorDebounce = setTimeout(() => { renderCentralizator(); _centralizatorDebounce = null; }, 800);
 }
 
 async function renderCentralizator() {
   populeazaSelectoareCentralizator();
   document.getElementById('centralizator-body').innerHTML = '<div class="spinner">Se calculeaza...</div>';
   try {
-    const lunaPerModul = {
-      GAZE:    getLunaModul('GAZE'),
-      ENEL:    getLunaModul('ENEL'),
-      RAJA:    getLunaModul('RAJA'),
-      POLARIS: getLunaModul('POLARIS')
+    // Interval per modul (poate fi 1 luna sau mai multe)
+    const intervalPerModul = {
+      GAZE:    getIntervalModul('GAZE'),
+      ENEL:    getIntervalModul('ENEL'),
+      RAJA:    getIntervalModul('RAJA'),
+      POLARIS: getIntervalModul('POLARIS')
     };
-    // 4 fetch-uri separate (calcule + facturi) pentru fiecare modul cu luna lui
+    // Pentru compatibilitate: lunaPerModul = luna START (folosit in fisa)
+    const lunaPerModul = {
+      GAZE:    intervalPerModul.GAZE.de,
+      ENEL:    intervalPerModul.ENEL.de,
+      RAJA:    intervalPerModul.RAJA.de,
+      POLARIS: intervalPerModul.POLARIS.de
+    };
+    // Filter PostgREST cu OR pe (an,luna) — construim conditie or=(and(an.eq.X,luna.eq.Y),and(...))
+    const buildOrFilter = (luni) => {
+      if (luni.length === 0) return null;
+      if (luni.length === 1) return `an=eq.${luni[0].an}&luna=eq.${luni[0].luna}`;
+      const parts = luni.map(l => `and(an.eq.${l.an},luna.eq.${l.luna})`).join(',');
+      return `or=(${parts})`;
+    };
+    const fGAZE = buildOrFilter(intervalPerModul.GAZE.luni);
+    const fENEL = buildOrFilter(intervalPerModul.ENEL.luni);
+    const fRAJA = buildOrFilter(intervalPerModul.RAJA.luni);
+    const fPOLARIS = buildOrFilter(intervalPerModul.POLARIS.luni);
+
     const [calcGAZE, calcENEL, calcRAJA, calcPOLARIS, factGAZE, factENEL, factRAJA, factPOLARIS, chiriasi, contracte] = await Promise.all([
-      api(`/domadami_calcule?modul=eq.GAZE&an=eq.${lunaPerModul.GAZE.an}&luna=eq.${lunaPerModul.GAZE.luna}&select=*`),
-      api(`/domadami_calcule?modul=eq.ENEL&an=eq.${lunaPerModul.ENEL.an}&luna=eq.${lunaPerModul.ENEL.luna}&select=*`),
-      api(`/domadami_calcule?modul=eq.RAJA&an=eq.${lunaPerModul.RAJA.an}&luna=eq.${lunaPerModul.RAJA.luna}&select=*`),
-      api(`/domadami_calcule?modul=eq.POLARIS&an=eq.${lunaPerModul.POLARIS.an}&luna=eq.${lunaPerModul.POLARIS.luna}&select=*`),
-      api(`/domadami_facturi?modul=eq.GAZE&an=eq.${lunaPerModul.GAZE.an}&luna=eq.${lunaPerModul.GAZE.luna}&select=total_factura_lei`),
-      api(`/domadami_facturi?modul=eq.ENEL&an=eq.${lunaPerModul.ENEL.an}&luna=eq.${lunaPerModul.ENEL.luna}&select=total_factura_lei`),
-      api(`/domadami_facturi?modul=eq.RAJA&an=eq.${lunaPerModul.RAJA.an}&luna=eq.${lunaPerModul.RAJA.luna}&select=total_factura_lei`),
-      api(`/domadami_facturi?modul=eq.POLARIS&an=eq.${lunaPerModul.POLARIS.an}&luna=eq.${lunaPerModul.POLARIS.luna}&select=total_factura_lei`),
+      api(`/domadami_calcule?modul=eq.GAZE&${fGAZE}&select=*`),
+      api(`/domadami_calcule?modul=eq.ENEL&${fENEL}&select=*`),
+      api(`/domadami_calcule?modul=eq.RAJA&${fRAJA}&select=*`),
+      api(`/domadami_calcule?modul=eq.POLARIS&${fPOLARIS}&select=*`),
+      api(`/domadami_facturi?modul=eq.GAZE&${fGAZE}&select=total_factura_lei,an,luna`),
+      api(`/domadami_facturi?modul=eq.ENEL&${fENEL}&select=total_factura_lei,an,luna`),
+      api(`/domadami_facturi?modul=eq.RAJA&${fRAJA}&select=total_factura_lei,an,luna`),
+      api(`/domadami_facturi?modul=eq.POLARIS&${fPOLARIS}&select=total_factura_lei,an,luna`),
       api('/domadami_chiriasi?select=*'),
       api('/domadami_contracte_chirie?select=*&data_end=is.null')
     ]);
@@ -2776,7 +2852,9 @@ async function renderCentralizator() {
     });
     calcule.forEach(c => {
       if (matrix[c.unitate_id]) {
-        matrix[c.unitate_id][c.modul] = parseFloat(c.cost_total) || 0;
+        // Cumulare pe interval — ADAUG (nu overwrite) daca sunt multiple luni
+        matrix[c.unitate_id][c.modul] = (matrix[c.unitate_id][c.modul] || 0) + (parseFloat(c.cost_total) || 0);
+        // breakdown pastrez ultima luna (informativ)
         matrix[c.unitate_id].breakdown[c.modul] = c.breakdown_json;
       }
     });
@@ -2807,13 +2885,19 @@ async function renderCentralizator() {
     const pierderiFirma = totalFactura - totalFacturat;
 
     // Cache pentru export
-    _centralizatorData = { matrix, chiriasPerUnitate, lunaPerModul, totalFactura, totalFacturat, totalPerModul };
+    _centralizatorData = { matrix, chiriasPerUnitate, lunaPerModul, intervalPerModul, totalFactura, totalFacturat, totalPerModul };
 
-    // Render KPI cu luna per modul
-    const lunaScrt = m => `${LUNI_RO[lunaPerModul[m].luna-1].substring(0,3)} ${lunaPerModul[m].an}`;
+    // Render KPI cu interval per modul (afiseaza "apr" sau "apr-iun" daca sunt mai multe luni)
+    const intervalScrt = m => {
+      const it = intervalPerModul[m];
+      const s1 = `${LUNI_RO[it.de.luna-1].substring(0,3)} ${it.de.an}`;
+      const s2 = `${LUNI_RO[it.pana.luna-1].substring(0,3)} ${it.pana.an}`;
+      if (it.luni.length === 1) return s1;
+      return `${s1} → ${s2} (${it.luni.length} luni)`;
+    };
     let html = `<div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:14px;line-height:1.4">🔥 ${lunaScrt('GAZE')}<br>⚡ ${lunaScrt('ENEL')}<br>💧 ${lunaScrt('RAJA')}<br>🗑️ ${lunaScrt('POLARIS')}</div></div>
-      <div class="kpi gold"><div class="lbl">Total facturi furnizori</div><div class="val">${fmt0(totalFactura)} RON</div><div class="meta">${facturi.length}/4 introduse</div></div>
+      <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:13px;line-height:1.4">🔥 ${intervalScrt('GAZE')}<br>⚡ ${intervalScrt('ENEL')}<br>💧 ${intervalScrt('RAJA')}<br>🗑️ ${intervalScrt('POLARIS')}</div></div>
+      <div class="kpi gold"><div class="lbl">Total facturi furnizori</div><div class="val">${fmt0(totalFactura)} RON</div><div class="meta">${facturi.length} facturi in interval</div></div>
       <div class="kpi green"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalFacturat)} RON</div><div class="meta">${Object.values(matrix).filter(r => r.GAZE+r.ENEL+r.RAJA+r.POLARIS > 0).length} unitati</div></div>
       <div class="kpi ${pierderiFirma>50?'red':'green'}"><div class="lbl">Diferenta (pierderi DOMADAMI)</div><div class="val">${fmt0(pierderiFirma)} RON</div><div class="meta">${totalFactura > 0 ? fmt(pierderiFirma/totalFactura*100, 1) : 0}%</div></div>
     </div>`;
@@ -2892,12 +2976,21 @@ function openFisa(unitateId) {
   const r = _centralizatorData.matrix[unitateId];
   const ch = (_centralizatorData.chiriasPerUnitate[unitateId] || []).map(c => c.nume).join(', ');
   const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
+  const ipm = _centralizatorData.intervalPerModul || null;
   const lpm = _centralizatorData.lunaPerModul;
+  const perModulLbl = m => {
+    if (!ipm) return `${LUNI_RO[lpm[m].luna-1]} ${lpm[m].an}`;
+    const it = ipm[m];
+    const s1 = `${LUNI_RO[it.de.luna-1].substring(0,3)} ${it.de.an}`;
+    if (it.luni.length === 1) return s1;
+    const s2 = `${LUNI_RO[it.pana.luna-1].substring(0,3)} ${it.pana.an}`;
+    return `${s1} → ${s2} (${it.luni.length}l)`;
+  };
   document.getElementById('fisa-titlu').textContent = `📄 Fisa ${u.cod} — ${ch || u.nume}`;
 
   let html = `<div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:18px">
     <div class="kpi gold"><div class="lbl">TOTAL DE PLATA</div><div class="val">${fmt(total, 2)} RON</div></div>
-    <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:13px;line-height:1.5">🔥 ${LUNI_RO[lpm.GAZE.luna-1]} ${lpm.GAZE.an}<br>⚡ ${LUNI_RO[lpm.ENEL.luna-1]} ${lpm.ENEL.an}<br>💧 ${LUNI_RO[lpm.RAJA.luna-1]} ${lpm.RAJA.an}<br>🗑️ ${LUNI_RO[lpm.POLARIS.luna-1]} ${lpm.POLARIS.an}</div></div>
+    <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:13px;line-height:1.5">🔥 ${perModulLbl('GAZE')}<br>⚡ ${perModulLbl('ENEL')}<br>💧 ${perModulLbl('RAJA')}<br>🗑️ ${perModulLbl('POLARIS')}</div></div>
   </div>`;
 
   ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
