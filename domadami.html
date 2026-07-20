@@ -289,6 +289,7 @@ body.is-viewer .role-banner.viewer{display:block}
     <div class="nav-item" data-page="raja" onclick="goPage('raja',this)"><span class="ico">💧</span><span>RAJA</span></div>
     <div class="nav-item" data-page="polaris" onclick="goPage('polaris',this)"><span class="ico">🗑️</span><span>POLARIS</span></div>
     <div class="nav-sep-lbl">RAPOARTE</div>
+    <div class="nav-item" data-page="situatie" onclick="goPage('situatie',this)"><span class="ico">📊</span><span>Situatie ansamblu</span></div>
     <div class="nav-item" data-page="centralizator" onclick="goPage('centralizator',this)"><span class="ico">📋</span><span>Centralizator</span></div>
     <div class="nav-item" data-page="analiza" onclick="goPage('analiza',this)"><span class="ico">📈</span><span>Analiza furnizori</span></div>
     <div class="nav-item" data-page="chiriasi" onclick="goPage('chiriasi',this)"><span class="ico">👥</span><span>Chiriasi & Unitati</span></div>
@@ -700,6 +701,23 @@ body.is-viewer .role-banner.viewer{display:block}
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
+      <!-- SITUATIE ANSAMBLU — facturi + citiri + distributie   -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-situatie">
+        <div class="card">
+          <div class="card-hdr">
+            <h3>📊 Situatie ansamblu — vedere completa</h3>
+            <div><button class="btn btn-primary" onclick="renderSituatieAnsamblu()">🔄 Refresh</button></div>
+          </div>
+          <div class="card-body" style="padding:14px;background:#eff6ff;color:#1e3a8a;font-size:13px">
+            Pentru fiecare modul si luna vezi:<br>
+            📄 <b>Factura furnizor</b> (data, serie/nr, perioada, valoare, cantitate, pret) · 👨 <b>Citiri Bogdan</b> (date, nr) · 📊 <b>Perioada consum aplicatie</b> · 💰 <b>Distributie chiriasi + pierderi</b>
+          </div>
+        </div>
+        <div id="situatie-body"><div class="spinner">Se incarca...</div></div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
       <!-- CENTRALIZATOR — matrice 24 × 4 + export              -->
       <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-centralizator">
@@ -1056,6 +1074,7 @@ const PAGE_TITLES = {
   teren:'📱 Citire contoare pe teren',
   dashboard:'Dashboard', gaze:'🔥 GAZE — Gaz Natural', enel:'⚡ ENEL — Energie Electrica',
   raja:'💧 RAJA — Apa', polaris:'🗑️ POLARIS — Salubritate',
+  situatie:'📊 Situatie ansamblu — facturi + citiri + distributie',
   centralizator:'📋 Centralizator lunar', analiza:'📈 Analiză furnizori',
   chiriasi:'👥 Chiriasi si Unitati', fisa:'📜 Fisa postului', setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
 };
@@ -1081,6 +1100,7 @@ function refreshPage(pageId) {
     enel: () => incarcaFacturaEnel(),
     raja: () => incarcaFacturaRaja(),
     polaris: () => incarcaFacturaPolaris(),
+    situatie: renderSituatieAnsamblu,
     centralizator: renderCentralizator,
     analiza: renderAnalizaFurnizori,
     fisa: renderFisaPostului,
@@ -2804,6 +2824,121 @@ let _centralizatorDebounce = null;
 function onCentralizatorChange() {
   if (_centralizatorDebounce) clearTimeout(_centralizatorDebounce);
   _centralizatorDebounce = setTimeout(() => { renderCentralizator(); _centralizatorDebounce = null; }, 800);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SITUATIE ANSAMBLU — vedere completa facturi + citiri + distributie
+// ═══════════════════════════════════════════════════════════════
+async function renderSituatieAnsamblu() {
+  const container = document.getElementById('situatie-body');
+  container.innerHTML = '<div class="spinner">Se incarca datele...</div>';
+  try {
+    const [facturi, citiri, calcule] = await Promise.all([
+      api('/domadami_facturi?select=*&order=modul,an.asc,luna.asc'),
+      api('/domadami_citiri?an=eq.2026&select=contor_id,an,luna,data_citire,este_estimat'),
+      api('/domadami_calcule?select=modul,an,luna,cost_total')
+    ]);
+
+    // Group citiri per (modul, an, luna) — apometre_apa_calda contribuie si la GAZE
+    const citiriPer = {};
+    citiri.forEach(c => {
+      const ct = _contoare.find(x => x.id === c.contor_id);
+      if (!ct) return;
+      const moduluri = [ct.modul];
+      if (ct.tip === 'apometru_apa_calda') moduluri.push('GAZE');
+      moduluri.forEach(m => {
+        const k = m + '_' + c.an + '_' + c.luna;
+        if (!citiriPer[k]) citiriPer[k] = [];
+        citiriPer[k].push(c);
+      });
+    });
+
+    // Suma calcule per (modul, an, luna)
+    const calcSum = {};
+    calcule.forEach(c => {
+      const k = c.modul + '_' + c.an + '_' + c.luna;
+      calcSum[k] = (calcSum[k] || 0) + parseFloat(c.cost_total || 0);
+    });
+
+    // Group facturi per modul
+    const perModul = { GAZE:[], ENEL:[], RAJA:[], POLARIS:[] };
+    facturi.forEach(f => { if (perModul[f.modul]) perModul[f.modul].push(f); });
+
+    const MOD_META = {
+      GAZE:{ic:'🔥', name:'GAZE', um:'mc', color:'#f59e0b'},
+      ENEL:{ic:'⚡', name:'ENEL', um:'kw', color:'#3b82f6'},
+      RAJA:{ic:'💧', name:'RAJA', um:'mc', color:'#06b6d4'},
+      POLARIS:{ic:'🗑️', name:'POLARIS', um:'—', color:'#8b5cf6'}
+    };
+
+    const fmtDt = d => d ? new Date(d).toLocaleDateString('ro-RO') : '—';
+
+    let html = '';
+    Object.entries(MOD_META).forEach(([mod, meta]) => {
+      const list = perModul[mod] || [];
+      html += `<div class="card" style="margin-bottom:16px;border-left:5px solid ${meta.color}">
+        <div class="card-hdr" style="background:${meta.color}15">
+          <h3>${meta.ic} ${meta.name} — ${list.length} facturi</h3>
+        </div>
+        <div class="card-body" style="padding:0">`;
+      if (list.length === 0) {
+        html += '<div style="padding:16px;color:var(--sub)">Nicio factura introdusa.</div>';
+      } else {
+        list.forEach(f => {
+          const k = mod + '_' + f.an + '_' + f.luna;
+          const cts = citiriPer[k] || [];
+          const ctsReale = cts.filter(c => !c.este_estimat).length;
+          const ctsEst = cts.filter(c => c.este_estimat).length;
+          const dates = [...new Set(cts.map(c => c.data_citire).filter(Boolean))].sort();
+          const distribuit = calcSum[k] || 0;
+          const cu = parseFloat(f.total_factura_lei) || 0;
+          const dif = cu - distribuit;
+          const difPct = cu > 0 ? (dif / cu * 100) : 0;
+          const difCls = Math.abs(difPct) < 3 ? '#16a34a' : (Math.abs(difPct) < 15 ? '#f59e0b' : '#dc2626');
+          const difBg = Math.abs(difPct) < 3 ? '#f0fdf4' : (Math.abs(difPct) < 15 ? '#fffbeb' : '#fef2f2');
+
+          html += `<div style="padding:14px 18px;border-bottom:1px solid #e5e7eb">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <div style="font-size:15px;font-weight:800;color:var(--dark)">📅 ${LUNI_RO[f.luna-1]} ${f.an}</div>
+              <div style="background:${difBg};color:${difCls};padding:4px 12px;border-radius:6px;font-weight:700;font-size:13px">
+                Pierderi: ${dif >= 0 ? '+' : ''}${fmt(dif, 2)} RON (${difPct >= 0 ? '+' : ''}${fmt(difPct, 1)}%)
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;font-size:12.5px">
+              <div style="background:#f9fafb;padding:10px;border-radius:6px">
+                <div style="font-weight:700;color:var(--sub);text-transform:uppercase;font-size:10px;margin-bottom:6px">📄 FACTURA FURNIZOR</div>
+                <div><b>${f.serie_factura || '—'}/${f.numar_factura || '—'}</b> · ${fmtDt(f.data_factura)}</div>
+                <div style="color:var(--sub);margin-top:3px">Perioada: ${fmtDt(f.perioada_de)} → ${fmtDt(f.perioada_pana_la)}</div>
+                <div style="margin-top:4px">CU TVA: <b>${fmt(cu, 2)}</b> · Fără TVA: ${f.valoare_fara_tva ? fmt(f.valoare_fara_tva, 2) : '<span style="color:#dc2626">—</span>'}</div>
+                <div>Cantitate: <b>${f.total_consum ? fmt(f.total_consum, 2) + ' ' + meta.um : '—'}</b> · Pret: ${f.pret_unitar_furnizor ? fmt(f.pret_unitar_furnizor, 4) : '<span style="color:#dc2626">—</span>'}</div>
+                ${f.luna_cu_incalzire !== null ? `<div style="margin-top:3px;color:${f.luna_cu_incalzire ? '#dc2626' : 'var(--sub)'}">Incalzire: <b>${f.luna_cu_incalzire ? 'DA 🔥' : 'NU'}</b></div>` : ''}
+              </div>
+              <div style="background:#f9fafb;padding:10px;border-radius:6px">
+                <div style="font-weight:700;color:var(--sub);text-transform:uppercase;font-size:10px;margin-bottom:6px">👨 CITIRI BOGDAN (in luna)</div>
+                ${cts.length > 0 ? `
+                  <div>Total: <b>${cts.length}</b> citiri</div>
+                  <div style="color:var(--green)">REALE: ${ctsReale}</div>
+                  ${ctsEst > 0 ? `<div style="color:#f59e0b">ESTIMATE: ${ctsEst} ⚠️</div>` : ''}
+                  <div style="margin-top:4px;color:var(--sub);font-size:11px">Date: ${dates.map(fmtDt).join(', ') || '—'}</div>
+                ` : '<div style="color:#dc2626;font-weight:700">NICI O CITIRE</div>'}
+              </div>
+              <div style="background:#f9fafb;padding:10px;border-radius:6px">
+                <div style="font-weight:700;color:var(--sub);text-transform:uppercase;font-size:10px;margin-bottom:6px">💰 DISTRIBUTIE CHIRIASI</div>
+                <div>Factura: <b>${fmt(cu, 2)}</b> RON</div>
+                <div>Distribuit: <b>${fmt(distribuit, 2)}</b> RON</div>
+                <div style="color:${difCls};margin-top:3px">Diferenta: <b>${dif >= 0 ? '+' : ''}${fmt(dif, 2)}</b> RON</div>
+              </div>
+            </div>
+          </div>`;
+        });
+      }
+      html += '</div></div>';
+    });
+
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-danger">Eroare: ${e.message}</div>`;
+  }
 }
 
 async function renderCentralizator() {
