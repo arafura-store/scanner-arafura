@@ -3493,9 +3493,11 @@ async function renderAnalizaFurnizori() {
             <th>Lună</th>
             <th>Data emit.</th>
             <th>Serie/Nr</th>
-            <th style="text-align:right">Valoare RON (fără TVA)</th>
+            <th style="text-align:right">💰 Valoare RON<br><small style="font-weight:400">(CU TVA)</small></th>
+            <th style="text-align:right">💵 Valoare RON<br><small style="font-weight:400">(FĂRĂ TVA)</small></th>
             <th style="text-align:right">Cantitate</th>
             <th style="text-align:center">UM</th>
+            <th style="text-align:right">💲 Preț unit.<br><small style="font-weight:400">(fără TVA)</small></th>
             <th>Perioada FURNIZOR<br><small style="font-weight:400">(autocitire)</small></th>
             <th>Perioada DOMADAMI<br><small style="font-weight:400">(citire propriu)</small></th>
             <th style="text-align:center">Decalaj</th>
@@ -3532,8 +3534,10 @@ async function renderAnalizaFurnizori() {
             <td>${fmtDate(f.data_factura)}</td>
             <td style="font-size:12px">${serieNr}</td>
             <td class="num"><b>${fmt(f.total_factura_lei, 2)}</b></td>
+            <td class="num" style="color:#0369a1">${f.valoare_fara_tva != null ? fmt(f.valoare_fara_tva, 2) : '<span style="color:var(--sub)">—</span>'}</td>
             <td class="num">${f.total_consum ? fmt(f.total_consum, 3) : '—'}</td>
             <td style="text-align:center;font-size:11px;color:var(--sub)">${f.unitate_masura || '—'}</td>
+            <td class="num" style="color:#7c3aed;font-weight:700">${f.pret_unitar_furnizor != null ? fmt(f.pret_unitar_furnizor, 4) : '<span style="color:var(--sub)">—</span>'}</td>
             <td style="font-size:12px">${periodaFurnizor}</td>
             <td style="font-size:12px">${periodaDomadami}</td>
             <td style="text-align:center">${decalajHTML}</td>
