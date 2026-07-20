@@ -404,11 +404,11 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Perioada facturată — DE LA</label>
+                <label>📆 Perioada facturată — DE LA</label>
                 <input type="date" id="gz-perioada-de">
               </div>
               <div class="form-grp">
-                <label>Perioada facturată — PÂNĂ LA</label>
+                <label>📆 Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="gz-perioada-pana">
                 <div class="hint">Datele de pe factura furnizorului (ex: 01.05.2026 → 31.05.2026)</div>
               </div>
@@ -484,11 +484,11 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Perioada facturată — DE LA</label>
+                <label>📆 Perioada facturată — DE LA</label>
                 <input type="date" id="el-perioada-de">
               </div>
               <div class="form-grp">
-                <label>Perioada facturată — PÂNĂ LA</label>
+                <label>📆 Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="el-perioada-pana">
                 <div class="hint">Datele de pe factura furnizorului</div>
               </div>
@@ -556,11 +556,11 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Perioada facturată — DE LA</label>
+                <label>📆 Perioada facturată — DE LA</label>
                 <input type="date" id="rj-perioada-de">
               </div>
               <div class="form-grp">
-                <label>Perioada facturată — PÂNĂ LA</label>
+                <label>📆 Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="rj-perioada-pana">
                 <div class="hint">Datele de pe factura furnizorului</div>
               </div>
@@ -629,16 +629,18 @@ body.is-viewer .role-banner.viewer{display:block}
                 <label>Valoare factură FĂRĂ TVA (RON)</label>
                 <input type="number" id="pl-total-lei" step="0.01" min="0" placeholder="ex: 487.50">
               </div>
-              <div class="form-grp">
-                <label>Perioada facturată — DE LA</label>
-                <input type="date" id="pl-perioada-de">
-              </div>
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Perioada facturată — PÂNĂ LA</label>
+                <label>📆 Perioada facturată — DE LA</label>
+                <input type="date" id="pl-perioada-de">
+              </div>
+              <div class="form-grp">
+                <label>📆 Perioada facturată — PÂNĂ LA</label>
                 <input type="date" id="pl-perioada-pana">
               </div>
+            </div>
+            <div class="form-row">
               <div class="form-grp" style="display:flex;align-items:flex-end;gap:8px">
                 <button class="btn btn-success btn-save-factura" onclick="salveazaFacturaPolaris()" style="flex:1">💾 Salveaza factura</button>
                 <button class="btn btn-primary" onclick="calculeazaPolaris()" style="flex:1">🧮 Calculeaza</button>
