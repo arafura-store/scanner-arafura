@@ -3122,6 +3122,25 @@ const FISA_ROLURI = {
       'NU introduce indexurile contoarelor (asta-i atributia lui Bogdan)',
       'Acces la rapoarte: Centralizator, Analiza furnizori, Fisa individuala chirias',
       'Export CSV / PDF pentru contabilitate proprie firma'
+    ],
+    pasi_practici: [
+      {pas: 1, text: 'Deschide aplicatia in browser: <b>domadami.html</b>', detaliu: 'Salveaza site-ul in Favorite ca sa deschizi mai usor data urmatoare.'},
+      {pas: 2, text: 'Login cu utilizatorul <b>contabilitate</b> si parola primita', detaliu: 'La primul login parola e <b>vivi123</b>. Poti sa o schimbi la Setari mai tarziu.'},
+      {pas: 3, text: 'In meniul din stanga, alege modulul pentru care ai factura', detaliu: 'GAZE (🔥) / ENEL (⚡) / RAJA (💧) / POLARIS (🗑️) — fiecare furnizor are pagina lui.'},
+      {pas: 4, text: 'Sus, in dropdown-ul de <b>LUNA</b>, alege luna facturii', detaliu: 'Ex: factura ENEL pentru mai 2026 → alege "Mai 2026". Daca nu e in lista, alege "&laquo; Luna anterioara".'},
+      {pas: 5, text: 'Completeaza campurile facturii unul cate unul', detaliu: '📅 Data emiterii facturii · 🏷️ Seria facturii · 🔢 Nr factura · 💰 Valoare TOTALA cu TVA · 📊 Consum (kw pentru ENEL, mc pentru GAZE/RAJA) · 📆 Perioada de la → pana la (perioada scrisa pe factura).'},
+      {pas: 6, text: 'DOAR pentru <b>GAZE</b>: bifeaza "Luna cu incalzire" daca a functionat centrala', detaliu: 'Iarna DA (nov-mar). Vara NU. Aprilie/octombrie — variabil, intreaba pe Bogdan sau Eugen daca nu esti sigura.'},
+      {pas: 7, text: 'Apasa butonul verde <b>💾 Salveaza factura</b>', detaliu: 'Va aparea un mesaj de confirmare. Daca vezi eroare, verifica ca ai completat toate campurile obligatorii.'},
+      {pas: 8, text: 'Dupa salvare, apasa <b>🧮 Recalculeaza</b> ca sa vezi cum se imparte pe chiriasi', detaliu: 'Aplicatia calculeaza automat consumul fiecarui chirias pe baza indexilor introdusi de Bogdan. Vezi si pierderile ARAFURA (diferenta factura vs distribuit).'},
+      {pas: 9, text: 'Verifica in <b>Centralizator</b> ca factura apare corect', detaliu: 'Meniul stanga → Centralizator. Vezi toate facturile luate impreuna + suma per chirias.'},
+      {pas: 10, text: 'Repeta pasii 3-9 pentru fiecare factura primita', detaliu: 'De obicei sunt 4 facturi pe luna (una per furnizor). Poti introduce mai multe luni consecutiv.'}
+    ],
+    important: [
+      '⚠️ NU introduce indexurile contoarelor — le pune Bogdan de pe iPhone-ul lui.',
+      '⚠️ Daca vezi consum negativ sau valori anormale — NU corecta tu, semnaleaza-i lui Bogdan sau Eugen.',
+      '⚠️ Daca ai o factura pe 2 luni combinat (rar), spune-i lui Eugen — trebuie tratata special.',
+      '💡 Poti reveni oricand pe o luna trecuta ca sa corectezi date — nu se blocheaza.',
+      '💡 In caz de probleme: intreaba-l pe Eugen sau vezi ecranele altor colegi (Bogdan, admin).'
     ]
   },
   viewer: {
@@ -3159,6 +3178,37 @@ async function renderFisaPostului() {
         </ol>
       </div>
     </div>
+
+    ${me.pasi_practici ? `
+    <div class="card" style="margin-bottom:20px;border-left:5px solid #16a34a">
+      <div class="card-hdr" style="background:#f0fdf4"><h3>🎯 GHID PAS CU PAS — Cum introduci o factura</h3></div>
+      <div class="card-body">
+        <p style="color:var(--sub);font-size:13px;margin-bottom:14px">Urmareste pasii in ordine — fiecare are un scurt detaliu daca apesi pe sageata.</p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${me.pasi_practici.map(p => `
+            <details style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px">
+              <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--dark);display:flex;align-items:center;gap:10px">
+                <span style="background:#16a34a;color:#fff;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${p.pas}</span>
+                <span>${p.text}</span>
+              </summary>
+              <div style="margin-top:8px;padding-left:36px;color:var(--sub);font-size:13px;line-height:1.6">${p.detaliu}</div>
+            </details>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    ` : ''}
+
+    ${me.important ? `
+    <div class="card" style="margin-bottom:20px;border-left:5px solid #dc2626;background:#fef2f2">
+      <div class="card-hdr" style="background:#fee2e2"><h3>⚠️ IMPORTANT — De retinut</h3></div>
+      <div class="card-body">
+        <ul style="margin-left:20px;line-height:2;font-size:13.5px;color:#7f1d1d">
+          ${me.important.map(t => `<li>${t}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    ` : ''}
 
     <h3 style="color:var(--dark);margin:24px 0 10px;font-size:15px">📋 Cele 4 roluri din DOMADAMI</h3>
   `;
