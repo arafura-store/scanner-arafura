@@ -2936,8 +2936,8 @@ async function renderSituatieAnsamblu() {
     });
 
     // ═══ SECTIUNE INDEXI COMPLETI — matrice contor × data_citire ═══
-    // Fetch TOATE citirile (fara filter an) pentru istoric complet
-    const toateCitirile = await api('/domadami_citiri?select=contor_id,an,luna,data_citire,index_final,este_estimat,observatii&order=data_citire.asc');
+    // Fetch DOAR citirile REALE (excludem estimarile — Eugen vrea doar ce a citit Bogdan si de pe facturi)
+    const toateCitirile = await api('/domadami_citiri?este_estimat=eq.false&select=contor_id,an,luna,data_citire,index_final,este_estimat,observatii&order=data_citire.asc');
     const contActive = _contoare.filter(c => c.activ).sort((a,b) => a.id - b.id);
 
     // Group citiri per contor
@@ -2954,8 +2954,8 @@ async function renderSituatieAnsamblu() {
 
     html += `<div class="card" style="margin-top:24px;margin-bottom:16px;border-left:5px solid #0f766e">
       <div class="card-hdr" style="background:#f0fdfa">
-        <h3>📚 TOȚI INDEXII — istorie completă (baza de date)</h3>
-        <div style="font-size:12px;color:var(--sub)">${toateCitirile.length} citiri, ${contActive.length} contoare active</div>
+        <h3>📚 TOȚI INDEXII REALI — istoric complet (numai citiri Bogdan)</h3>
+        <div style="font-size:12px;color:var(--sub)">${toateCitirile.length} citiri reale, ${contActive.length} contoare active · <b style="color:#0f766e">Estimările sunt excluse</b></div>
       </div>
       <div class="card-body" style="padding:0">`;
 
@@ -3007,7 +3007,7 @@ async function renderSituatieAnsamblu() {
       });
       html += `</tbody></table>
         <div style="padding:8px 18px;font-size:11px;color:var(--sub);background:#fafafa">
-          <b style="color:#f59e0b">*</b> = valoare ESTIMATA (nu citita fizic); hover pe celula pentru detalii
+          Numai citiri REALE (facute fizic de Bogdan). Estimările sunt excluse din aceasta vedere.
         </div>
       </details>`;
     });
