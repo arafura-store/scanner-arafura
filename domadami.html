@@ -393,13 +393,25 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Valoare factură FĂRĂ TVA (RON)</label>
-                <input type="number" id="gz-total-lei" step="0.01" min="0" placeholder="ex: 12345.67">
+                <label>💰 Valoare factură CU TVA (RON)</label>
+                <input type="number" id="gz-total-lei" step="0.01" min="0" placeholder="ex: 3464.48" oninput="onFacturaChange('gz')">
+                <div class="hint">Totalul de plată de pe factură (cu TVA)</div>
               </div>
               <div class="form-grp">
-                <label>Cantitate (mc)</label>
-                <input type="number" id="gz-total-mc" step="0.001" min="0" placeholder="ex: 870.32">
-                <div class="hint">Pret unitar = valoare fara TVA / cantitate (calculat automat)</div>
+                <label>💵 Valoare factură FĂRĂ TVA (RON)</label>
+                <input type="number" id="gz-fara-tva" step="0.01" min="0" placeholder="ex: 2863.21" oninput="onFacturaChange('gz')">
+                <div class="hint">Baza fără TVA (pentru pret unitar)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>📊 Cantitate (mc)</label>
+                <input type="number" id="gz-total-mc" step="0.001" min="0" placeholder="ex: 713" oninput="onFacturaChange('gz')">
+              </div>
+              <div class="form-grp">
+                <label>💲 Preț unitar FĂRĂ TVA (LEI/mc) <span style="color:var(--sub);font-weight:400">— auto, editabil</span></label>
+                <input type="number" id="gz-pret-unitar" step="0.0001" min="0" placeholder="calculat auto">
+                <div class="hint" id="gz-pret-hint">Se completează automat din fără TVA / cantitate. Poți suprascrie cu prețul exact de pe factură.</div>
               </div>
             </div>
             <div class="form-row">
@@ -473,13 +485,25 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Valoare factură FĂRĂ TVA (RON)</label>
-                <input type="number" id="el-total-lei" step="0.01" min="0" placeholder="ex: 8543.21">
+                <label>💰 Valoare factură CU TVA (RON)</label>
+                <input type="number" id="el-total-lei" step="0.01" min="0" placeholder="ex: 15352.72" oninput="onFacturaChange('el')">
+                <div class="hint">Totalul de plată de pe factură (cu TVA)</div>
               </div>
               <div class="form-grp">
-                <label>Cantitate (kw)</label>
-                <input type="number" id="el-total-kw" step="0.001" min="0" placeholder="ex: 21500">
-                <div class="hint">Pret unitar = valoare fara TVA / cantitate (calculat automat)</div>
+                <label>💵 Valoare factură FĂRĂ TVA (RON)</label>
+                <input type="number" id="el-fara-tva" step="0.01" min="0" placeholder="ex: 12688.20" oninput="onFacturaChange('el')">
+                <div class="hint">Baza fără TVA (pentru pret unitar)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>📊 Cantitate (kw)</label>
+                <input type="number" id="el-total-kw" step="0.001" min="0" placeholder="ex: 11080" oninput="onFacturaChange('el')">
+              </div>
+              <div class="form-grp">
+                <label>💲 Preț unitar FĂRĂ TVA (LEI/kw) <span style="color:var(--sub);font-weight:400">— auto, editabil</span></label>
+                <input type="number" id="el-pret-unitar" step="0.0001" min="0" placeholder="calculat auto">
+                <div class="hint" id="el-pret-hint">Se completează automat din fără TVA / cantitate. Poți suprascrie cu prețul exact de pe factură.</div>
               </div>
             </div>
             <div class="form-row">
@@ -545,13 +569,25 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Valoare factură FĂRĂ TVA (RON, include canalizare)</label>
-                <input type="number" id="rj-total-lei" step="0.01" min="0" placeholder="ex: 3245.67">
+                <label>💰 Valoare factură CU TVA (RON, include canalizare)</label>
+                <input type="number" id="rj-total-lei" step="0.01" min="0" placeholder="ex: 2488.11" oninput="onFacturaChange('rj')">
+                <div class="hint">Totalul de plată de pe factură (cu TVA)</div>
               </div>
               <div class="form-grp">
-                <label>Cantitate (mc, contor general)</label>
-                <input type="number" id="rj-total-mc" step="0.001" min="0" placeholder="ex: 145.5">
-                <div class="hint">Pret unitar all-inclusive = valoare fara TVA / cantitate</div>
+                <label>💵 Valoare factură FĂRĂ TVA (RON)</label>
+                <input type="number" id="rj-fara-tva" step="0.01" min="0" placeholder="ex: 2241.54" oninput="onFacturaChange('rj')">
+                <div class="hint">Baza fără TVA (pentru pret unitar)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-grp">
+                <label>📊 Cantitate (mc, contor general)</label>
+                <input type="number" id="rj-total-mc" step="0.001" min="0" placeholder="ex: 126" oninput="onFacturaChange('rj')">
+              </div>
+              <div class="form-grp">
+                <label>💲 Preț unitar FĂRĂ TVA (LEI/mc) <span style="color:var(--sub);font-weight:400">— auto, editabil</span></label>
+                <input type="number" id="rj-pret-unitar" step="0.0001" min="0" placeholder="calculat auto">
+                <div class="hint" id="rj-pret-hint">Se completează automat din fără TVA / cantitate. Poți suprascrie cu prețul exact de pe factură.</div>
               </div>
             </div>
             <div class="form-row">
@@ -626,8 +662,14 @@ body.is-viewer .role-banner.viewer{display:block}
             </div>
             <div class="form-row">
               <div class="form-grp">
-                <label>Valoare factură FĂRĂ TVA (RON)</label>
-                <input type="number" id="pl-total-lei" step="0.01" min="0" placeholder="ex: 487.50">
+                <label>💰 Valoare factură CU TVA (RON)</label>
+                <input type="number" id="pl-total-lei" step="0.01" min="0" placeholder="ex: 1388.09">
+                <div class="hint">Totalul de plată de pe factură (cu TVA)</div>
+              </div>
+              <div class="form-grp">
+                <label>💵 Valoare factură FĂRĂ TVA (RON)</label>
+                <input type="number" id="pl-fara-tva" step="0.01" min="0" placeholder="ex: 1166.46">
+                <div class="hint">Baza fără TVA (informativă — POLARIS e forfait)</div>
               </div>
             </div>
             <div class="form-row">
@@ -1214,16 +1256,66 @@ async function salveazaCalcule(modul, an, luna, calculeArray) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// PRET UNITAR — auto-calc din valoare fara TVA / cantitate
+// prefix = 'gz' / 'el' / 'rj' (POLARIS nu are pret unitar)
+// Se apeleaza la fiecare modificare a valorii CU TVA, FARA TVA sau cantitate
+// Pretul unitar poate fi editat manual dupa auto-calc
+// ═══════════════════════════════════════════════════════════════
+window._pretManualOverride = window._pretManualOverride || { gz:false, el:false, rj:false };
+function onFacturaChange(prefix) {
+  const cantId = prefix==='gz' ? 'gz-total-mc' : (prefix==='el' ? 'el-total-kw' : 'rj-total-mc');
+  const faraTva = parseFloat(document.getElementById(prefix+'-fara-tva').value) || 0;
+  const cant    = parseFloat(document.getElementById(cantId).value) || 0;
+  const pretEl  = document.getElementById(prefix+'-pret-unitar');
+  const hint    = document.getElementById(prefix+'-pret-hint');
+  if (!pretEl) return;
+  if (faraTva > 0 && cant > 0) {
+    const pretAuto = faraTva / cant;
+    // Doar auto-completeaza daca pretul e gol sau echivalent cu pretul auto anterior (nu suprascriem editarea manuala)
+    if (!_pretManualOverride[prefix] || !pretEl.value) {
+      pretEl.value = pretAuto.toFixed(4);
+      if (hint) hint.innerHTML = `Auto-calculat: <b>${pretAuto.toFixed(4)}</b>. Poți suprascrie cu prețul de pe factură.`;
+    } else {
+      // Verifica diferenta intre pret manual si auto
+      const pretManual = parseFloat(pretEl.value) || 0;
+      const diff = Math.abs(pretManual - pretAuto);
+      const diffPct = pretAuto > 0 ? (diff/pretAuto*100) : 0;
+      if (hint) {
+        if (diffPct > 1) {
+          hint.innerHTML = `⚠️ <b style="color:#dc2626">Diferență ${diffPct.toFixed(1)}%</b> între prețul introdus (${pretManual}) și cel calculat (${pretAuto.toFixed(4)}). Verifică cifrele!`;
+        } else {
+          hint.innerHTML = `✓ Pret coincide cu ${pretAuto.toFixed(4)} calculat.`;
+        }
+      }
+    }
+  } else if (pretEl && !_pretManualOverride[prefix]) {
+    pretEl.value = '';
+    if (hint) hint.innerHTML = 'Completează valoare fără TVA + cantitate pentru auto-calcul.';
+  }
+}
+// Detecteaza editarea manuala a pretului
+document.addEventListener('DOMContentLoaded', () => {
+  ['gz','el','rj'].forEach(p => {
+    const el = document.getElementById(p+'-pret-unitar');
+    if (el) el.addEventListener('input', () => { _pretManualOverride[p] = true; onFacturaChange(p); });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GAZE
 // ═══════════════════════════════════════════════════════════════
 async function incarcaFacturaGaze() {
   const { an, luna } = getLuna();
+  _pretManualOverride.gz = false;
   try {
     const facturi = await api(`/domadami_facturi?modul=eq.GAZE&an=eq.${an}&luna=eq.${luna}&select=*`);
     if (facturi.length > 0) {
       const f = facturi[0];
       document.getElementById('gz-total-lei').value = f.total_factura_lei || '';
+      document.getElementById('gz-fara-tva').value = f.valoare_fara_tva || '';
       document.getElementById('gz-total-mc').value = f.total_consum || '';
+      document.getElementById('gz-pret-unitar').value = f.pret_unitar_furnizor || '';
+      if (f.pret_unitar_furnizor) _pretManualOverride.gz = true;
       document.getElementById('gz-incalzire').checked = f.luna_cu_incalzire === true;
       document.getElementById('gz-nr-luni').value = '1';
       document.getElementById('gz-perioada-de').value = f.perioada_de || '';
@@ -1231,9 +1323,10 @@ async function incarcaFacturaGaze() {
       document.getElementById('gz-serie-factura').value = f.serie_factura || '';
       document.getElementById('gz-nr-factura').value = f.numar_factura || '';
       document.getElementById('gz-data-factura').value = f.data_factura || '';
+      onFacturaChange('gz');
       toast(`Factura GAZE ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['gz-total-lei','gz-total-mc','gz-perioada-de','gz-perioada-pana','gz-serie-factura','gz-nr-factura','gz-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['gz-total-lei','gz-fara-tva','gz-total-mc','gz-pret-unitar','gz-perioada-de','gz-perioada-pana','gz-serie-factura','gz-nr-factura','gz-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       document.getElementById('gz-incalzire').checked = false;
     }
     incarcaCitiriGaze();
@@ -1246,7 +1339,9 @@ async function salveazaFacturaGaze() {
   if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('gz-total-lei').value) || 0;
+  const fara_tva = parseFloat(document.getElementById('gz-fara-tva').value) || null;
   const total_mc = parseFloat(document.getElementById('gz-total-mc').value) || 0;
+  const pret_furnizor = parseFloat(document.getElementById('gz-pret-unitar').value) || null;
   if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
@@ -1254,7 +1349,9 @@ async function salveazaFacturaGaze() {
       body: JSON.stringify({
         modul: 'GAZE', an, luna,
         total_factura_lei: total_lei,
+        valoare_fara_tva: fara_tva,
         total_consum: total_mc,
+        pret_unitar_furnizor: pret_furnizor,
         unitate_masura: 'mc',
         luna_cu_incalzire: document.getElementById('gz-incalzire').checked,
         perioada_de: document.getElementById('gz-perioada-de').value || null,
@@ -1626,20 +1723,25 @@ async function calculeazaGaze() {
 // ═══════════════════════════════════════════════════════════════
 async function incarcaFacturaEnel() {
   const { an, luna } = getLuna();
+  _pretManualOverride.el = false;
   try {
     const facturi = await api(`/domadami_facturi?modul=eq.ENEL&an=eq.${an}&luna=eq.${luna}&select=*`);
     if (facturi.length > 0) {
       const f = facturi[0];
       document.getElementById('el-total-lei').value = f.total_factura_lei || '';
+      document.getElementById('el-fara-tva').value = f.valoare_fara_tva || '';
       document.getElementById('el-total-kw').value = f.total_consum || '';
+      document.getElementById('el-pret-unitar').value = f.pret_unitar_furnizor || '';
+      if (f.pret_unitar_furnizor) _pretManualOverride.el = true;
       document.getElementById('el-perioada-de').value = f.perioada_de || '';
       document.getElementById('el-perioada-pana').value = f.perioada_pana_la || '';
       document.getElementById('el-serie-factura').value = f.serie_factura || '';
       document.getElementById('el-nr-factura').value = f.numar_factura || '';
       document.getElementById('el-data-factura').value = f.data_factura || '';
+      onFacturaChange('el');
       toast(`Factura ENEL ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['el-total-lei','el-total-kw','el-perioada-de','el-perioada-pana','el-serie-factura','el-nr-factura','el-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['el-total-lei','el-fara-tva','el-total-kw','el-pret-unitar','el-perioada-de','el-perioada-pana','el-serie-factura','el-nr-factura','el-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     }
     incarcaCitiriEnel();
   } catch (e) {
@@ -1651,7 +1753,9 @@ async function salveazaFacturaEnel() {
   if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('el-total-lei').value) || 0;
+  const fara_tva = parseFloat(document.getElementById('el-fara-tva').value) || null;
   const total_kw = parseFloat(document.getElementById('el-total-kw').value) || 0;
+  const pret_furnizor = parseFloat(document.getElementById('el-pret-unitar').value) || null;
   if (total_lei <= 0 || total_kw <= 0) { toast('Completeaza total RON si total kw', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
@@ -1659,7 +1763,9 @@ async function salveazaFacturaEnel() {
       body: JSON.stringify({
         modul: 'ENEL', an, luna,
         total_factura_lei: total_lei,
+        valoare_fara_tva: fara_tva,
         total_consum: total_kw,
+        pret_unitar_furnizor: pret_furnizor,
         unitate_masura: 'kw',
         perioada_de: document.getElementById('el-perioada-de').value || null,
         perioada_pana_la: document.getElementById('el-perioada-pana').value || null,
@@ -2013,20 +2119,25 @@ async function calculeazaEnel() {
 // ═══════════════════════════════════════════════════════════════
 async function incarcaFacturaRaja() {
   const { an, luna } = getLuna();
+  _pretManualOverride.rj = false;
   try {
     const facturi = await api(`/domadami_facturi?modul=eq.RAJA&an=eq.${an}&luna=eq.${luna}&select=*`);
     if (facturi.length > 0) {
       const f = facturi[0];
       document.getElementById('rj-total-lei').value = f.total_factura_lei || '';
+      document.getElementById('rj-fara-tva').value = f.valoare_fara_tva || '';
       document.getElementById('rj-total-mc').value = f.total_consum || '';
+      document.getElementById('rj-pret-unitar').value = f.pret_unitar_furnizor || '';
+      if (f.pret_unitar_furnizor) _pretManualOverride.rj = true;
       document.getElementById('rj-perioada-de').value = f.perioada_de || '';
       document.getElementById('rj-perioada-pana').value = f.perioada_pana_la || '';
       document.getElementById('rj-serie-factura').value = f.serie_factura || '';
       document.getElementById('rj-nr-factura').value = f.numar_factura || '';
       document.getElementById('rj-data-factura').value = f.data_factura || '';
+      onFacturaChange('rj');
       toast(`Factura RAJA ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['rj-total-lei','rj-total-mc','rj-perioada-de','rj-perioada-pana','rj-serie-factura','rj-nr-factura','rj-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['rj-total-lei','rj-fara-tva','rj-total-mc','rj-pret-unitar','rj-perioada-de','rj-perioada-pana','rj-serie-factura','rj-nr-factura','rj-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     }
     incarcaCitiriRaja();
   } catch (e) {
@@ -2038,7 +2149,9 @@ async function salveazaFacturaRaja() {
   if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('rj-total-lei').value) || 0;
+  const fara_tva = parseFloat(document.getElementById('rj-fara-tva').value) || null;
   const total_mc = parseFloat(document.getElementById('rj-total-mc').value) || 0;
+  const pret_furnizor = parseFloat(document.getElementById('rj-pret-unitar').value) || null;
   if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
@@ -2046,7 +2159,9 @@ async function salveazaFacturaRaja() {
       body: JSON.stringify({
         modul: 'RAJA', an, luna,
         total_factura_lei: total_lei,
+        valoare_fara_tva: fara_tva,
         total_consum: total_mc,
+        pret_unitar_furnizor: pret_furnizor,
         unitate_masura: 'mc',
         perioada_de: document.getElementById('rj-perioada-de').value || null,
         perioada_pana_la: document.getElementById('rj-perioada-pana').value || null,
@@ -2381,6 +2496,8 @@ async function incarcaFacturaPolaris() {
     if (facturi.length > 0) {
       const f = facturi[0];
       document.getElementById('pl-total-lei').value = f.total_factura_lei || '';
+      const pfEl = document.getElementById('pl-fara-tva');
+      if (pfEl) pfEl.value = f.valoare_fara_tva || '';
       document.getElementById('pl-perioada-de').value = f.perioada_de || '';
       document.getElementById('pl-perioada-pana').value = f.perioada_pana_la || '';
       document.getElementById('pl-serie-factura').value = f.serie_factura || '';
@@ -2388,7 +2505,7 @@ async function incarcaFacturaPolaris() {
       document.getElementById('pl-data-factura').value = f.data_factura || '';
       toast(`Factura POLARIS ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
-      ['pl-total-lei','pl-perioada-de','pl-perioada-pana','pl-serie-factura','pl-nr-factura','pl-data-factura'].forEach(id => document.getElementById(id).value = '');
+      ['pl-total-lei','pl-fara-tva','pl-perioada-de','pl-perioada-pana','pl-serie-factura','pl-nr-factura','pl-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     }
   } catch (e) {
     toast('Eroare incarcare POLARIS: ' + e.message, 'err');
@@ -2399,6 +2516,7 @@ async function salveazaFacturaPolaris() {
   if (!canEditFactura()) return;
   const { an, luna } = getLuna();
   const total_lei = parseFloat(document.getElementById('pl-total-lei').value) || 0;
+  const fara_tva = parseFloat(document.getElementById('pl-fara-tva').value) || null;
   if (total_lei <= 0) { toast('Completeaza total factura', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
@@ -2406,6 +2524,7 @@ async function salveazaFacturaPolaris() {
       body: JSON.stringify({
         modul: 'POLARIS', an, luna,
         total_factura_lei: total_lei,
+        valoare_fara_tva: fara_tva,
         unitate_masura: 'forfait',
         perioada_de: document.getElementById('pl-perioada-de').value || null,
         perioada_pana_la: document.getElementById('pl-perioada-pana').value || null,
