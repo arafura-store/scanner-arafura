@@ -3003,9 +3003,21 @@ function openFisa(unitateId) {
     const bd = r.breakdown[m] || {};
     let detalii = '';
     if (m === 'GAZE') {
-      detalii = `Tip: ${bd.tip||'—'} · Consum apa calda: ${fmt(bd.consum_apa_calda_mc||0, 2)} mc<br>
+      if (bd.tip === 'gaz_pasant_farmacie') {
+        // FARMACIE — centrala termica proprie, plateste gaz prin contor pasant
+        detalii = `<b>🏥 Contor pasant (centrala Farmacie)</b><br>
+        Consum contor pasant: <b>${fmt(bd.consum_pasant_mc||0, 3)} mc</b><br>
+        Preț unitar gaz: ${fmt(bd.pret_unitar||0, 4)} RON/mc (CU TVA)<br>
+        Cost total: ${fmt(bd.cost_pasant||0, 2)} mc × ${fmt(bd.pret_unitar||0, 4)} = <b>${fmt(bd.cost_pasant||0, 2)} RON</b><br>
+        <div style="margin-top:8px;padding:8px;background:#eff6ff;border-radius:6px;font-size:12px;color:#1e40af">
+          ℹ️ ${bd.nota || 'Farmacie are centrala termica proprie — plateste gazul consumat prin contorul pasant separat.'}
+        </div>`;
+      } else {
+        // GARSONIERE — repartizare apa calda + eventual caldura
+        detalii = `Tip: ${bd.tip||'—'} · Consum apa calda: ${fmt(bd.consum_apa_calda_mc||0, 2)} mc<br>
         Cost apa calda: ${fmt(bd.cost_apa_calda||0, 2)} RON (${fmt(bd.pret_referinta_apa_calda||0, 2)} RON/mc × ${fmt(bd.consum_apa_calda_mc||0, 2)} mc)<br>
         ${bd.tip==='iarna' ? `Cost caldura: ${fmt(bd.cost_caldura||0, 2)} RON (${bd.elementi_calorifer||0}/${bd.total_elementi_firma||0} elementi × cost ramas)` : ''}`;
+      }
     } else if (m === 'ENEL') {
       detalii = `Consum individual: ${fmt0(bd.consum_individual_kw||0)} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt((bd.consum_individual_kw||0)*(bd.pret_unitar||0), 2)} RON<br>
         ${bd.iluminat_kw > 0 ? `Iluminat forfait: ${bd.iluminat_kw} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.iluminat_kw*bd.pret_unitar, 2)} RON<br>` : ''}
