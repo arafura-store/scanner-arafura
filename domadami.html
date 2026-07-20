@@ -1549,6 +1549,28 @@ async function calculeazaGaze() {
         }
       });
     });
+
+    // Adaug si FARMACIE — plateste gazul consumat prin contorul pasant
+    // (Farmacie are centrala termica proprie, singurul consumator cu contor pasant)
+    if (contorPas && contorPas.unitate_id && consumPas > 0) {
+      calculePentruSalvare.push({
+        unitate_id: contorPas.unitate_id,
+        consum_principal: consumPas,
+        consum_forfait: 0,
+        pret_unitar: pretUnitar,
+        cost_consum: costPas,
+        cost_forfait: 0,
+        cost_total: costPas,
+        breakdown_json: {
+          tip: 'gaz_pasant_farmacie',
+          consum_pasant_mc: consumPas,
+          pret_unitar: pretUnitar,
+          cost_pasant: costPas,
+          nota: 'Farmacie are centrala termica proprie — plateste gazul consumat prin contorul pasant separat'
+        }
+      });
+    }
+
     // Salvez calculele in baza
     salveazaCalcule('GAZE', an, luna, calculePentruSalvare);
 
