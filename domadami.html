@@ -1328,6 +1328,17 @@ async function incarcaFacturaGaze() {
     } else {
       ['gz-total-lei','gz-fara-tva','gz-total-mc','gz-pret-unitar','gz-perioada-de','gz-perioada-pana','gz-serie-factura','gz-nr-factura','gz-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
       document.getElementById('gz-incalzire').checked = false;
+      // Sugerez pretul unitar din factura precedenta (ultima disponibila)
+      try {
+        const prev = await api(`/domadami_facturi?modul=eq.GAZE&pret_unitar_furnizor=not.is.null&order=an.desc,luna.desc&limit=1`);
+        if (prev.length > 0 && prev[0].pret_unitar_furnizor) {
+          const pretEl = document.getElementById('gz-pret-unitar');
+          const hint = document.getElementById('gz-pret-hint');
+          pretEl.value = prev[0].pret_unitar_furnizor;
+          _pretManualOverride.gz = true;
+          if (hint) hint.innerHTML = `💡 Pre-completat din factura precedentă (${LUNI_RO[prev[0].luna-1]} ${prev[0].an}: <b>${prev[0].pret_unitar_furnizor}</b>). Modifică dacă noua factură are alt preț.`;
+        }
+      } catch(e) {}
     }
     incarcaCitiriGaze();
   } catch (e) {
@@ -1343,6 +1354,7 @@ async function salveazaFacturaGaze() {
   const total_mc = parseFloat(document.getElementById('gz-total-mc').value) || 0;
   const pret_furnizor = parseFloat(document.getElementById('gz-pret-unitar').value) || null;
   if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
+  if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
@@ -1742,6 +1754,17 @@ async function incarcaFacturaEnel() {
       toast(`Factura ENEL ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
       ['el-total-lei','el-fara-tva','el-total-kw','el-pret-unitar','el-perioada-de','el-perioada-pana','el-serie-factura','el-nr-factura','el-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      // Sugerez pretul unitar din factura precedenta
+      try {
+        const prev = await api(`/domadami_facturi?modul=eq.ENEL&pret_unitar_furnizor=not.is.null&order=an.desc,luna.desc&limit=1`);
+        if (prev.length > 0 && prev[0].pret_unitar_furnizor) {
+          const pretEl = document.getElementById('el-pret-unitar');
+          const hint = document.getElementById('el-pret-hint');
+          pretEl.value = prev[0].pret_unitar_furnizor;
+          _pretManualOverride.el = true;
+          if (hint) hint.innerHTML = `💡 Pre-completat din factura precedentă (${LUNI_RO[prev[0].luna-1]} ${prev[0].an}: <b>${prev[0].pret_unitar_furnizor}</b>). Modifică dacă noua factură are alt preț.`;
+        }
+      } catch(e) {}
     }
     incarcaCitiriEnel();
   } catch (e) {
@@ -1757,6 +1780,7 @@ async function salveazaFacturaEnel() {
   const total_kw = parseFloat(document.getElementById('el-total-kw').value) || 0;
   const pret_furnizor = parseFloat(document.getElementById('el-pret-unitar').value) || null;
   if (total_lei <= 0 || total_kw <= 0) { toast('Completeaza total RON si total kw', 'err'); return; }
+  if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
@@ -2138,6 +2162,17 @@ async function incarcaFacturaRaja() {
       toast(`Factura RAJA ${LUNI_RO[luna-1]} ${an} incarcata`, 'info');
     } else {
       ['rj-total-lei','rj-fara-tva','rj-total-mc','rj-pret-unitar','rj-perioada-de','rj-perioada-pana','rj-serie-factura','rj-nr-factura','rj-data-factura'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      // Sugerez pretul unitar din factura precedenta
+      try {
+        const prev = await api(`/domadami_facturi?modul=eq.RAJA&pret_unitar_furnizor=not.is.null&order=an.desc,luna.desc&limit=1`);
+        if (prev.length > 0 && prev[0].pret_unitar_furnizor) {
+          const pretEl = document.getElementById('rj-pret-unitar');
+          const hint = document.getElementById('rj-pret-hint');
+          pretEl.value = prev[0].pret_unitar_furnizor;
+          _pretManualOverride.rj = true;
+          if (hint) hint.innerHTML = `💡 Pre-completat din factura precedentă (${LUNI_RO[prev[0].luna-1]} ${prev[0].an}: <b>${prev[0].pret_unitar_furnizor}</b>). Modifică dacă noua factură are alt preț.`;
+        }
+      } catch(e) {}
     }
     incarcaCitiriRaja();
   } catch (e) {
@@ -2153,6 +2188,7 @@ async function salveazaFacturaRaja() {
   const total_mc = parseFloat(document.getElementById('rj-total-mc').value) || 0;
   const pret_furnizor = parseFloat(document.getElementById('rj-pret-unitar').value) || null;
   if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
+  if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
@@ -2518,6 +2554,7 @@ async function salveazaFacturaPolaris() {
   const total_lei = parseFloat(document.getElementById('pl-total-lei').value) || 0;
   const fara_tva = parseFloat(document.getElementById('pl-fara-tva').value) || null;
   if (total_lei <= 0) { toast('Completeaza total factura', 'err'); return; }
+  if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
     await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
