@@ -1991,7 +1991,9 @@ async function calculeazaEnel() {
     const forfaitEtaj = parseFloat(_setari.forfait_iluminat_etaj_kw) || 10;
     const acStricat = _setari.contor_ac_etaj_stricat === 'true';
     const acForfait = parseFloat(_setari.contor_ac_etaj_forfait_kw) || 40;
-    const nrLuniFactura = (allCitiri.find(c => c.an === an && c.luna === luna)?.nr_luni_acoperite) || 1;
+    // FIX: filtrez pe contoare ENEL specific (nu prima citire globala care poate fi din alt modul)
+    const contoareEnelIds = _contoare.filter(c => c.modul === 'ENEL').map(c => c.id);
+    const nrLuniFactura = (allCitiri.find(c => c.an === an && c.luna === luna && contoareEnelIds.includes(c.contor_id))?.nr_luni_acoperite) || 1;
 
     // Cost per unitate (suma contoare)
     const costPerUnitate = {};
@@ -2026,7 +2028,7 @@ async function calculeazaEnel() {
       // AC etaj
       if (u.utilizeaza_ac_etaj && isOcupat(u)) {
         if (acStricat) {
-          consumAC[u.id] = acForfait;  // forfait fix (NU se multiplica cu nr_luni)
+          consumAC[u.id] = acForfait * nrLuniFactura;  // FIX: se multiplica cu nr_luni (AC=40kw/luna x nr_luni)
         } else {
           // Citim contor AC etaj comun si impartim egal
           const contorAC = _contoare.find(c => c.tip === 'ac_etaj');
@@ -2045,7 +2047,7 @@ async function calculeazaEnel() {
     // Suma totala kw forfait + iluminat + AC
     const sumaIluminatScari = garsOcupate.length * forfaitScari * nrLuniFactura;
     const sumaIluminatEtaj = etajOcupate.length * forfaitEtaj * nrLuniFactura;
-    const sumaAC = acStricat ? etajOcupate.length * acForfait : Object.values(consumAC).reduce((a,b)=>a+b, 0);
+    const sumaAC = acStricat ? etajOcupate.length * acForfait * nrLuniFactura : Object.values(consumAC).reduce((a,b)=>a+b, 0);
     const sumaKwDistribuiti = sumaKwIndiv + sumaIluminatScari + sumaIluminatEtaj + sumaAC;
     const pierderiKw = totalKw - sumaKwDistribuiti;
     const pierderiLei = pierderiKw * pretUnitar;
@@ -2403,7 +2405,9 @@ async function calculeazaRaja() {
       return o ? o.este_ocupata : true;
     };
     const forfaitToaleta = parseFloat(_setari.forfait_toaleta_comuna_mc) || 1;
-    const facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna);
+    // FIX: filtrez pe contoare RAJA specific (nu prima citire globala)
+    const contoareRajaIds = _contoare.filter(c => c.modul === 'RAJA').map(c => c.id);
+    const facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna && contoareRajaIds.includes(c.contor_id));
     const nrLuniFactura = facturaRaja?.nr_luni_acoperite || 1;
 
     // Consum apa rece + apa calda per unitate (din TOATE contoarele RAJA: rece + caldă + individuale)
