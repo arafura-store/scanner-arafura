@@ -3513,13 +3513,15 @@ async function renderAnalizaFurnizori() {
           const nrCt = nrCitiriPerLuna[m][k] || 0;
           const nrEst = nrEstimatePerLuna[m][k] || 0;
           const nrContoare = contoarePerLuna[m][k]?.size || 0;
-          // Badge estimare — ORICE estimare e vizibila (portocaliu warning)
+          // Badge estimare
           let badgeEst = '';
           if (nrCt > 0 && nrEst > 0) {
             if (nrEst === nrCt) {
-              badgeEst = ` <span style="display:inline-block;font-size:11px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-weight:800;margin-left:6px">⚠️ TOATE ESTIMATE (${nrEst}/${nrCt})</span>`;
+              badgeEst = ` <span class="badge b-orange" style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-weight:700">⚠️ TOATE ESTIMATE</span>`;
+            } else if (nrEst >= nrCt / 2) {
+              badgeEst = ` <span class="badge" style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;font-weight:700">⚠️ ${nrEst}/${nrCt} EST</span>`;
             } else {
-              badgeEst = ` <span style="display:inline-block;font-size:11px;background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700;margin-left:6px">⚠️ ${nrEst}/${nrCt} ESTIMATE</span>`;
+              badgeEst = ` <span class="badge" style="font-size:10px;background:#e0f2fe;color:#075985;padding:1px 6px;border-radius:4px;font-weight:600">${nrEst}/${nrCt} est</span>`;
             }
           }
           const periodaFurnizor = f.perioada_de && f.perioada_pana_la ? `${fmtDate(f.perioada_de)} → ${fmtDate(f.perioada_pana_la)}` : '<span style="color:var(--sub)">—</span>';
