@@ -1254,7 +1254,14 @@ function aplicaDataToate(prefix) {
 // ═══════════════════════════════════════════════════════════════
 async function salveazaCalcule(modul, an, luna, calculeArray) {
   if (!calculeArray || calculeArray.length === 0) return;
-  // Curat: setez status preliminar la toate
+  // FIX: sterg TOATE calculele vechi pentru (modul,an,luna) — apoi INSERT curat
+  // Motiv: UPSERT nu sterge calculele orfane (chiriasi exclusi ulterior din calcul)
+  try {
+    await fetch(`${SUPA_URL}/domadami_calcule?modul=eq.${modul}&an=eq.${an}&luna=eq.${luna}`, {
+      method: 'DELETE', headers: HEADERS_WRITE
+    });
+  } catch (e) { console.warn('Warning stergere calcule vechi:', e); }
+  // Payload nou
   const payload = calculeArray.map(c => ({
     unitate_id: c.unitate_id,
     modul, an, luna,
