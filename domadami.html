@@ -68,6 +68,10 @@ body.is-contabilitate .setare-inp{
   pointer-events:none!important;background:#f3f4f6!important;opacity:0.75;cursor:not-allowed!important
 }
 body.is-contabilitate .btn-save-citiri,body.is-contabilitate .btn-save-setari,body.is-contabilitate .btn-edit-elementi{display:none!important}
+/* CONTABILITATE: ascunde COMPLET cardurile cu tabelele de indexi contoare — Vivi introduce DOAR factura */
+body.is-contabilitate .card:has(#gz-citiri),
+body.is-contabilitate .card:has(#el-citiri),
+body.is-contabilitate .card:has(#rj-citiri){display:none!important}
 
 /* Bannere informative per rol */
 .role-banner{display:none;padding:9px 18px;text-align:center;font-weight:700;font-size:13px;color:#fff}
