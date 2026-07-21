@@ -1644,6 +1644,17 @@ async function calculeazaGaze() {
     const costRamas   = totalLei - costPas;
 
     // Apometre apa calda — per garsoniera (G1-G8)
+    // FIX 2026-07-21: pentru factura cumulata pe N luni (nr_luni_acoperite),
+    // consum apometru = index_curent - index_de_acum_N_luni (nu doar ultima citire anterioara).
+    // Astfel, daca Bogdan a citit intermediar (ex: 20.04 intre 19.03 si 29.05), citirea intermediara nu subestimeaza consumul.
+    const nrLuniFacturaGaze = parseInt(cGen?.nr_luni_acoperite) || 1;
+    const idLunaStart = an*100 + luna - nrLuniFacturaGaze + 1;  // luna start a intervalului
+    const prevMultiLuna = id => {
+      const candidates = allCitiri.filter(c => c.contor_id === id && (c.an*100+c.luna) < idLunaStart);
+      if (candidates.length === 0) return null;
+      candidates.sort((a,b) => (b.an*100+b.luna) - (a.an*100+a.luna));
+      return candidates[0];
+    };
     const garsoniere = _unitati.filter(u => u.tip === 'garsoniera').sort((a,b)=>a.ordine-b.ordine);
     const apomCalde = _contoare.filter(c => c.tip === 'apometru_apa_calda');
     const consumPerG = {};
@@ -1652,11 +1663,14 @@ async function calculeazaGaze() {
       consumPerG[g.id] = { mag: g.cod, consum: 0, elementi: g.nr_elementi_calorifer || 0 };
       apomCalde.filter(a => a.unitate_id === g.id).forEach(a => {
         const cur = citiriRaw.find(c => c.contor_id === a.id);
-        const prev = prevForContor(a.id);
+        // Pentru factura cumulata: folosesc prev = citirea de acum nrLuniFacturaGaze luni (ignora citirile intermediare)
+        const prev = nrLuniFacturaGaze > 1 ? prevMultiLuna(a.id) : prevForContor(a.id);
         if (cur && prev) {
           const c = parseFloat(cur.index_final) - parseFloat(prev.index_final);
-          consumPerG[g.id].consum += c;
-          totalApaCalda += c;
+          if (c > 0) {  // ignor consum negativ (erori apometru)
+            consumPerG[g.id].consum += c;
+            totalApaCalda += c;
+          }
         }
       });
     });
@@ -3281,8 +3295,32 @@ async function openFisa(unitateId) {
       return cand.reduce((a,b) => (a.an*100+a.luna) > (b.an*100+b.luna) ? a : b);
     };
     const curFor = (cid, an, luna) => citirileUnit.find(c => c.contor_id === cid && c.an === an && c.luna === luna);
+    // Calcul mai intai totalul CUMULAT pe interval per contor + total general
+    let totalGeneral = 0;
+    const perContorTotal = {};
+    interval.luni.forEach(l => {
+      contoareRel.forEach(ct => {
+        const prev = prevFor(ct.id, l.an, l.luna);
+        const cur = curFor(ct.id, l.an, l.luna);
+        if (prev && cur) {
+          const c = parseFloat(cur.index_final) - parseFloat(prev.index_final);
+          if (c > 0) {
+            perContorTotal[ct.id] = (perContorTotal[ct.id] || 0) + c;
+            totalGeneral += c;
+          }
+        }
+      });
+    });
+    const um = modul === 'ENEL' ? 'kw' : 'mc';
     let out = '<div style="margin-top:10px;padding:10px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">';
     out += `<div style="font-weight:700;color:var(--sub);font-size:11px;margin-bottom:8px;text-transform:uppercase">📊 Indexi apometre/contoare</div>`;
+    // SUMAR SUS: total cumulat pe interval
+    if (interval.luni.length > 1) {
+      out += `<div style="padding:6px 10px;background:#dcfce7;border-radius:5px;font-size:12px;margin-bottom:8px">
+        <b>🔢 Consum TOTAL cumulat (${interval.luni.length} luni):</b> <b style="color:#15803d;font-size:14px">${fmt(totalGeneral, 0)} ${um}</b>
+      </div>`;
+    }
+    // Detaliu per luna
     interval.luni.forEach(l => {
       const luniNume = `${LUNI_RO[l.luna-1]} ${l.an}`;
       let totalMc = 0, rows = '';
@@ -3296,12 +3334,12 @@ async function openFisa(unitateId) {
           const est = cur.este_estimat || prev.este_estimat;
           rows += `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;color:${c<0?'#dc2626':'var(--dark)'}">
             <span>${escH(ct.denumire)}${est?' <span style="color:#f59e0b">*est</span>':''}</span>
-            <span><b>${prev.index_final}</b> (${fmtDtShort(prev.data_citire)}) → <b>${cur.index_final}</b> (${fmtDtShort(cur.data_citire)}) = <b style="color:${c<=0?'var(--sub)':'var(--green)'}">${c>=0?'+':''}${fmt(c,0)} ${modul==='ENEL'?'kw':'mc'}</b></span>
+            <span><b>${prev.index_final}</b> (${fmtDtShort(prev.data_citire)}) → <b>${cur.index_final}</b> (${fmtDtShort(cur.data_citire)}) = <b style="color:${c<=0?'var(--sub)':'var(--green)'}">${c>=0?'+':''}${fmt(c,0)} ${um}</b></span>
           </div>`;
         }
       });
       if (rows) {
-        out += `<div style="margin-top:6px"><b style="font-size:12px">📅 ${luniNume}</b> — Total: <b>${fmt(totalMc, 0)} ${modul==='ENEL'?'kw':'mc'}</b></div>${rows}`;
+        out += `<div style="margin-top:6px"><b style="font-size:12px">📅 ${luniNume}</b> — Total: <b>${fmt(totalMc, 0)} ${um}</b></div>${rows}`;
       }
     });
     out += '</div>';
