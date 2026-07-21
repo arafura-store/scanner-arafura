@@ -3222,9 +3222,25 @@ async function renderCentralizator() {
   }
 }
 
-function openFisa(unitateId) {
+async function openFisa(unitateId) {
   const u = _unitati.find(x => x.id === unitateId);
   if (!u || !_centralizatorData) return;
+  // Fetch citiri pt contoarele acestei unitati (RAJA + ENEL + apometre apa calda pt GAZE)
+  const contoareUnit = _contoare.filter(c => c.activ && c.unitate_id === unitateId);
+  const contoreIds = contoareUnit.map(c => c.id);
+  // + contoare comune GAZE (general + pasant Farmacie) pentru context garsoniere
+  const contorGen = _contoare.find(c => c.modul === 'GAZE' && c.tip === 'general');
+  const contorPas = _contoare.find(c => c.modul === 'GAZE' && c.tip === 'pasant');
+  if (u.tip === 'garsoniera') {
+    if (contorGen) contoreIds.push(contorGen.id);
+    if (contorPas) contoreIds.push(contorPas.id);
+  }
+  let citirileUnit = [];
+  if (contoreIds.length > 0) {
+    citirileUnit = await api(`/domadami_citiri?contor_id=in.(${contoreIds.join(',')})&select=contor_id,an,luna,data_citire,index_final,este_estimat&order=data_citire`);
+  }
+  const fmtDtShort = d => d ? d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(2,4) : '—';
+  const getContor = id => _contoare.find(c => c.id === id) || { denumire: `id=${id}` };
   const r = _centralizatorData.matrix[unitateId];
   const ch = (_centralizatorData.chiriasPerUnitate[unitateId] || []).map(c => c.nume).join(', ');
   const total = r.GAZE + r.ENEL + r.RAJA + r.POLARIS;
@@ -3244,6 +3260,53 @@ function openFisa(unitateId) {
     <div class="kpi gold"><div class="lbl">TOTAL DE PLATA</div><div class="val">${fmt(total, 2)} RON</div></div>
     <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:13px;line-height:1.5">🔥 ${perModulLbl('GAZE')}<br>⚡ ${perModulLbl('ENEL')}<br>💧 ${perModulLbl('RAJA')}<br>🗑️ ${perModulLbl('POLARIS')}</div></div>
   </div>`;
+
+  // Helper: tabel cu indexi per apometru/contor per luna din interval
+  const renderIndexiTable = (modul) => {
+    if (modul === 'POLARIS') return ''; // POLARIS n-are contoare
+    const interval = ipm ? ipm[modul] : null;
+    if (!interval || !interval.luni) return '';
+    // Contoarele acestei unitati care contribuie la modul
+    const contoareRel = contoareUnit.filter(c => {
+      if (modul === 'GAZE') return c.tip === 'apometru_apa_calda';
+      if (modul === 'ENEL') return c.modul === 'ENEL';
+      if (modul === 'RAJA') return c.modul === 'RAJA' && (c.tip === 'apometru_apa_rece' || c.tip === 'apometru_apa_calda' || c.tip === 'individual');
+      return false;
+    });
+    if (contoareRel.length === 0) return '';
+    // Pentru fiecare luna din interval → prev/cur per contor
+    const prevFor = (cid, an, luna) => {
+      const cand = citirileUnit.filter(c => c.contor_id === cid && (c.an*100+c.luna) < an*100+luna);
+      if (!cand.length) return null;
+      return cand.reduce((a,b) => (a.an*100+a.luna) > (b.an*100+b.luna) ? a : b);
+    };
+    const curFor = (cid, an, luna) => citirileUnit.find(c => c.contor_id === cid && c.an === an && c.luna === luna);
+    let out = '<div style="margin-top:10px;padding:10px;background:#fafafa;border-radius:6px;border:1px solid #e5e7eb">';
+    out += `<div style="font-weight:700;color:var(--sub);font-size:11px;margin-bottom:8px;text-transform:uppercase">📊 Indexi apometre/contoare</div>`;
+    interval.luni.forEach(l => {
+      const luniNume = `${LUNI_RO[l.luna-1]} ${l.an}`;
+      let totalMc = 0, rows = '';
+      contoareRel.forEach(ct => {
+        const prev = prevFor(ct.id, l.an, l.luna);
+        const cur = curFor(ct.id, l.an, l.luna);
+        if (prev && cur) {
+          const c = parseFloat(cur.index_final) - parseFloat(prev.index_final);
+          const cf = c > 0 ? c : 0;
+          totalMc += cf;
+          const est = cur.este_estimat || prev.este_estimat;
+          rows += `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;color:${c<0?'#dc2626':'var(--dark)'}">
+            <span>${escH(ct.denumire)}${est?' <span style="color:#f59e0b">*est</span>':''}</span>
+            <span><b>${prev.index_final}</b> (${fmtDtShort(prev.data_citire)}) → <b>${cur.index_final}</b> (${fmtDtShort(cur.data_citire)}) = <b style="color:${c<=0?'var(--sub)':'var(--green)'}">${c>=0?'+':''}${fmt(c,0)} ${modul==='ENEL'?'kw':'mc'}</b></span>
+          </div>`;
+        }
+      });
+      if (rows) {
+        out += `<div style="margin-top:6px"><b style="font-size:12px">📅 ${luniNume}</b> — Total: <b>${fmt(totalMc, 0)} ${modul==='ENEL'?'kw':'mc'}</b></div>${rows}`;
+      }
+    });
+    out += '</div>';
+    return out;
+  };
 
   ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
     if (r[m] <= 0) return;
@@ -3303,7 +3366,7 @@ function openFisa(unitateId) {
     }
     html += `<div class="card" style="margin-bottom:14px">
       <div class="card-hdr"><h3>${ic} ${m} — ${fmt(r[m], 2)} RON</h3></div>
-      <div class="card-body" style="font-size:13px;line-height:1.7">${detalii || '(fara detalii)'}</div>
+      <div class="card-body" style="font-size:13px;line-height:1.7">${detalii || '(fara detalii)'}${renderIndexiTable(m)}</div>
     </div>`;
   });
 
