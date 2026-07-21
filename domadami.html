@@ -3275,6 +3275,31 @@ async function openFisa(unitateId) {
     <div class="kpi"><div class="lbl">Facturare combinată</div><div class="val" style="font-size:13px;line-height:1.5">🔥 ${perModulLbl('GAZE')}<br>⚡ ${perModulLbl('ENEL')}<br>💧 ${perModulLbl('RAJA')}<br>🗑️ ${perModulLbl('POLARIS')}</div></div>
   </div>`;
 
+  // Helper: calculeaza consum cumulat pe interval pentru un modul (folosit si in text sus)
+  const getConsumCumulat = (modul) => {
+    if (modul === 'POLARIS' || !ipm) return 0;
+    const interval = ipm[modul];
+    if (!interval || !interval.luni) return 0;
+    const contoareRel = contoareUnit.filter(c => {
+      if (modul === 'GAZE') return c.tip === 'apometru_apa_calda';
+      if (modul === 'ENEL') return c.modul === 'ENEL';
+      if (modul === 'RAJA') return c.modul === 'RAJA' && (c.tip === 'apometru_apa_rece' || c.tip === 'apometru_apa_calda' || c.tip === 'individual');
+      return false;
+    });
+    let total = 0;
+    interval.luni.forEach(l => {
+      contoareRel.forEach(ct => {
+        const prev = citirileUnit.filter(c => c.contor_id === ct.id && (c.an*100+c.luna) < l.an*100+l.luna)
+          .reduce((a,b) => !a || (b.an*100+b.luna) > (a.an*100+a.luna) ? b : a, null);
+        const cur = citirileUnit.find(c => c.contor_id === ct.id && c.an === l.an && c.luna === l.luna);
+        if (prev && cur) {
+          const c = parseFloat(cur.index_final) - parseFloat(prev.index_final);
+          if (c > 0) total += c;
+        }
+      });
+    });
+    return total;
+  };
   // Helper: tabel cu indexi per apometru/contor per luna din interval
   const renderIndexiTable = (modul) => {
     if (modul === 'POLARIS') return ''; // POLARIS n-are contoare
@@ -3385,12 +3410,23 @@ async function openFisa(unitateId) {
         }
       }
     } else if (m === 'ENEL') {
-      detalii = `Consum individual: ${fmt0(bd.consum_individual_kw||0)} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt((bd.consum_individual_kw||0)*(bd.pret_unitar||0), 2)} RON<br>
-        ${bd.iluminat_kw > 0 ? `Iluminat forfait: ${bd.iluminat_kw} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.iluminat_kw*bd.pret_unitar, 2)} RON<br>` : ''}
-        ${bd.ac_kw > 0 ? `AC etaj ${bd.ac_forfait_aplicat?'(forfait)':'(real)'}: ${fmt(bd.ac_kw, 2)} kw × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.ac_kw*bd.pret_unitar, 2)} RON` : ''}`;
+      const pret = bd.pret_unitar || 0;
+      const costTotal = r[m];
+      const consumCumulat = pret > 0 ? costTotal / pret : 0;
+      const consumInd = getConsumCumulat('ENEL');  // consum fizic contor cumulat
+      const consumForfait = consumCumulat - consumInd;  // rest = iluminat + AC
+      detalii = `Consum individual (cumulat interval): <b>${fmt0(consumInd)} kw</b> × ${fmt(pret, 4)} = <b>${fmt(consumInd*pret, 2)} RON</b><br>
+        ${consumForfait > 0.5 ? `Forfait (iluminat+AC): <b>${fmt(consumForfait, 0)} kw</b> × ${fmt(pret, 4)} = <b>${fmt(consumForfait*pret, 2)} RON</b><br>` : ''}
+        <b>TOTAL: ${fmt(consumCumulat, 0)} kw × ${fmt(pret, 4)} = ${fmt(costTotal, 2)} RON</b>`;
     } else if (m === 'RAJA') {
-      detalii = `Consum apa: ${fmt(bd.consum_apa_total_mc||0, 3)} mc × ${fmt(bd.pret_unitar||0, 4)} = ${fmt((bd.consum_apa_total_mc||0)*(bd.pret_unitar||0), 2)} RON<br>
-        ${bd.consum_toaleta_forfait_mc > 0 ? `Toaleta forfait: ${fmt(bd.consum_toaleta_forfait_mc, 2)} mc × ${fmt(bd.pret_unitar||0, 4)} = ${fmt(bd.consum_toaleta_forfait_mc*bd.pret_unitar, 2)} RON` : ''}`;
+      const pret = bd.pret_unitar || 0;
+      const costTotal = r[m];
+      const consumCumulat = pret > 0 ? costTotal / pret : 0;
+      const consumApa = getConsumCumulat('RAJA');  // consum apometre cumulat
+      const consumForfait = consumCumulat - consumApa;  // rest = toaleta forfait
+      detalii = `Consum apa (cumulat interval): <b>${fmt(consumApa, 2)} mc</b> × ${fmt(pret, 4)} = <b>${fmt(consumApa*pret, 2)} RON</b><br>
+        ${consumForfait > 0.05 ? `Toaleta forfait: <b>${fmt(consumForfait, 2)} mc</b> × ${fmt(pret, 4)} = <b>${fmt(consumForfait*pret, 2)} RON</b><br>` : ''}
+        <b>TOTAL: ${fmt(consumCumulat, 2)} mc × ${fmt(pret, 4)} = ${fmt(costTotal, 2)} RON</b>`;
     } else if (m === 'POLARIS') {
       if (bd.tip === 'garsoniera_fix') {
         detalii = `Cost FIX garsoniera: <b>${fmt(bd.cost_fix||0, 2)} RON</b>`;
