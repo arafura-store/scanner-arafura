@@ -3206,8 +3206,12 @@ async function renderCentralizator() {
         <td></td>
       </tr>
       <tr style="color:var(--red)">
-        <td colspan="6">+ Pierderi DOMADAMI (apa + electric)</td>
-        <td class="num" style="background:#fee2e2">${fmt(pierderiFirma, 2)}</td>
+        <td colspan="2">+ Pierderi DOMADAMI (apa + electric)</td>
+        <td class="num" style="background:#fee2e2;color:var(--red);font-weight:700">${(facturaPerModul.GAZE - totalPerModul.GAZE) !== 0 ? fmt(facturaPerModul.GAZE - totalPerModul.GAZE, 2) : '—'}</td>
+        <td class="num" style="background:#fee2e2;color:var(--red);font-weight:700">${(facturaPerModul.ENEL - totalPerModul.ENEL) !== 0 ? fmt(facturaPerModul.ENEL - totalPerModul.ENEL, 2) : '—'}</td>
+        <td class="num" style="background:#fee2e2;color:var(--red);font-weight:700">${(facturaPerModul.RAJA - totalPerModul.RAJA) !== 0 ? fmt(facturaPerModul.RAJA - totalPerModul.RAJA, 2) : '—'}</td>
+        <td class="num" style="background:#fee2e2;color:var(--red);font-weight:700">${(facturaPerModul.POLARIS - totalPerModul.POLARIS) !== 0 ? fmt(facturaPerModul.POLARIS - totalPerModul.POLARIS, 2) : '—'}</td>
+        <td class="num" style="background:#fee2e2;color:var(--red);font-weight:800">${fmt(pierderiFirma, 2)}</td>
         <td></td>
       </tr>
       <tr style="background:#dbeafe">
