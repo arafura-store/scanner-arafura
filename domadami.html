@@ -1608,7 +1608,9 @@ async function calculeazaGaze() {
     ]);
     if (facturi.length === 0) { toast('Nu exista factura GAZE pentru luna selectata', 'err'); return; }
     const f = facturi[0];
-    const totalLei = parseFloat(f.total_factura_lei) || 0;
+    // ARAFURA e platitor TVA cu drept deducere → distributie chiriasi la pret FARA TVA
+    const totalLei = parseFloat(f.valoare_fara_tva) || 0;
+    if (totalLei <= 0) { toast('Completeaza VALOAREA FARA TVA la factura GAZE', 'err'); return; }
     const totalMc  = parseFloat(f.total_consum) || 0;
     const cuIncalzire = f.luna_cu_incalzire === true;
     if (totalMc <= 0) { toast('Total mc factura este 0 — completeaza factura', 'err'); return; }
@@ -1987,7 +1989,9 @@ async function calculeazaEnel() {
     ]);
     if (facturi.length === 0) { toast('Nu exista factura ENEL pentru luna selectata', 'err'); return; }
     const f = facturi[0];
-    const totalLei = parseFloat(f.total_factura_lei) || 0;
+    // ARAFURA e platitor TVA cu drept deducere → distributie chiriasi la pret FARA TVA
+    const totalLei = parseFloat(f.valoare_fara_tva) || 0;
+    if (totalLei <= 0) { toast('Completeaza VALOAREA FARA TVA la factura ENEL', 'err'); return; }
     const totalKw = parseFloat(f.total_consum) || 0;
     if (totalKw <= 0) { toast('Total kw factura este 0', 'err'); return; }
 
@@ -2413,7 +2417,9 @@ async function calculeazaRaja() {
     ]);
     if (facturi.length === 0) { toast('Nu exista factura RAJA pentru luna selectata', 'err'); return; }
     const f = facturi[0];
-    const totalLei = parseFloat(f.total_factura_lei) || 0;
+    // ARAFURA e platitor TVA cu drept deducere → distributie chiriasi la pret FARA TVA
+    const totalLei = parseFloat(f.valoare_fara_tva) || 0;
+    if (totalLei <= 0) { toast('Completeaza VALOAREA FARA TVA la factura RAJA', 'err'); return; }
     const totalMc = parseFloat(f.total_consum) || 0;
     if (totalMc <= 0) { toast('Total mc factura este 0', 'err'); return; }
 
@@ -2641,8 +2647,9 @@ async function calculeazaPolaris() {
       api(`/domadami_ocupare_lunara?an=eq.${an}&luna=eq.${luna}&select=*`)
     ]);
     if (facturi.length === 0) { toast('Nu exista factura POLARIS pentru luna selectata', 'err'); return; }
-    const totalLei = parseFloat(facturi[0].total_factura_lei) || 0;
-    if (totalLei <= 0) { toast('Total factura este 0', 'err'); return; }
+    // ARAFURA e platitor TVA cu drept deducere → distributie chiriasi la pret FARA TVA
+    const totalLei = parseFloat(facturi[0].valoare_fara_tva) || 0;
+    if (totalLei <= 0) { toast('Completeaza VALOAREA FARA TVA la factura POLARIS', 'err'); return; }
 
     const isOcupat = u => {
       const o = ocupareLst.find(x => x.unitate_id === u.id);
