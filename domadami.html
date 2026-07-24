@@ -736,33 +736,33 @@ body.is-viewer .role-banner.viewer{display:block}
               <div>
                 <div class="title">Luna folosită per modul (poți combina luni diferite pe aceeași facturare)</div>
                 Exemplu: ENEL+GAZE pe martie, RAJA+POLARIS pe aprilie. Default = luna globală sus.
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px">
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🔥 GAZE</label>
-                    <div style="display:flex;gap:4px;align-items:center">
-                      <select id="cent-luna-GAZE-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
-                      <span style="color:var(--sub);font-size:11px">→</span>
-                      <select id="cent-luna-GAZE-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px">
+                  <div style="min-width:0"><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🔥 GAZE</label>
+                    <div style="display:flex;gap:3px;align-items:center;min-width:0">
+                      <select id="cent-luna-GAZE-de" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="De la"></select>
+                      <span style="color:var(--sub);font-size:10px;flex-shrink:0">→</span>
+                      <select id="cent-luna-GAZE-pana" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="Până la"></select>
                     </div>
                   </div>
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">⚡ ENEL</label>
-                    <div style="display:flex;gap:4px;align-items:center">
-                      <select id="cent-luna-ENEL-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
-                      <span style="color:var(--sub);font-size:11px">→</span>
-                      <select id="cent-luna-ENEL-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                  <div style="min-width:0"><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">⚡ ENEL</label>
+                    <div style="display:flex;gap:3px;align-items:center;min-width:0">
+                      <select id="cent-luna-ENEL-de" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="De la"></select>
+                      <span style="color:var(--sub);font-size:10px;flex-shrink:0">→</span>
+                      <select id="cent-luna-ENEL-pana" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="Până la"></select>
                     </div>
                   </div>
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">💧 RAJA</label>
-                    <div style="display:flex;gap:4px;align-items:center">
-                      <select id="cent-luna-RAJA-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
-                      <span style="color:var(--sub);font-size:11px">→</span>
-                      <select id="cent-luna-RAJA-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                  <div style="min-width:0"><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">💧 RAJA</label>
+                    <div style="display:flex;gap:3px;align-items:center;min-width:0">
+                      <select id="cent-luna-RAJA-de" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="De la"></select>
+                      <span style="color:var(--sub);font-size:10px;flex-shrink:0">→</span>
+                      <select id="cent-luna-RAJA-pana" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="Până la"></select>
                     </div>
                   </div>
-                  <div><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🗑️ POLARIS</label>
-                    <div style="display:flex;gap:4px;align-items:center">
-                      <select id="cent-luna-POLARIS-de" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="De la"></select>
-                      <span style="color:var(--sub);font-size:11px">→</span>
-                      <select id="cent-luna-POLARIS-pana" onchange="onCentralizatorChange()" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-weight:600" title="Până la"></select>
+                  <div style="min-width:0"><label style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase">🗑️ POLARIS</label>
+                    <div style="display:flex;gap:3px;align-items:center;min-width:0">
+                      <select id="cent-luna-POLARIS-de" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="De la"></select>
+                      <span style="color:var(--sub);font-size:10px;flex-shrink:0">→</span>
+                      <select id="cent-luna-POLARIS-pana" onchange="onCentralizatorChange()" style="flex:1;min-width:0;padding:6px 4px;border:1px solid var(--border);border-radius:6px;font-weight:600;font-size:12px" title="Până la"></select>
                     </div>
                   </div>
                 </div>
