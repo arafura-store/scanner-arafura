@@ -58,6 +58,7 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
 .b-red{background:#fee2e2;color:#991b1b}.b-orange{background:#fed7aa;color:#9a3412}
 .b-green{background:#dcfce7;color:#166534}.b-blue{background:#dbeafe;color:#1e40af}
 .b-gold{background:#fef3c7;color:#92400e}
+.b-inchis{background:#e5e7eb;color:#374151;margin-left:6px;font-weight:700}
 /* CHARTS */
 .chart-wrap{height:280px;position:relative}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -625,7 +626,7 @@ function renderPVMatrix(pvuri) {
 
   let totalLipsa = 0;
   MAGAZINE.forEach(mag => {
-    html += `<tr><td class="mag">${mag}</td>`;
+    html += `<tr><td class="mag">${magEti(mag)}</td>`;
     luniLst.forEach(l => {
       const k = mag + '|' + l.key;
       const set = grup[k];
@@ -696,7 +697,7 @@ function renderLipsa(pvuri) {
   let html = '<table class="tbl"><thead><tr><th>Magazin</th><th>Status</th></tr></thead><tbody>';
   lipsa.forEach(m => {
     html += `<tr>
-      <td><b style="color:var(--navy)">${m}</b></td>
+      <td><b style="color:var(--navy)">${magEti(m)}</b></td>
       <td><span class="badge b-red alert-pulse">⚠ NU A TRIMIS PV</span></td>
     </tr>`;
   });
@@ -756,7 +757,7 @@ function renderClasament(contracte) {
     const med = i===0?'<span class="med1">🥇</span>':i===1?'<span class="med2">🥈</span>':i===2?'<span class="med3">🥉</span>':(i+1+'.');
     return `<tr>
       <td>${med}</td>
-      <td><b style="color:var(--navy)">${r.magazin}</b></td>
+      <td><b style="color:var(--navy)">${magEti(r.magazin)}</b></td>
       <td style="text-align:right"><span class="badge b-blue">${r.contracte}</span></td>
       <td style="text-align:right;font-weight:700;color:var(--navy)">${fmt0(r.suma)}</td>
       <td style="text-align:right;color:${com>=0.35?'var(--green)':'var(--orange)'};font-weight:700">${fmt(com,2)}%</td>
@@ -872,6 +873,17 @@ const LUNI_RO_SCRT = ['Ian','Feb','Mar','Apr','Mai','Iun','Iul','Aug','Sep','Oct
 // Magazine canonice — populate DINAMIC din datele Supabase
 // Exclude TOTAL + magazine inchise (valori reziduale, nu reale)
 const MAG_INCHISE = new Set(['ION RATIU', 'OVIDIU LIPSA']);
+
+// Magazine inchise care AU istoric real de activitate — datele NU se filtreaza
+// (ar strica totalurile lunilor trecute), doar se marcheaza vizual ca inchise.
+// BROTACEI: activitate oprita ian. 2026, casa inchisa feb. 2026, sold stins apr. 2026.
+const MAG_INCHISE_ISTORIC = new Set(['BROTACEI']);
+function magEti(m) {
+  const n = escH(m);
+  return MAG_INCHISE_ISTORIC.has(String(m || '').toUpperCase())
+    ? `${n}<span class="badge b-inchis" title="Magazin închis — activitate oprită ian. 2026, sold stins apr. 2026">închis</span>`
+    : n;
+}
 let MAG_UPP = [];
 function rebuildMagList() {
   const set = new Set();
@@ -979,7 +991,7 @@ function renderValoriContracte(ref) {
     }
     const cls = !c || valCur === 0 ? 'zero' : (valCur === maxVal ? 'top' : '');
     return `<div class="mc ${cls}">
-      <div class="mc-mag">${mag}</div>
+      <div class="mc-mag">${magEti(mag)}</div>
       <div class="mc-val">${fmt0(valCur)}</div>
       <div class="mc-var">${varHtml}</div>
     </div>`;
@@ -1098,7 +1110,7 @@ function renderComisionLunar(ref) {
     else varHtml = `<span style="color:${colorVar(dd)}">${arrowVar(dd)} ${fmt0(Math.abs(dd))} (${fmt(Math.abs(pp),1)}%)</span>`;
     const cls = !c || valCur === 0 ? 'zero' : (valCur === maxVal ? 'good' : '');
     return `<div class="mc ${cls}">
-      <div class="mc-mag">${mag}</div>
+      <div class="mc-mag">${magEti(mag)}</div>
       <div class="mc-val" style="color:var(--green)">${fmt0(valCur)}</div>
       <div class="mc-var">${varHtml}</div>
     </div>`;
@@ -1214,7 +1226,7 @@ function renderExecutariLunar(ref) {
     else varHtml = `<span style="color:${colorVar(-dd)}">${arrowVar(dd)} ${fmt0(Math.abs(dd))} (${fmt(Math.abs(pp),1)}%)</span>`;
     const cls = !c || valCur === 0 ? 'zero' : (valCur === maxVal && valCur > 0 ? 'danger' : '');
     return `<div class="mc ${cls}">
-      <div class="mc-mag">${mag}</div>
+      <div class="mc-mag">${magEti(mag)}</div>
       <div class="mc-val" style="color:${valCur > 0 ? 'var(--red)' : 'var(--sub)'}">${fmt0(valCur)}</div>
       <div class="mc-var">${varHtml}</div>
     </div>`;
@@ -1311,7 +1323,7 @@ function renderComMag() {
     '</tr></thead><tbody>';
   arr.forEach(r => {
     html += `<tr>
-      <td><b style="color:var(--navy)">${r.magazin}</b></td>
+      <td><b style="color:var(--navy)">${magEti(r.magazin)}</b></td>
       <td style="text-align:right">${r.n}</td>
       <td style="text-align:right;font-weight:700;color:var(--navy)">${fmt0(r.suma)}</td>
       <td style="text-align:right;background:#fef3c7;font-weight:700;color:var(--gold-d)">${fmt(r.comMed,3)}%</td>
