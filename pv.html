@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<title>PV Executare — Perfecta Invest IFN</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1F3864; --blue:#2E75B6; --gold:#FFD700; --gold-d:#856404;
+  --red:#C00000; --green:#00B050; --orange:#FF6600;
+  --bg:#f0f2f5; --border:#e2e8f0; --sub:#64748b;
+}
+body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:15px;line-height:1.4;padding-bottom:90px}
+.top{background:var(--navy);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+.top h1{font-size:15px}
+.top .mag{font-size:12px;background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:6px;cursor:pointer}
+.wrap{max-width:820px;margin:14px auto;padding:0 12px}
+
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.07);margin-bottom:14px;overflow:hidden}
+.card h2{background:var(--navy);color:#fff;padding:10px 14px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.card .body{padding:14px}
+
+label{display:block;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:0.03em;margin-bottom:4px}
+input,select{width:100%;padding:11px;border:1px solid var(--border);border-radius:8px;font-size:16px;font-family:inherit;background:#fff}
+input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(46,117,182,0.12)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.fld{margin-bottom:10px}
+
+.btn{padding:11px 16px;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit}
+.btn-nav{background:var(--navy);color:#fff}
+.btn-gold{background:var(--gold);color:var(--navy)}
+.btn-red{background:var(--red);color:#fff}
+.btn-ghost{background:#fff;color:var(--navy);border:1px solid var(--border)}
+.btn:active{opacity:0.8}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
+
+.contract{border:1px solid var(--border);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.contract-hd{background:#f8fafc;padding:10px 12px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.contract-hd .f{flex:1;min-width:110px}
+.obiect{display:grid;grid-template-columns:1.4fr 0.9fr 0.8fr 0.8fr 0.8fr auto;gap:6px;padding:8px 12px;align-items:end;border-top:1px solid var(--border)}
+.obiect .neta{background:#f1f5f9;border-radius:8px;padding:11px;font-weight:700;text-align:right;font-size:15px}
+.x{background:transparent;border:none;color:var(--red);font-size:20px;font-weight:700;cursor:pointer;padding:6px 8px;line-height:1}
+
+/* TOTALURI — verificare fata de aviz */
+.tot{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:3px solid var(--navy);padding:10px 14px;box-shadow:0 -3px 12px rgba(0,0,0,0.12);z-index:60}
+.tot-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px}
+.tot-row b{font-size:15px}
+.ok{color:var(--green)}.bad{color:var(--red)}
+
+.alert{border-radius:10px;padding:14px;font-weight:700;text-align:center;margin-bottom:12px}
+.alert-red{background:#fee2e2;color:#991b1b;border:3px solid var(--red);animation:puls 1.2s infinite}
+.alert-green{background:#dcfce7;color:#166534;border:2px solid var(--green)}
+@keyframes puls{0%,100%{opacity:1}50%{opacity:0.62}}
+
+.login{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-box{background:#fff;border-radius:12px;padding:28px;width:100%;max-width:360px;box-shadow:0 4px 20px rgba(0,0,0,0.1)}
+.login-hdr{background:var(--navy);color:#fff;border-radius:8px;padding:14px;margin-bottom:16px;text-align:center;font-weight:700}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:110px;background:var(--navy);color:#fff;padding:12px 20px;border-radius:10px;font-weight:700;z-index:200;display:none;box-shadow:0 4px 14px rgba(0,0,0,0.3);max-width:90%;text-align:center}
+
+.hint{font-size:11px;color:var(--sub);margin-top:4px}
+@media(max-width:620px){
+  .obiect{grid-template-columns:1fr 1fr;gap:8px}
+  .obiect .neta{text-align:left}
+  .grid3{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ALEGERE MAGAZIN (o singura data pe dispozitiv) -->
+<div id="screen-mag" class="login">
+  <div class="login-box">
+    <div class="login-hdr">PV EXECUTARE<br><span style="font-size:11px;font-weight:400;opacity:0.85">Perfecta Invest IFN</span></div>
+    <div class="fld">
+      <label>Magazinul tău</label>
+      <select id="sel-mag"></select>
+      <div class="hint">Se ține minte pe telefonul ăsta. O alegi o singură dată.</div>
+    </div>
+    <div class="fld">
+      <label>Numele tău (amanetar)</label>
+      <input id="sel-amanetar" placeholder="ex: NECHITA ELENA" autocomplete="name">
+    </div>
+    <button class="btn btn-nav" style="width:100%" onclick="salveazaDispozitiv()">Continuă</button>
+  </div>
+</div>
+
+<!-- FORMULAR -->
+<div id="screen-form" style="display:none">
+  <div class="top">
+    <h1>📋 PV Executare</h1>
+    <div class="mag" onclick="schimbaDispozitiv()"><span id="hd-mag">—</span> ✎</div>
+  </div>
+
+  <div class="wrap">
+    <div id="alert-zona"></div>
+
+    <div class="card">
+      <h2>Date PV <span id="hd-nrpv" style="font-weight:400;opacity:0.85"></span></h2>
+      <div class="body">
+        <div class="grid2">
+          <div class="fld"><label>Perioada</label><input id="f-perioada" placeholder="ex: iulie 2026"></div>
+          <div class="fld"><label>Data documentului</label><input type="date" id="f-data"></div>
+        </div>
+        <div class="fld"><label>Amanetar</label><input id="f-amanetar"></div>
+        <div class="grid3">
+          <div class="fld"><label>Nr. aviz</label><input id="f-nr-aviz" placeholder="ex: 153"></div>
+          <div class="fld"><label>Aviz — grame</label><input id="f-aviz-gr" type="number" step="0.001" inputmode="decimal" placeholder="0.000" oninput="recalc()"></div>
+          <div class="fld"><label>Aviz — lei</label><input id="f-aviz-lei" type="number" step="0.01" inputmode="decimal" placeholder="0.00" oninput="recalc()"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Contracte <span id="hd-nr-contracte" style="font-weight:400;opacity:0.85"></span></h2>
+      <div class="body">
+        <div id="lista-contracte"></div>
+        <button class="btn btn-ghost" style="width:100%" onclick="adaugaContract()">➕ Adaugă contract</button>
+      </div>
+    </div>
+
+    <button class="btn btn-gold" id="btn-trimite" style="width:100%;padding:15px;font-size:16px" onclick="trimite()">✅ Trimite PV-ul</button>
+    <div class="hint" style="text-align:center;margin-top:8px">Ce completezi se salvează automat pe telefon. Dacă închizi din greșeală, îl găsești când revii.</div>
+  </div>
+
+  <!-- TOTALURI FIXE JOS -->
+  <div class="tot">
+    <div class="tot-row"><span>Total grame brute</span><b id="t-gr">0,000</b></div>
+    <div class="tot-row"><span>Total valoare contracte</span><b id="t-lei">0,00</b></div>
+    <div class="tot-row" id="t-status" style="justify-content:center;font-weight:700;padding-top:4px"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPA_URL = 'https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1';
+const SUPA_KEY = 'sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw';
+const HEADERS  = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json' };
+
+// Magazinele Perfecta care trimit PV-uri (asa cum sunt scrise in tabela)
+const MAGAZINE = ['Babadag','Brotacei','Cumpana','Kogalniceanu','Marvimex','Medgidia','Navodari','Poarta 6','Poporului','Tomis 3'];
+const OBIECTE  = ['INEL','CERCEI','LANT','BRATARA','MEDALION','VERIGHETA','ALTELE'];
+const KARATE   = ['14K','18K','8K','9K','12K','22K','24K','Ag925','Ag900'];
+
+const TOLERANTA = 0.05;           // ca in scriptul vechi
+const KEY_DEV   = 'pv_dispozitiv';
+const KEY_DRAFT = 'pv_draft';
+
+let contracte = [];   // [{nr, val, obiecte:[{den,kar,gr,sc}]}]
+let dispozitiv = null;
+let seTrimite = false;
+
+// ── HELPERS ──
+const fmt  = (n,d=2) => (Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:d,maximumFractionDigits:d});
+const num  = v => { const n = parseFloat(String(v==null?'':v).replace(',','.')); return isNaN(n)?0:n; };
+const escH = s => String(s==null?'':s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+function toast(msg, ms=2600){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._t); t._t = setTimeout(()=>t.style.display='none', ms);
+}
+
+// Abreviere magazin pentru nr PV: "Kogalniceanu" -> KOGALNIC, "Poarta 6" -> POARTA6
+function abrev(magazin){
+  return magazin.toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^A-Z0-9]/g,'')
+    .slice(0,8);
+}
+
+// ── DISPOZITIV ──
+function initDispozitiv(){
+  const sel = document.getElementById('sel-mag');
+  sel.innerHTML = '<option value="">— alege —</option>' + MAGAZINE.map(m=>`<option>${m}</option>`).join('');
+  try { dispozitiv = JSON.parse(localStorage.getItem(KEY_DEV) || 'null'); } catch(e){ dispozitiv = null; }
+  if (dispozitiv && dispozitiv.magazin) { porneste(); }
+  else { document.getElementById('screen-mag').style.display = 'flex'; }
+}
+function salveazaDispozitiv(){
+  const m = document.getElementById('sel-mag').value;
+  const a = document.getElementById('sel-amanetar').value.trim();
+  if (!m) { toast('Alege magazinul'); return; }
+  if (!a) { toast('Scrie numele tău'); return; }
+  dispozitiv = { magazin:m, amanetar:a };
+  localStorage.setItem(KEY_DEV, JSON.stringify(dispozitiv));
+  porneste();
+}
+function schimbaDispozitiv(){
+  if (!confirm('Schimbi magazinul / numele de pe acest telefon?')) return;
+  document.getElementById('sel-mag').value = dispozitiv.magazin;
+  document.getElementById('sel-amanetar').value = dispozitiv.amanetar;
+  document.getElementById('screen-form').style.display = 'none';
+  document.getElementById('screen-mag').style.display = 'flex';
+}
+
+async function porneste(){
+  document.getElementById('screen-mag').style.display = 'none';
+  document.getElementById('screen-form').style.display = 'block';
+  document.getElementById('hd-mag').textContent = dispozitiv.magazin;
+  document.getElementById('f-amanetar').value = dispozitiv.amanetar;
+
+  const azi = new Date();
+  document.getElementById('f-data').value = azi.toISOString().slice(0,10);
+  const luni = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+  document.getElementById('f-perioada').value = luni[azi.getMonth()] + ' ' + azi.getFullYear();
+
+  incarcaDraft();
+  if (!contracte.length) adaugaContract();
+  render();
+  pregatesteNrPV();
+}
+
+// ── NUMAR PV ──
+let nrPvPropus = '';
+async function pregatesteNrPV(){
+  const pref = 'PV-' + abrev(dispozitiv.magazin) + '-';
+  let maxim = 0;
+  try {
+    const r = await fetch(`${SUPA_URL}/pv_executare?select=nr_pv&nr_pv=like.${encodeURIComponent(pref + '*')}`, { headers: HEADERS });
+    if (r.ok) {
+      (await r.json()).forEach(x => {
+        const m = String(x.nr_pv||'').match(/-(\d+)$/);
+        if (m) maxim = Math.max(maxim, parseInt(m[1],10));
+      });
+    }
+  } catch(e){ /* offline — numarul se recalculeaza la trimitere */ }
+  nrPvPropus = pref + String(maxim + 1).padStart(3,'0');
+  document.getElementById('hd-nrpv').textContent = nrPvPropus;
+}
+
+// ── CONTRACTE / OBIECTE ──
+function adaugaContract(){
+  contracte.push({ nr:'', val:'', obiecte:[{den:'INEL', kar:'14K', gr:'', sc:''}] });
+  render();
+}
+function stergeContract(i){
+  if (contracte.length === 1) { toast('Trebuie măcar un contract'); return; }
+  if (!confirm('Ștergi contractul ' + (contracte[i].nr || '#' + (i+1)) + '?')) return;
+  contracte.splice(i,1); render();
+}
+function adaugaObiect(i){ contracte[i].obiecte.push({den:'INEL', kar:'14K', gr:'', sc:''}); render(); }
+function stergeObiect(i,j){
+  if (contracte[i].obiecte.length === 1) { toast('Contractul are nevoie de un obiect'); return; }
+  contracte[i].obiecte.splice(j,1); render();
+}
+function setC(i,camp,v){ contracte[i][camp] = v; salveazaDraft(); recalc(); }
+function setO(i,j,camp,v){ contracte[i].obiecte[j][camp] = v; salveazaDraft(); render(); }
+
+function render(){
+  const box = document.getElementById('lista-contracte');
+  box.innerHTML = contracte.map((c,i) => `
+    <div class="contract">
+      <div class="contract-hd">
+        <div class="f"><label>Nr. contract</label>
+          <input value="${escH(c.nr)}" inputmode="numeric" onchange="setC(${i},'nr',this.value)" placeholder="ex: 1128"></div>
+        <div class="f"><label>Valoare contract (lei)</label>
+          <input value="${escH(c.val)}" type="number" step="0.01" inputmode="decimal" onchange="setC(${i},'val',this.value)" placeholder="0.00"></div>
+        <button class="x" onclick="stergeContract(${i})" title="Șterge contractul">✕</button>
+      </div>
+      ${c.obiecte.map((o,j) => `
+        <div class="obiect">
+          <div><label>Obiect</label>
+            <select onchange="setO(${i},${j},'den',this.value)">
+              ${OBIECTE.map(x=>`<option${x===o.den?' selected':''}>${x}</option>`).join('')}
+            </select></div>
+          <div><label>Karataj</label>
+            <select onchange="setO(${i},${j},'kar',this.value)">
+              ${KARATE.map(x=>`<option${x===o.kar?' selected':''}>${x}</option>`).join('')}
+            </select></div>
+          <div><label>Gr. brută</label>
+            <input value="${escH(o.gr)}" type="number" step="0.001" inputmode="decimal" onchange="setO(${i},${j},'gr',this.value)" placeholder="0.000"></div>
+          <div><label>Scăzământ</label>
+            <input value="${escH(o.sc)}" type="number" step="0.001" inputmode="decimal" onchange="setO(${i},${j},'sc',this.value)" placeholder="0.000"></div>
+          <div><label>Gr. netă</label>
+            <div class="neta">${fmt(Math.max(0, num(o.gr) - num(o.sc)), 3)}</div></div>
+          <button class="x" onclick="stergeObiect(${i},${j})" title="Șterge obiectul">✕</button>
+        </div>`).join('')}
+      <div style="padding:8px 12px;border-top:1px solid var(--border)">
+        <button class="btn btn-ghost" style="width:100%;padding:8px" onclick="adaugaObiect(${i})">➕ Adaugă obiect la acest contract</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('hd-nr-contracte').textContent =
+    contracte.length + (contracte.length === 1 ? ' contract' : ' contracte');
+  recalc();
+}
+
+// ── TOTALURI + VERIFICARE AVIZ ──
+function totaluri(){
+  let gr = 0, lei = 0, obiecte = 0;
+  contracte.forEach(c => {
+    lei += num(c.val);
+    c.obiecte.forEach(o => { gr += num(o.gr); obiecte++; });
+  });
+  return { gr, lei, obiecte };
+}
+function recalc(){
+  const t = totaluri();
+  const avizGr  = num(document.getElementById('f-aviz-gr').value);
+  const avizLei = num(document.getElementById('f-aviz-lei').value);
+  const grOk  = Math.abs(t.gr  - avizGr)  < TOLERANTA;
+  const leiOk = Math.abs(t.lei - avizLei) < TOLERANTA;
+
+  document.getElementById('t-gr').innerHTML  = `<span class="${grOk?'ok':'bad'}">${fmt(t.gr,3)}</span>` +
+    (avizGr ? ` <span style="color:var(--sub);font-size:12px">/ aviz ${fmt(avizGr,3)}</span>` : '');
+  document.getElementById('t-lei').innerHTML = `<span class="${leiOk?'ok':'bad'}">${fmt(t.lei,2)}</span>` +
+    (avizLei ? ` <span style="color:var(--sub);font-size:12px">/ aviz ${fmt(avizLei,2)}</span>` : '');
+
+  const st = document.getElementById('t-status');
+  const zona = document.getElementById('alert-zona');
+  if (!avizGr && !avizLei) {
+    st.innerHTML = '<span style="color:var(--sub);font-weight:400">completează avizul ca să verific</span>';
+    zona.innerHTML = '';
+    return { grOk, leiOk, ...t, avizGr, avizLei };
+  }
+  if (grOk && leiOk) {
+    st.innerHTML = '<span class="ok">✔ CORESPUNDE cu avizul</span>';
+    zona.innerHTML = '<div class="alert alert-green">✔ Totalurile corespund cu avizul</div>';
+  } else {
+    const dGr  = t.gr - avizGr, dLei = t.lei - avizLei;
+    st.innerHTML = '<span class="bad">✖ DIFERENȚĂ față de aviz</span>';
+    zona.innerHTML = `<div class="alert alert-red">⚠ NU CORESPUNDE CU AVIZUL<br>
+      ${!grOk ? `grame: ${dGr>0?'+':''}${fmt(dGr,3)}<br>` : ''}
+      ${!leiOk ? `lei: ${dLei>0?'+':''}${fmt(dLei,2)}` : ''}</div>`;
+  }
+  return { grOk, leiOk, ...t, avizGr, avizLei };
+}
+
+// ── DRAFT LOCAL ──
+function salveazaDraft(){
+  try {
+    localStorage.setItem(KEY_DRAFT, JSON.stringify({
+      contracte,
+      perioada: document.getElementById('f-perioada').value,
+      data:     document.getElementById('f-data').value,
+      nrAviz:   document.getElementById('f-nr-aviz').value,
+      avizGr:   document.getElementById('f-aviz-gr').value,
+      avizLei:  document.getElementById('f-aviz-lei').value,
+    }));
+  } catch(e){}
+}
+function incarcaDraft(){
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY_DRAFT) || 'null');
+    if (!d || !d.contracte || !d.contracte.length) return;
+    contracte = d.contracte;
+    if (d.perioada) document.getElementById('f-perioada').value = d.perioada;
+    if (d.data)     document.getElementById('f-data').value     = d.data;
+    if (d.nrAviz)   document.getElementById('f-nr-aviz').value  = d.nrAviz;
+    if (d.avizGr)   document.getElementById('f-aviz-gr').value  = d.avizGr;
+    if (d.avizLei)  document.getElementById('f-aviz-lei').value = d.avizLei;
+    toast('Am recuperat ce completaseși data trecută');
+  } catch(e){}
+}
+['f-perioada','f-data','f-nr-aviz','f-aviz-gr','f-aviz-lei'].forEach(id => {
+  document.addEventListener('DOMContentLoaded', () => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', salveazaDraft);
+  });
+});
+
+// ── TRIMITERE ──
+async function trimite(){
+  if (seTrimite) return;
+  const v = recalc();
+
+  const perioada = document.getElementById('f-perioada').value.trim();
+  const dataDoc  = document.getElementById('f-data').value;
+  const amanetar = document.getElementById('f-amanetar').value.trim();
+  const nrAviz   = document.getElementById('f-nr-aviz').value.trim();
+
+  if (!perioada) { toast('Completează perioada'); return; }
+  if (!dataDoc)  { toast('Completează data'); return; }
+  if (!amanetar) { toast('Completează amanetarul'); return; }
+  if (!nrAviz)   { toast('Completează numărul avizului'); return; }
+
+  const fara = contracte.filter(c => !String(c.nr).trim());
+  if (fara.length) { toast('Ai ' + fara.length + ' contract(e) fără număr'); return; }
+  if (!v.obiecte)  { toast('Nu ai niciun obiect'); return; }
+
+  if (!v.grOk || !v.leiOk) {
+    if (!confirm('ATENȚIE — totalurile NU corespund cu avizul.\n\nPV-ul se va trimite marcat "DIFERENTA".\n\nTrimiți așa?')) return;
+  } else {
+    if (!confirm('Trimiți PV-ul?\n\n' + contracte.length + ' contracte · ' + v.obiecte + ' obiecte\n' +
+                 fmt(v.gr,3) + ' g · ' + fmt(v.lei,2) + ' lei')) return;
+  }
+
+  seTrimite = true;
+  const btn = document.getElementById('btn-trimite');
+  btn.disabled = true; btn.textContent = 'Se trimite…';
+
+  try {
+    await pregatesteNrPV();   // renumerotez chiar inainte, sa nu se ciocneasca doua telefoane
+    const status = (v.grOk && v.leiOk) ? 'CORESPUNDE' : 'DIFERENTA';
+    const randuri = [];
+    contracte.forEach(c => {
+      c.obiecte.forEach(o => {
+        const gb = num(o.gr), sc = num(o.sc);
+        randuri.push({
+          nr_pv: nrPvPropus, magazin: dispozitiv.magazin, amanetar: amanetar,
+          perioada: perioada, data_doc: dataDoc, nr_aviz: nrAviz,
+          nr_contract: String(c.nr).trim(), denumire_obiect: o.den, karataj: o.kar,
+          gr_bruta: gb, scazamant: sc, gr_neta: Math.max(0, gb - sc),
+          valoare_contract: num(c.val),
+          aviz_gr: v.avizGr, aviz_lei: v.avizLei,
+          status_verificare: status
+        });
+      });
+    });
+
+    const r = await fetch(`${SUPA_URL}/pv_executare`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify(randuri)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + (await r.text()).slice(0,150));
+
+    localStorage.removeItem(KEY_DRAFT);
+    contracte = [];
+    document.getElementById('screen-form').innerHTML = `
+      <div class="top"><h1>📋 PV Executare</h1></div>
+      <div class="wrap">
+        <div class="alert alert-green" style="font-size:17px;padding:26px">
+          ✔ PV TRIMIS<br><span style="font-size:22px">${nrPvPropus}</span><br>
+          <span style="font-size:13px;font-weight:400">${randuri.length} obiecte · ${fmt(v.gr,3)} g · ${fmt(v.lei,2)} lei</span>
+          ${status === 'DIFERENTA' ? '<br><span style="font-size:13px;color:var(--red)">marcat DIFERENȚĂ față de aviz</span>' : ''}
+        </div>
+        <button class="btn btn-nav" style="width:100%" onclick="location.reload()">Trimite alt PV</button>
+      </div>`;
+  } catch(e) {
+    seTrimite = false;
+    btn.disabled = false; btn.textContent = '✅ Trimite PV-ul';
+    alert('NU s-a trimis!\n\n' + (e.message || e) + '\n\nDatele sunt salvate pe telefon — încearcă din nou când ai semnal.');
+  }
+}
+
+initDispozitiv();
+</script>
+</body>
+</html>
