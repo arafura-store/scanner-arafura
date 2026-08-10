@@ -59,6 +59,8 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
 .b-green{background:#dcfce7;color:#166534}.b-blue{background:#dbeafe;color:#1e40af}
 .b-gold{background:#fef3c7;color:#92400e}
 .b-inchis{background:#e5e7eb;color:#374151;margin-left:6px;font-weight:700}
+.mini-btn{background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:13px;font-weight:700;color:var(--navy)}
+.mini-btn:hover{background:#f1f5f9}
 /* CHARTS */
 .chart-wrap{height:280px;position:relative}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -1489,8 +1491,10 @@ async function refreshAurLive() {
       <div style="background:#fef3c7;border-left:4px solid var(--gold);border-radius:6px;padding:9px 12px;font-size:11px;color:#92400e;margin-top:10px">
         Preț informativ, <b>nu se salvează</b> în istoric. Cotațiile oficiale rămân cele de la <b>08:00</b> și <b>16:00</b>.
       </div>
-      <button onclick="refreshAurLive()" style="width:100%;margin-top:14px;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">🔄 Actualizează din nou</button>`;
+      <button onclick="refreshAurLive()" style="width:100%;margin-top:14px;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">🔄 Actualizează din nou</button>
+      <div id="aur-alerte" style="margin-top:18px;border-top:2px solid var(--border);padding-top:14px"></div>`;
     box.innerHTML = h;
+    renderAlerte(p24);
 
   } catch (e) {
     box.innerHTML = `
@@ -1501,6 +1505,131 @@ async function refreshAurLive() {
       </div>
       <button onclick="refreshAurLive()" style="width:100%;margin-top:14px;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">🔄 Încearcă din nou</button>`;
   }
+}
+
+// ── ALERTE PRET AUR (verificate in cloud, la 15 min — GitHub Actions) ──
+const EMAIL_IMPLICIT = 'eugendinescu@yahoo.com';
+
+async function renderAlerte(pretCurent) {
+  const box = document.getElementById('aur-alerte');
+  if (!box) return;
+  box.innerHTML = '<div style="color:var(--sub);font-size:12px">Se încarcă alertele…</div>';
+
+  let alerte = [], eroare = null;
+  try {
+    const r = await fetch(`${SUPA_URL}/alerte_aur?select=*&order=prag.desc`, { headers: HEADERS });
+    if (r.status === 404) eroare = 'tabela';
+    else if (!r.ok) eroare = await r.text();
+    else alerte = await r.json();
+  } catch (e) { eroare = e.message || String(e); }
+
+  if (eroare === 'tabela') {
+    box.innerHTML = `<div style="background:#fef3c7;border-left:4px solid var(--gold);border-radius:6px;padding:12px;font-size:12px;color:#92400e">
+      <b>🔔 Alertele nu sunt încă activate.</b><br>
+      Trebuie rulat o singură dată fișierul <code>sql/alerte_aur.sql</code> în Supabase.</div>`;
+    return;
+  }
+  if (eroare) {
+    box.innerHTML = `<div style="color:var(--red);font-size:12px">Nu am putut citi alertele: ${escH(eroare).slice(0,120)}</div>`;
+    return;
+  }
+
+  const active = alerte.filter(a => a.activa);
+  let h = `<div style="font-weight:700;font-size:13px;margin-bottom:4px">🔔 Alerte pe email</div>
+    <div style="font-size:11px;color:var(--sub);margin-bottom:10px">
+      Verificate automat la fiecare 15 minute, în cloud — merg și când calculatorul e închis.</div>`;
+
+  if (!alerte.length) {
+    h += '<div style="color:var(--sub);font-size:12px;margin-bottom:10px">Nicio alertă setată.</div>';
+  } else {
+    h += '<table class="tbl" style="margin-bottom:12px"><tbody>';
+    alerte.forEach(a => {
+      const prag = parseFloat(a.prag) || 0;
+      const atins = a.directie === 'peste' ? (pretCurent >= prag) : (pretCurent <= prag);
+      const dist = pretCurent - prag;
+      h += `<tr${a.activa ? '' : ' style="opacity:0.45"'}>
+        <td style="width:22px">${a.activa ? (atins ? '🔴' : '🟢') : '⚪'}</td>
+        <td>
+          <b>${a.directie === 'peste' ? 'peste' : 'sub'} ${fmt(prag,2)}</b>
+          <span style="color:var(--sub);font-size:11px">RON/g</span>
+          ${a.eticheta ? `<br><span style="font-size:11px;color:var(--sub)">${escH(a.eticheta)}</span>` : ''}
+          ${!a.activa && a.ultima_declansare ? `<br><span style="font-size:10px;color:var(--green)">✔ declanșată la ${fmt(a.pret_declansare,2)}</span>` : ''}
+        </td>
+        <td style="text-align:right;font-size:11px;color:var(--sub)">
+          ${a.activa ? (atins ? '<b style="color:var(--red)">atins</b>' : `${dist >= 0 ? '+' : ''}${fmt(dist,2)}`) : 'inactivă'}
+        </td>
+        <td style="text-align:right;width:80px">
+          <button onclick="comutaAlerta('${a.id}',${!a.activa})" class="mini-btn" title="${a.activa ? 'Dezactivează' : 'Reactivează'}">${a.activa ? '⏸' : '▶'}</button>
+          <button onclick="stergeAlerta('${a.id}')" class="mini-btn" style="color:var(--red)" title="Șterge">✕</button>
+        </td></tr>`;
+    });
+    h += '</tbody></table>';
+  }
+
+  h += `<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Alertă nouă</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <select id="al-dir" style="flex:0 0 92px;padding:9px;border:1px solid var(--border);border-radius:7px;font-size:14px">
+        <option value="peste">peste</option><option value="sub">sub</option>
+      </select>
+      <input id="al-prag" type="number" step="0.01" inputmode="decimal" placeholder="${fmt(pretCurent,2)}"
+             style="flex:1;padding:9px;border:1px solid var(--border);border-radius:7px;font-size:14px">
+      <span style="align-self:center;font-size:11px;color:var(--sub)">RON/g</span>
+    </div>
+    <input id="al-eticheta" placeholder="notă (opțional) — ex: vând la prețul ăsta"
+           style="width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-bottom:8px">
+    <input id="al-email" value="${escH(EMAIL_IMPLICIT)}" type="email"
+           style="width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-bottom:8px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-bottom:10px;cursor:pointer">
+      <input type="checkbox" id="al-odata" checked style="width:auto;margin:0"> anunță-mă o singură dată, apoi dezactivează
+    </label>
+    <button class="mini-btn" onclick="adaugaAlerta()" style="width:100%;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">➕ Adaugă alerta</button>
+  </div>`;
+
+  box.innerHTML = h;
+}
+
+async function adaugaAlerta() {
+  const prag = parseFloat(String(document.getElementById('al-prag').value).replace(',','.'));
+  const email = document.getElementById('al-email').value.trim();
+  if (!(prag > 0))            { alert('Scrie un preț valid.'); return; }
+  if (!email.includes('@'))   { alert('Scrie o adresă de email validă.'); return; }
+  const payload = {
+    directie: document.getElementById('al-dir').value,
+    prag: prag,
+    email: email,
+    eticheta: document.getElementById('al-eticheta').value.trim() || null,
+    o_singura_data: document.getElementById('al-odata').checked,
+    activa: true
+  };
+  try {
+    const r = await fetch(`${SUPA_URL}/alerte_aur`, {
+      method: 'POST', headers: { ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+      body: JSON.stringify([payload])
+    });
+    if (!r.ok) throw new Error(await r.text());
+    refreshAurLive();
+  } catch (e) { alert('Nu am putut salva alerta:\n' + (e.message || e)); }
+}
+
+async function comutaAlerta(id, activa) {
+  try {
+    const r = await fetch(`${SUPA_URL}/alerte_aur?id=eq.${id}`, {
+      method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+      body: JSON.stringify({ activa: activa })
+    });
+    if (!r.ok) throw new Error(await r.text());
+    refreshAurLive();
+  } catch (e) { alert('Nu am putut modifica alerta:\n' + (e.message || e)); }
+}
+
+async function stergeAlerta(id) {
+  if (!confirm('Ștergi alerta?')) return;
+  try {
+    const r = await fetch(`${SUPA_URL}/alerte_aur?id=eq.${id}`, { method:'DELETE', headers: HEADERS });
+    if (!r.ok) throw new Error(await r.text());
+    refreshAurLive();
+  } catch (e) { alert('Nu am putut șterge alerta:\n' + (e.message || e)); }
 }
 
 // ── MODAL ISTORIC COTATII ──
