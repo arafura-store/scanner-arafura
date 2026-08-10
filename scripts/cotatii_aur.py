@@ -34,8 +34,21 @@ RESEND_KEY   = os.environ.get("RESEND_API_KEY") or ""
 FROM_EMAIL   = os.environ.get("FROM_EMAIL") or "Alerte Aur <onboarding@resend.dev>"
 TG_TOKEN     = os.environ.get("TELEGRAM_BOT_TOKEN") or ""
 TG_CHAT      = os.environ.get("TELEGRAM_CHAT_ID") or ""
-CMB_KEY      = os.environ.get("CALLMEBOT_APIKEY") or ""   # WhatsApp prin CallMeBot
-CMB_PHONE    = os.environ.get("CALLMEBOT_PHONE") or ""    # numarul tau, format +40...
+# WhatsApp prin CallMeBot. Fiecare numar are cheia LUI (CallMeBot o leaga de numarul
+# care a trimit mesajul de activare) — de aceea sunt perechi telefon+cheie.
+# Cheile stau in secretele GitHub, NU in baza de date: repo-ul e public si cheia de
+# citire a bazei e vizibila in cod, deci oricine ar putea spama numerele.
+# Pentru un destinatar nou: adaugi CALLMEBOT_PHONE_2 + CALLMEBOT_APIKEY_2 (apoi _3 etc).
+def _destinatari_whatsapp():
+    lista = []
+    for sufix in ("", "_2", "_3", "_4", "_5"):
+        tel = (os.environ.get(f"CALLMEBOT_PHONE{sufix}") or "").strip()
+        key = (os.environ.get(f"CALLMEBOT_APIKEY{sufix}") or "").strip()
+        if tel and key:
+            lista.append((tel, key))
+    return lista
+
+CMB_DESTINATARI = _destinatari_whatsapp()
 
 TZ = ZoneInfo("Europe/Bucharest")
 SLOTS = ("08:00", "16:00")
@@ -201,17 +214,24 @@ def trimite_mail(catre, subiect, html):
 
 
 def trimite_whatsapp(text):
-    """WhatsApp prin CallMeBot (serviciu gratuit, neoficial — doar uz personal)."""
-    if not CMB_KEY or not CMB_PHONE:
-        log("  !! CALLMEBOT_APIKEY / CALLMEBOT_PHONE lipsesc — nu pot trimite pe WhatsApp")
+    """WhatsApp prin CallMeBot (serviciu gratuit, neoficial — doar uz personal).
+    Trimite catre TOATE numerele configurate. Returneaza True daca a reusit macar unul."""
+    if not CMB_DESTINATARI:
+        log("  !! CALLMEBOT_PHONE / CALLMEBOT_APIKEY lipsesc — nu pot trimite pe WhatsApp")
         return False
-    url = ("https://api.callmebot.com/whatsapp.php?"
-           + urllib.parse.urlencode({"phone": CMB_PHONE, "text": text, "apikey": CMB_KEY}))
-    st, corp = http(url, timeout=45)
-    if st == 200 and "error" not in corp.lower()[:400]:
-        return True
-    log(f"  EROARE CallMeBot: HTTP {st} {corp[:250]}")
-    return False
+    reusite = 0
+    for tel, key in CMB_DESTINATARI:
+        url = ("https://api.callmebot.com/whatsapp.php?"
+               + urllib.parse.urlencode({"phone": tel, "text": text, "apikey": key}))
+        st, corp = http(url, timeout=45)
+        # numerele se mascheaza in log — log-urile GitHub Actions sunt publice la repo public
+        masca = f"...{tel[-4:]}"
+        if st == 200 and "error" not in corp.lower()[:400]:
+            reusite += 1
+            log(f"    WhatsApp -> {masca}: trimis")
+        else:
+            log(f"    WhatsApp -> {masca}: ESUAT (HTTP {st}) {corp[:150]}")
+    return reusite > 0
 
 
 def coada_notificare(a, n_cons):
