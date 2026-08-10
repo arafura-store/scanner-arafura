@@ -134,10 +134,12 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
           <div class="val" id="k-critice">—</div>
           <div class="sub" id="k-critice-val">— LEI la risc</div>
         </div>
-        <div class="kpi gold" ondblclick="openCotatiiModal()" title="Dublu-click pentru istoric complet" style="cursor:pointer">
+        <div class="kpi gold" ondblclick="openCotatiiModal()" title="Dublu-click pentru istoric complet" style="cursor:pointer;position:relative">
           <div class="lbl">Cotație aur 24K azi <span style="font-size:9px;opacity:0.6">📈 dblclick</span></div>
           <div class="val" id="k-aur">—</div>
           <div class="sub" id="k-aur-var">RON / gram</div>
+          <button onclick="event.stopPropagation();openAurLive()" title="Preț aur chiar acum, direct din piață"
+            style="position:absolute;top:10px;right:10px;background:var(--gold);color:var(--navy);border:none;padding:5px 11px;border-radius:6px;cursor:pointer;font-weight:800;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.2)">⚡ LIVE</button>
         </div>
         <div class="kpi green" ondblclick="openComisionModal()" title="Dublu-click pentru breakdown" style="cursor:pointer">
           <div class="lbl">Comision mediu firmă <span style="font-size:9px;opacity:0.6">📊 dblclick</span><span id="k-comision-luna-ref" style="font-size:9px;opacity:0.7;font-weight:400"></span></div>
@@ -439,6 +441,17 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
   </div>
 </div>
 
+<!-- MODAL PRET AUR LIVE -->
+<div id="aur-live-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;overflow-y:auto" onclick="if(event.target===this)closeAurLive()">
+  <div style="background:#fff;border-radius:12px;max-width:560px;margin:40px auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+    <div style="background:var(--navy);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">
+      <h3 style="font-size:15px">⚡ Preț aur LIVE</h3>
+      <button onclick="closeAurLive()" style="background:transparent;border:1px solid #fff;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:700">✕ Închide</button>
+    </div>
+    <div style="padding:18px" id="aur-live-body"></div>
+  </div>
+</div>
+
 <script>
 const SUPA_URL = 'https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1';
 const SUPA_KEY = 'sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw';
@@ -567,6 +580,7 @@ function renderKPI(contracte, cotatii) {
   // Cotatie aur azi
   if (cotatii.length > 0) {
     const azi = cotatii[0]; // most recent
+    _ultimaCotatie = azi;   // referinta pentru butonul LIVE
     const ieri = cotatii.find(c => c.data_snapshot !== azi.data_snapshot);
     const pretAzi = parseFloat(azi.pret_24k)||0;
     document.getElementById('k-aur').textContent = fmt(pretAzi, 2);
@@ -1388,6 +1402,95 @@ function renderComDis() {
   }, 50);
 }
 
+// ── PRET AUR LIVE (la cerere, buton ⚡ LIVE) ──
+// Aceeasi formula ca watcher-ul Python de la 08:00/16:00:
+//   24K = EUR/gram x (curs BNR - 0.02) x 0.985
+// Cursul BNR se ia din ultima cotatie salvata (BNR il schimba o data pe zi);
+// ce e volatil — pretul spot al aurului — se ia live din piata.
+const AUR_MARJA = 0.985, AUR_AJUST_CURS = 0.02, AUR_OZ_GRAME = 31.1034768;
+let _ultimaCotatie = null;
+
+function openAurLive() {
+  document.getElementById('aur-live-modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  refreshAurLive();
+}
+function closeAurLive() {
+  document.getElementById('aur-live-modal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function refreshAurLive() {
+  const box = document.getElementById('aur-live-body');
+  box.innerHTML = '<div style="text-align:center;padding:40px;color:var(--sub);font-weight:700">Se ia prețul din piață…</div>';
+
+  try {
+    const [xauResp, fxResp] = await Promise.all([
+      fetch('https://api.gold-api.com/price/XAU'),
+      fetch('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD')
+    ]);
+    if (!xauResp.ok) throw new Error('sursa pentru aur nu răspunde');
+    if (!fxResp.ok)  throw new Error('sursa pentru curs valutar nu răspunde');
+
+    const xauUsd = parseFloat((await xauResp.json()).price);
+    const eurUsd = parseFloat((await fxResp.json()).rates.USD);
+    if (!(xauUsd > 0) || !(eurUsd > 0)) throw new Error('date invalide de la surse');
+
+    const cursBnr = _ultimaCotatie ? parseFloat(_ultimaCotatie.curs_bnr) : 0;
+    if (!(cursBnr > 0)) throw new Error('nu am curs BNR de referință în baza de date');
+
+    const eurGram     = (xauUsd / eurUsd) / AUR_OZ_GRAME;
+    const cursAjustat = cursBnr - AUR_AJUST_CURS;
+    const p24         = eurGram * cursAjustat * AUR_MARJA;
+
+    const karate = [['24K', p24], ['22K', p24*22/24], ['18K', p24*18/24],
+                    ['14K', p24*14/24], ['12K', p24/2], ['8K', p24/3]];
+
+    const ref   = _ultimaCotatie ? (parseFloat(_ultimaCotatie.pret_24k)||0) : 0;
+    const diff  = p24 - ref;
+    const pct   = ref > 0 ? (diff/ref*100) : 0;
+    const cls   = diff >= 0 ? 'var-up' : 'var-down';
+    const arrow = diff >= 0 ? '↑' : '↓';
+    const acum  = new Date().toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+    let h = `
+      <div style="text-align:center;padding:6px 0 14px">
+        <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:0.04em">24K — RON / gram</div>
+        <div style="font-size:44px;font-weight:800;color:var(--gold-d);line-height:1.1">${fmt(p24,2)}</div>
+        ${ref > 0 ? `<div style="font-size:13px;margin-top:4px"><span class="${cls}">${arrow} ${fmt(Math.abs(diff),2)} RON (${fmt(Math.abs(pct),2)}%)</span>
+          <span style="color:var(--sub)">față de ${escH(_ultimaCotatie.data_ora||'')}</span></div>` : ''}
+        <div style="font-size:11px;color:var(--sub);margin-top:6px">🕒 ${acum}</div>
+      </div>
+      <table class="tbl" style="margin-bottom:14px"><tbody>`;
+    karate.forEach(([k, v], i) => {
+      h += `<tr${i===0?' style="background:#fef3c7"':''}>
+              <td style="font-weight:${i===0?'800':'700'};width:70px">${k}</td>
+              <td style="text-align:right;font-weight:${i===0?'800':'700'};font-size:${i===0?'16px':'14px'};color:${i===0?'var(--gold-d)':'inherit'}">${fmt(v,2)}</td>
+              <td style="color:var(--sub);font-size:11px">RON/g</td>
+            </tr>`;
+    });
+    h += `</tbody></table>
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--sub);line-height:1.7">
+        Aur spot: <b>${fmt(xauUsd,2)} USD/uncie</b> &nbsp;·&nbsp; EUR/USD: <b>${fmt(eurUsd,4)}</b><br>
+        EUR/gram brut: <b>${fmt(eurGram,2)}</b> &nbsp;·&nbsp; Curs BNR: <b>${fmt(cursBnr,4)}</b> → ajustat <b>${fmt(cursAjustat,4)}</b>
+      </div>
+      <div style="background:#fef3c7;border-left:4px solid var(--gold);border-radius:6px;padding:9px 12px;font-size:11px;color:#92400e;margin-top:10px">
+        Preț informativ, <b>nu se salvează</b> în istoric. Cotațiile oficiale rămân cele de la <b>08:00</b> și <b>16:00</b>.
+      </div>
+      <button onclick="refreshAurLive()" style="width:100%;margin-top:14px;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">🔄 Actualizează din nou</button>`;
+    box.innerHTML = h;
+
+  } catch (e) {
+    box.innerHTML = `
+      <div style="background:#fee2e2;border-left:4px solid var(--red);border-radius:6px;padding:14px;color:#991b1b">
+        <b>Nu am putut lua prețul live.</b><br>
+        <span style="font-size:12px">${escH(e.message||e)}</span><br>
+        <span style="font-size:11px;opacity:0.85">Verifică internetul. Cotațiile automate de la 08:00 și 16:00 nu sunt afectate.</span>
+      </div>
+      <button onclick="refreshAurLive()" style="width:100%;margin-top:14px;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer">🔄 Încearcă din nou</button>`;
+  }
+}
+
 // ── MODAL ISTORIC COTATII ──
 let _allCotatii = [];
 async function openCotatiiModal() {
@@ -1489,6 +1592,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (document.getElementById('cot-modal').style.display === 'block') closeCotatiiModal();
     if (document.getElementById('com-modal').style.display === 'block') closeComisionModal();
+    if (document.getElementById('aur-live-modal').style.display === 'block') closeAurLive();
   }
 });
 
