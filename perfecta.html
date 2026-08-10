@@ -1552,7 +1552,7 @@ async function renderAlerte(pretCurent) {
         <td>
           <b>${a.directie === 'peste' ? 'peste' : 'sub'} ${fmt(prag,2)}</b>
           <span style="color:var(--sub);font-size:11px">RON/g</span>
-          <span style="font-size:11px;color:var(--sub)">${a.telegram ? ' ✈️' : ''}${a.email ? ' ✉️' : ''}</span>
+          <span style="font-size:11px;color:var(--sub)">${a.whatsapp ? ' 💬' : ''}${a.telegram ? ' ✈️' : ''}${a.email ? ' ✉️' : ''}</span>
           ${a.eticheta ? `<br><span style="font-size:11px;color:var(--sub)">${escH(a.eticheta)}</span>` : ''}
           ${!a.activa && a.ultima_declansare ? `<br><span style="font-size:10px;color:var(--green)">✔ declanșată la ${fmt(a.pret_declansare,2)}</span>` : ''}
         </td>
@@ -1579,9 +1579,12 @@ async function renderAlerte(pretCurent) {
     </div>
     <input id="al-eticheta" placeholder="notă (opțional) — ex: vând la prețul ăsta"
            style="width:100%;padding:9px;border:1px solid var(--border);border-radius:7px;font-size:13px;margin-bottom:8px">
-    <div style="display:flex;gap:14px;margin-bottom:8px">
+    <div style="display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:700">
-        <input type="checkbox" id="al-telegram" checked style="width:auto;margin:0" onchange="document.getElementById('al-email-wrap').style.display=document.getElementById('al-mail').checked?'block':'none'"> ✈️ Telegram
+        <input type="checkbox" id="al-whatsapp" checked style="width:auto;margin:0"> 💬 WhatsApp
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:700">
+        <input type="checkbox" id="al-telegram" style="width:auto;margin:0"> ✈️ Telegram
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:700">
         <input type="checkbox" id="al-mail" style="width:auto;margin:0" onchange="document.getElementById('al-email-wrap').style.display=this.checked?'block':'none'"> ✉️ Email
@@ -1602,15 +1605,17 @@ async function renderAlerte(pretCurent) {
 
 async function adaugaAlerta() {
   const prag = parseFloat(String(document.getElementById('al-prag').value).replace(',','.'));
+  const peWhatsapp = document.getElementById('al-whatsapp').checked;
   const peTelegram = document.getElementById('al-telegram').checked;
   const peMail = document.getElementById('al-mail').checked;
   const email = document.getElementById('al-email').value.trim();
   if (!(prag > 0))               { alert('Scrie un preț valid.'); return; }
-  if (!peTelegram && !peMail)    { alert('Alege măcar un canal: Telegram sau Email.'); return; }
+  if (!peWhatsapp && !peTelegram && !peMail) { alert('Alege măcar un canal: WhatsApp, Telegram sau Email.'); return; }
   if (peMail && !email.includes('@')) { alert('Scrie o adresă de email validă.'); return; }
   const payload = {
     directie: document.getElementById('al-dir').value,
     prag: prag,
+    whatsapp: peWhatsapp,
     telegram: peTelegram,
     email: peMail ? email : null,
     eticheta: document.getElementById('al-eticheta').value.trim() || null,

@@ -34,6 +34,8 @@ RESEND_KEY   = os.environ.get("RESEND_API_KEY") or ""
 FROM_EMAIL   = os.environ.get("FROM_EMAIL") or "Alerte Aur <onboarding@resend.dev>"
 TG_TOKEN     = os.environ.get("TELEGRAM_BOT_TOKEN") or ""
 TG_CHAT      = os.environ.get("TELEGRAM_CHAT_ID") or ""
+CMB_KEY      = os.environ.get("CALLMEBOT_APIKEY") or ""   # WhatsApp prin CallMeBot
+CMB_PHONE    = os.environ.get("CALLMEBOT_PHONE") or ""    # numarul tau, format +40...
 
 TZ = ZoneInfo("Europe/Bucharest")
 SLOTS = ("08:00", "16:00")
@@ -192,6 +194,41 @@ def trimite_mail(catre, subiect, html):
     return False
 
 
+def trimite_whatsapp(text):
+    """WhatsApp prin CallMeBot (serviciu gratuit, neoficial — doar uz personal)."""
+    if not CMB_KEY or not CMB_PHONE:
+        log("  !! CALLMEBOT_APIKEY / CALLMEBOT_PHONE lipsesc — nu pot trimite pe WhatsApp")
+        return False
+    url = ("https://api.callmebot.com/whatsapp.php?"
+           + urllib.parse.urlencode({"phone": CMB_PHONE, "text": text, "apikey": CMB_KEY}))
+    st, corp = http(url, timeout=45)
+    if st == 200 and "error" not in corp.lower()[:400]:
+        return True
+    log(f"  EROARE CallMeBot: HTTP {st} {corp[:250]}")
+    return False
+
+
+def text_whatsapp(a, c, acum):
+    """Text simplu; WhatsApp accepta *bold* intre asteriscuri."""
+    p = c["p24"]
+    sageata = "🔺" if a["directie"] == "peste" else "🔻"
+    nota = f"\n{a['eticheta']}" if a.get("eticheta") else ""
+    coada = ("Alerta s-a dezactivat automat." if a["o_singura_data"]
+             else f"Urmatoarea notificare cel devreme peste {COOLDOWN_ORE}h.")
+    return (
+        f"{sageata} *ALERTA AUR*{nota}\n\n"
+        f"24K a ajuns *{a['directie']}* pragul de *{a['prag']:,.2f}* RON/g\n\n"
+        f"*ACUM: {p:,.2f} RON/gram*\n\n"
+        f"22K  {p*22/24:,.2f}\n"
+        f"18K  {p*18/24:,.2f}\n"
+        f"14K  {p*14/24:,.2f}\n"
+        f"12K  {p/2:,.2f}\n"
+        f"8K   {p/3:,.2f}\n\n"
+        f"{acum.strftime('%d.%m.%Y %H:%M')} · spot {c['xau_usd']:,.2f} USD/uncie · "
+        f"curs BNR {c['curs_bnr']:.4f}\n{coada}"
+    )
+
+
 def trimite_telegram(text):
     if not TG_TOKEN or not TG_CHAT:
         log("  !! TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID lipsesc — nu pot trimite pe Telegram")
@@ -290,7 +327,9 @@ def verifica_alerte(c, acum, doar_test):
                 pass
 
         et = a.get("eticheta") or f"{a['directie']} {prag:,.2f}"
-        canale = ([f"telegram"] if a.get("telegram") else []) + ([a["email"]] if a.get("email") else [])
+        canale = (["whatsapp"] if a.get("whatsapp") else []) \
+               + (["telegram"] if a.get("telegram") else []) \
+               + ([a["email"]] if a.get("email") else [])
         log(f"  ALERTA DECLANSATA: {et} (prag {prag:.2f}, pret {p:.2f}) -> {', '.join(canale) or 'niciun canal'}")
         if doar_test:
             declansate += 1
@@ -298,6 +337,8 @@ def verifica_alerte(c, acum, doar_test):
 
         # trimit pe toate canalele alese; e destul sa reuseasca unul
         trimis = False
+        if a.get("whatsapp"):
+            trimis = trimite_whatsapp(text_whatsapp(a, c, acum)) or trimis
         if a.get("telegram"):
             trimis = trimite_telegram(text_telegram(a, c, acum)) or trimis
         if a.get("email"):
