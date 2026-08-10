@@ -45,11 +45,12 @@ CATCHUP_MAX_MIN = 180
 AJUSTARE_CURS = 0.02
 MARJA         = 0.985
 OZ_IN_GRAME   = 31.1034768
-# Alertele recurente (o_singura_data = false) insista din 15 in 15 minute, ca sa nu
-# ratezi momentul. Ca sa nu ajungem la 96 mesaje/zi (CallMeBot e gratuit si nu-si
-# publica limitele), dupa PRAG_INSISTENTA mesaje la rand se trece pe din ora in ora.
+# Alertele recurente (o_singura_data = false) anunta de PRAG_INSISTENTA ori la
+# REPETA_MIN minute, ca sa nu ratezi momentul, apoi trec pe din ora in ora — si ca
+# sa nu ajungem la zeci de mesaje/zi (CallMeBot e gratuit si nu-si publica limitele).
+# Ales de Eugen 10.08.2026: 3 mesaje rapide (acopera prima jumatate de ora), apoi orar.
 REPETA_MIN        = 15
-PRAG_INSISTENTA   = 10
+PRAG_INSISTENTA   = 3
 REPETA_MIN_RARIT  = 60
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
@@ -218,7 +219,7 @@ def coada_notificare(a, n_cons):
     if a["o_singura_data"]:
         return "Alerta s-a dezactivat automat (era setata o singura data)."
     urm = n_cons + 1
-    if urm < PRAG_INSISTENTA:
+    if urm <= PRAG_INSISTENTA:
         return f"Te anunt din {REPETA_MIN} in {REPETA_MIN} minute cat timp pretul e peste prag. ({urm}/{PRAG_INSISTENTA})"
     return (f"Al {urm}-lea mesaj la rand — trec pe din ora in ora ca sa nu blochez serviciul. "
             f"Intra si schimba pragul cand poti.")
