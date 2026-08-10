@@ -45,7 +45,12 @@ CATCHUP_MAX_MIN = 180
 AJUSTARE_CURS = 0.02
 MARJA         = 0.985
 OZ_IN_GRAME   = 31.1034768
-COOLDOWN_ORE  = 12      # pentru alertele recurente (o_singura_data = false)
+# Alertele recurente (o_singura_data = false) insista din 15 in 15 minute, ca sa nu
+# ratezi momentul. Ca sa nu ajungem la 96 mesaje/zi (CallMeBot e gratuit si nu-si
+# publica limitele), dupa PRAG_INSISTENTA mesaje la rand se trece pe din ora in ora.
+REPETA_MIN        = 15
+PRAG_INSISTENTA   = 10
+REPETA_MIN_RARIT  = 60
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 
@@ -208,13 +213,23 @@ def trimite_whatsapp(text):
     return False
 
 
-def text_whatsapp(a, c, acum):
+def coada_notificare(a, n_cons):
+    """Ce scrie la finalul mesajului despre ritmul urmatoarelor notificari."""
+    if a["o_singura_data"]:
+        return "Alerta s-a dezactivat automat (era setata o singura data)."
+    urm = n_cons + 1
+    if urm < PRAG_INSISTENTA:
+        return f"Te anunt din {REPETA_MIN} in {REPETA_MIN} minute cat timp pretul e peste prag. ({urm}/{PRAG_INSISTENTA})"
+    return (f"Al {urm}-lea mesaj la rand — trec pe din ora in ora ca sa nu blochez serviciul. "
+            f"Intra si schimba pragul cand poti.")
+
+
+def text_whatsapp(a, c, acum, n_cons=0):
     """Text simplu; WhatsApp accepta *bold* intre asteriscuri."""
     p = c["p24"]
     sageata = "🔺" if a["directie"] == "peste" else "🔻"
     nota = f"\n{a['eticheta']}" if a.get("eticheta") else ""
-    coada = ("Alerta s-a dezactivat automat." if a["o_singura_data"]
-             else f"Urmatoarea notificare cel devreme peste {COOLDOWN_ORE}h.")
+    coada = coada_notificare(a, n_cons)
     return (
         f"{sageata} *ALERTA AUR*{nota}\n\n"
         f"24K a ajuns *{a['directie']}* pragul de *{a['prag']:,.2f}* RON/g\n\n"
@@ -242,12 +257,11 @@ def trimite_telegram(text):
     return False
 
 
-def text_telegram(a, c, acum):
+def text_telegram(a, c, acum, n_cons=0):
     p = c["p24"]
     sageata = "🔺" if a["directie"] == "peste" else "🔻"
     nota = f"\n<i>{a['eticheta']}</i>" if a.get("eticheta") else ""
-    coada = ("Alerta s-a dezactivat automat." if a["o_singura_data"]
-             else f"Urmatoarea notificare cel devreme peste {COOLDOWN_ORE}h.")
+    coada = coada_notificare(a, n_cons)
     return (
         f"{sageata} <b>ALERTA AUR</b>{nota}\n\n"
         f"24K a ajuns <b>{a['directie']}</b> pragul de <b>{a['prag']:,.2f}</b> RON/g\n\n"
@@ -262,7 +276,7 @@ def text_telegram(a, c, acum):
     )
 
 
-def corp_mail(a, c, acum):
+def corp_mail(a, c, acum, n_cons=0):
     p = c["p24"]
     sageata = "↑" if a["directie"] == "peste" else "↓"
     return f"""
@@ -290,7 +304,7 @@ def corp_mail(a, c, acum):
     <p style="font-size:11px;color:#64748b;margin-top:16px;line-height:1.7">
       {acum.strftime('%d.%m.%Y %H:%M')} · aur spot {c['xau_usd']:,.2f} USD/uncie ·
       EUR/USD {c['eur_usd']:.4f} · curs BNR {c['curs_bnr']:.4f}<br>
-      {'Alerta s-a dezactivat automat (era setată o singură dată).' if a['o_singura_data'] else f'Următoarea notificare cel devreme peste {COOLDOWN_ORE} ore.'}
+      {coada_notificare(a, n_cons)}
     </p>
   </div>
 </div>"""
@@ -314,14 +328,22 @@ def verifica_alerte(c, acum, doar_test):
     for a in alerte:
         prag = float(a["prag"])
         atins = (p >= prag) if a["directie"] == "peste" else (p <= prag)
+        n_cons = int(a.get("notificari_consecutive") or 0)
+
         if not atins:
+            # pretul a revenit in interval — resetez contorul de insistenta
+            if n_cons and not doar_test:
+                supa(f"alerte_aur?id=eq.{a['id']}", "PATCH",
+                     {"notificari_consecutive": 0}, "return=minimal")
+                log(f"  {a.get('eticheta') or prag}: pretul a revenit in interval — contor resetat")
             continue
 
-        # cooldown pentru alertele recurente
+        # cat de des insist, pentru alertele recurente
         if not a["o_singura_data"] and a.get("ultima_declansare"):
+            minute = REPETA_MIN if n_cons < PRAG_INSISTENTA else REPETA_MIN_RARIT
             try:
                 ult = datetime.fromisoformat(a["ultima_declansare"].replace("Z", "+00:00"))
-                if (datetime.now(timezone.utc) - ult) < timedelta(hours=COOLDOWN_ORE):
+                if (datetime.now(timezone.utc) - ult) < timedelta(minutes=minute - 1):
                     continue
             except Exception:
                 pass
@@ -338,18 +360,19 @@ def verifica_alerte(c, acum, doar_test):
         # trimit pe toate canalele alese; e destul sa reuseasca unul
         trimis = False
         if a.get("whatsapp"):
-            trimis = trimite_whatsapp(text_whatsapp(a, c, acum)) or trimis
+            trimis = trimite_whatsapp(text_whatsapp(a, c, acum, n_cons)) or trimis
         if a.get("telegram"):
-            trimis = trimite_telegram(text_telegram(a, c, acum)) or trimis
+            trimis = trimite_telegram(text_telegram(a, c, acum, n_cons)) or trimis
         if a.get("email"):
             sub = f"🔔 Aur 24K {p:,.2f} RON/g — {a['directie']} {prag:,.2f}"
-            trimis = trimite_mail(a["email"], sub, corp_mail(a, c, acum)) or trimis
+            trimis = trimite_mail(a["email"], sub, corp_mail(a, c, acum, n_cons)) or trimis
         if not trimis:
             log("  nu am reusit pe niciun canal — reincerc la rularea urmatoare")
             continue
 
         patch = {"ultima_declansare": datetime.now(timezone.utc).isoformat(),
-                 "pret_declansare": round(p, 2)}
+                 "pret_declansare": round(p, 2),
+                 "notificari_consecutive": n_cons + 1}
         if a["o_singura_data"]:
             patch["activa"] = False
         supa(f"alerte_aur?id=eq.{a['id']}", "PATCH", patch, "return=minimal")
