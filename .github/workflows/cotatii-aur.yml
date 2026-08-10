@@ -1,0 +1,36 @@
+name: Cotatii aur + alerte pret
+
+# Ruleaza in cloud-ul GitHub, independent de PC si de Google.
+#   - la fiecare 15 minute, luni-vineri: verifica pragurile de alerta
+#   - cand nimereste fereastra 08:00 / 16:00 (ora Romaniei): salveaza cotatia oficiala
+# Ora GitHub e UTC; scriptul converteste singur in Europe/Bucharest (se descurca si cu ora de vara).
+on:
+  schedule:
+    - cron: '*/15 * * * 1-5'
+  workflow_dispatch:          # buton de rulare manuala din tab-ul Actions
+
+concurrency:
+  group: cotatii-aur
+  cancel-in-progress: false
+
+jobs:
+  aur:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cotatie + alerte
+        env:
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          FROM_EMAIL: ${{ vars.FROM_EMAIL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scripts/cotatii_aur.py
