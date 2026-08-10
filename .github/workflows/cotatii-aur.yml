@@ -28,6 +28,8 @@ jobs:
         env:
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY_2: ${{ secrets.CALLMEBOT_APIKEY_2 }}
+          CALLMEBOT_PHONE_2: ${{ secrets.CALLMEBOT_PHONE_2 }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
