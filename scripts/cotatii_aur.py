@@ -32,6 +32,8 @@ SUPABASE_URL = "https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or "sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw"
 RESEND_KEY   = os.environ.get("RESEND_API_KEY") or ""
 FROM_EMAIL   = os.environ.get("FROM_EMAIL") or "Alerte Aur <onboarding@resend.dev>"
+TG_TOKEN     = os.environ.get("TELEGRAM_BOT_TOKEN") or ""
+TG_CHAT      = os.environ.get("TELEGRAM_CHAT_ID") or ""
 
 TZ = ZoneInfo("Europe/Bucharest")
 SLOTS = ("08:00", "16:00")
@@ -190,6 +192,39 @@ def trimite_mail(catre, subiect, html):
     return False
 
 
+def trimite_telegram(text):
+    if not TG_TOKEN or not TG_CHAT:
+        log("  !! TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID lipsesc — nu pot trimite pe Telegram")
+        return False
+    st, corp = http(f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage", "POST",
+                    {"chat_id": TG_CHAT, "text": text,
+                     "parse_mode": "HTML", "disable_web_page_preview": True})
+    if st == 200:
+        return True
+    log(f"  EROARE Telegram: HTTP {st} {corp[:200]}")
+    return False
+
+
+def text_telegram(a, c, acum):
+    p = c["p24"]
+    sageata = "🔺" if a["directie"] == "peste" else "🔻"
+    nota = f"\n<i>{a['eticheta']}</i>" if a.get("eticheta") else ""
+    coada = ("Alerta s-a dezactivat automat." if a["o_singura_data"]
+             else f"Urmatoarea notificare cel devreme peste {COOLDOWN_ORE}h.")
+    return (
+        f"{sageata} <b>ALERTA AUR</b>{nota}\n\n"
+        f"24K a ajuns <b>{a['directie']}</b> pragul de <b>{a['prag']:,.2f}</b> RON/g\n\n"
+        f"<b>Acum: {p:,.2f} RON/gram</b>\n"
+        f"<code>22K {p*22/24:8,.2f}\n"
+        f"18K {p*18/24:8,.2f}\n"
+        f"14K {p*14/24:8,.2f}\n"
+        f"12K {p/2:8,.2f}\n"
+        f" 8K {p/3:8,.2f}</code>\n\n"
+        f"<i>{acum.strftime('%d.%m.%Y %H:%M')} · spot {c['xau_usd']:,.2f} USD/oz · "
+        f"curs BNR {c['curs_bnr']:.4f}</i>\n{coada}"
+    )
+
+
 def corp_mail(a, c, acum):
     p = c["p24"]
     sageata = "↑" if a["directie"] == "peste" else "↓"
@@ -255,13 +290,21 @@ def verifica_alerte(c, acum, doar_test):
                 pass
 
         et = a.get("eticheta") or f"{a['directie']} {prag:,.2f}"
-        log(f"  ALERTA DECLANSATA: {et} (prag {prag:.2f}, pret {p:.2f}) -> {a['email']}")
+        canale = ([f"telegram"] if a.get("telegram") else []) + ([a["email"]] if a.get("email") else [])
+        log(f"  ALERTA DECLANSATA: {et} (prag {prag:.2f}, pret {p:.2f}) -> {', '.join(canale) or 'niciun canal'}")
         if doar_test:
             declansate += 1
             continue
 
-        sub = f"🔔 Aur 24K {p:,.2f} RON/g — {a['directie']} {prag:,.2f}"
-        if not trimite_mail(a["email"], sub, corp_mail(a, c, acum)):
+        # trimit pe toate canalele alese; e destul sa reuseasca unul
+        trimis = False
+        if a.get("telegram"):
+            trimis = trimite_telegram(text_telegram(a, c, acum)) or trimis
+        if a.get("email"):
+            sub = f"🔔 Aur 24K {p:,.2f} RON/g — {a['directie']} {prag:,.2f}"
+            trimis = trimite_mail(a["email"], sub, corp_mail(a, c, acum)) or trimis
+        if not trimis:
+            log("  nu am reusit pe niciun canal — reincerc la rularea urmatoare")
             continue
 
         patch = {"ultima_declansare": datetime.now(timezone.utc).isoformat(),
