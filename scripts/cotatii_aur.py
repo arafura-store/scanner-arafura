@@ -5,7 +5,7 @@ COTATII AUR — rulare in cloud (GitHub Actions), independent de PC si de Google
 
 Face doua lucruri la fiecare rulare (cron la 15 min):
 
-  1. SNAPSHOT OFICIAL — daca e ora 08:00 sau 16:00 (ora Romaniei, zi lucratoare)
+  1. SNAPSHOT OFICIAL — daca e ora 00:00, 08:00 sau 16:00 (ora Romaniei, zi lucratoare)
      si cotatia nu e deja in baza, o calculeaza si o salveaza in `cotatii_aur`.
      Recuperare pana la +3h, ca sa acopere intarzierile GitHub Actions.
 
@@ -51,7 +51,11 @@ def _destinatari_whatsapp():
 CMB_DESTINATARI = _destinatari_whatsapp()
 
 TZ = ZoneInfo("Europe/Bucharest")
-SLOTS = ("08:00", "16:00")
+# Cotatii oficiale din 8 in 8 ore (cerut de Eugen 11.08.2026; inainte erau doar 08:00 si 16:00).
+# ATENTIE: 00:00 ora Romaniei = 21:00 UTC in ziua precedenta, deci cron-ul din workflow
+# TREBUIE sa acopere toate zilele (`*/15 * * * *`) — altfel slotul de luni 00:00 nu prinde
+# niciodata, pentru ca la GitHub e duminica.
+SLOTS = ("00:00", "08:00", "16:00")
 ZILE_LUCRATOARE = (0, 1, 2, 3, 4)
 CATCHUP_MAX_MIN = 180
 
