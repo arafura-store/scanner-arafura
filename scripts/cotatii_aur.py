@@ -457,6 +457,21 @@ def main():
         except Exception as e:
             log(f"  istoricul nu s-a putut improspata: {e}")
 
+    # Stirile o data pe ora (la prima rulare din fiecare ora), nu la fiecare 15 min
+    if acum.minute < 15 and not args.test:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import stiri_aur
+            toate, vazute = [], set()
+            for categorie, interogare in stiri_aur.SURSE:
+                for x in stiri_aur.ia_categoria(categorie, interogare):
+                    if x["cheie"] not in vazute:
+                        vazute.add(x["cheie"]); toate.append(x)
+            if toate and stiri_aur.salveaza(toate):
+                log(f"Stiri: {len(toate)} titluri actualizate")
+        except Exception as e:
+            log(f"  stirile nu s-au putut aduce: {e}")
+
     log(f"Gata. {n} alerte declansate.")
 
 

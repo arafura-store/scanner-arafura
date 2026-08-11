@@ -270,6 +270,23 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
+      <!-- STIRI CARE MISCA AURUL                              -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="section" style="margin-top:24px">
+        <h2>📰 Știri care mișcă aurul
+          <span class="meta" id="st-meta"></span>
+        </h2>
+        <div class="body">
+          <div style="font-size:11px;color:var(--sub);margin-bottom:10px">
+            Prețul aurului nu se mișcă doar de la știrile despre aur. Se mișcă de la dobânzile Fed,
+            de la inflația americană și de la dolar — de multe ori fără ca titlul să conțină cuvântul „aur".
+          </div>
+          <div id="st-filtre" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <div id="st-lista"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
       <!-- RAPOARTE LUNARE PERFECTA — valori contracte +      -->
       <!-- registru casa, importate automat din Drive          -->
       <!-- ═══════════════════════════════════════════════════ -->
@@ -591,6 +608,7 @@ async function loadAll(silent=false) {
     _istoricAur = istoricAur || [];
     renderFluctuatii();
     incarcaTranzactii();
+    incarcaStiri();
   } catch(e) {
     document.getElementById('spinner').textContent = '❌ Eroare: ' + e.message;
   }
@@ -1459,6 +1477,86 @@ function renderComDis() {
       options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}}}}
     });
   }, 50);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  STIRI CARE MISCA AURUL
+// ══════════════════════════════════════════════════════════════
+let _stiri = [];
+let _stFiltru = 'toate';
+
+const ST_CATEGORII = {
+  aur:      { et:'Aur',       cul:'#fef3c7', txt:'#92400e', expl:'reacția pieței și prognozele' },
+  fed:      { et:'Fed',       cul:'#dbeafe', txt:'#1e40af', expl:'dobânzi mari = aur slab, de regulă' },
+  inflatie: { et:'Inflație',  cul:'#fee2e2', txt:'#991b1b', expl:'inflația mare împinge lumea spre aur' },
+  dolar:    { et:'Dolar',     cul:'#dcfce7', txt:'#166534', expl:'dolar puternic = aur mai ieftin' },
+  banci:    { et:'Bănci centrale', cul:'#f3e8ff', txt:'#6b21a8', expl:'cei mai mari cumpărători din lume' },
+};
+
+function stFiltreaza(c){ _stFiltru = c; renderStiri(); }
+
+function candA(iso){
+  if (!iso) return '';
+  const min = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (min < 60) return `acum ${min} min`;
+  if (min < 1440) return `acum ${Math.round(min/60)} h`;
+  const zile = Math.round(min/1440);
+  return zile === 1 ? 'ieri' : `acum ${zile} zile`;
+}
+
+async function incarcaStiri(){
+  try {
+    const r = await fetch(`${SUPA_URL}/stiri_aur?select=*&order=publicat_la.desc.nullslast&limit=120`, { headers: HEADERS });
+    _stiri = r.ok ? await r.json() : [];
+  } catch(e){ _stiri = []; }
+  renderStiri();
+}
+
+function renderStiri(){
+  const lista = document.getElementById('st-lista');
+  if (!lista) return;
+
+  if (!_stiri.length){
+    document.getElementById('st-filtre').innerHTML = '';
+    lista.innerHTML = `<div style="background:#fef3c7;border-left:4px solid var(--gold);border-radius:6px;padding:12px;font-size:12px;color:#92400e">
+      <b>Nu am încă știri.</b> Trebuie creată tabela <code>stiri_aur</code> și rulat scriptul care le aduce.</div>`;
+    return;
+  }
+
+  const nr = {};
+  _stiri.forEach(s => nr[s.categorie] = (nr[s.categorie]||0) + 1);
+  const cea_mai_noua = _stiri.map(s => s.publicat_la).filter(Boolean).sort().pop();
+  document.getElementById('st-meta').textContent =
+    `${_stiri.length} titluri · cea mai nouă ${candA(cea_mai_noua)}`;
+
+  document.getElementById('st-filtre').innerHTML =
+    `<button class="mini-btn" onclick="stFiltreaza('toate')"
+      style="${_stFiltru==='toate'?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">Toate (${_stiri.length})</button>` +
+    Object.entries(ST_CATEGORII).filter(([c]) => nr[c]).map(([c,d]) =>
+      `<button class="mini-btn" onclick="stFiltreaza('${c}')" title="${d.expl}"
+        style="${_stFiltru===c?`background:${d.txt};color:#fff;border-color:${d.txt}`:''}">${d.et} (${nr[c]})</button>`).join('');
+
+  const filtrate = _stFiltru === 'toate' ? _stiri : _stiri.filter(s => s.categorie === _stFiltru);
+  const d = ST_CATEGORII[_stFiltru];
+
+  lista.innerHTML =
+    (d ? `<div style="font-size:11px;color:var(--sub);margin-bottom:8px;font-style:italic">${d.expl}</div>` : '') +
+    filtrate.slice(0, 40).map(s => {
+      const c = ST_CATEGORII[s.categorie] || { et:s.categorie, cul:'#e5e7eb', txt:'#374151' };
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start">
+        <span class="badge" style="background:${c.cul};color:${c.txt};flex:0 0 auto;margin-top:2px">${c.et}</span>
+        <div style="flex:1;min-width:0">
+          <a href="${escH(s.link)}" target="_blank" rel="noopener"
+             style="color:var(--navy);text-decoration:none;font-weight:600;font-size:13px;line-height:1.35">${escH(s.titlu)}</a>
+          <div style="font-size:11px;color:var(--sub);margin-top:2px">
+            ${escH(s.sursa||'')} ${s.sursa && s.publicat_la ? '·' : ''} ${candA(s.publicat_la)}</div>
+        </div>
+      </div>`;
+    }).join('') +
+    `<div style="font-size:11px;color:var(--sub);margin-top:10px">
+       Titlurile vin din Google News și se actualizează o dată pe oră. Reține că o știre ajunge la tine
+       după ce prețul s-a mișcat deja — folosește-le ca să înțelegi <i>de ce</i>, nu ca să prinzi <i>când</i>.
+     </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════
