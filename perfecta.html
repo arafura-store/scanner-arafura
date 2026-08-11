@@ -1470,6 +1470,56 @@ function renderComDis() {
 let _tranzactii = [];
 let _capitalAlocat = 0;
 
+const OZ_G = 31.1034768;
+
+// Instrumentele reale: la bursa nu se cumpara grame.
+const TR_INSTRUMENTE = [
+  { id:'fizic', et:'Aur fizic',            unitate:'gram',    moneda:'RON', levier:1  },
+  { id:'cfd',   et:'Spot / CFD (XAUUSD)',  unitate:'uncie',   moneda:'USD', levier:10 },
+  { id:'fut',   et:'Futures COMEX (GC)',   unitate:'uncie',   moneda:'USD', levier:20 },
+  { id:'etf',   et:'ETF pe aur',           unitate:'unitate', moneda:'EUR', levier:1  },
+];
+
+/** Cursurile de azi, din ultima zi de istoric. */
+function trCursuri(){
+  const r = _istoricAur.length ? _istoricAur[_istoricAur.length-1] : null;
+  if (!r) return null;
+  const usd_ron = +r.usd_ron, eur_ron = +r.eur_ron;
+  return { usd_ron, eur_ron, eur_usd: eur_ron / usd_ron, xau_usd: +r.xau_usd,
+           ron_gram: +r.ron_gram_24k };
+}
+
+/** Pretul pietei acum, in unitatea si moneda pozitiei. null = nu-l pot sti (ETF). */
+function trPretPiata(unitate, moneda){
+  const c = trCursuri();
+  if (!c) return null;
+  if (unitate === 'unitate') return null;                 // ETF-ul are pretul lui, se scrie manual
+  const ronGram = (_ultimaCotatie && +_ultimaCotatie.pret_24k) || c.ron_gram;
+  if (unitate === 'gram'){
+    if (moneda === 'RON') return ronGram;
+    if (moneda === 'USD') return c.xau_usd / OZ_G;
+    if (moneda === 'EUR') return c.xau_usd / c.eur_usd / OZ_G;
+  }
+  if (unitate === 'uncie'){
+    if (moneda === 'USD') return c.xau_usd;
+    if (moneda === 'EUR') return c.xau_usd / c.eur_usd;
+    if (moneda === 'RON') return c.xau_usd * c.usd_ron;
+  }
+  return null;
+}
+
+/** Transforma o suma din moneda pozitiei in lei, ca sa pot aduna mere cu mere. */
+function trInLei(suma, moneda){
+  const c = trCursuri();
+  if (!c || moneda === 'RON') return suma;
+  if (moneda === 'USD') return suma * c.usd_ron;
+  if (moneda === 'EUR') return suma * c.eur_ron;
+  return suma;
+}
+
+function trSimbol(m){ return m === 'RON' ? 'lei' : m === 'USD' ? '$' : '€'; }
+function trUM(u){ return u === 'gram' ? 'gram' : u === 'uncie' ? 'uncie' : 'unitate'; }
+
 function trPretCurent(){
   if (_ultimaCotatie && +_ultimaCotatie.pret_24k) return +_ultimaCotatie.pret_24k;
   if (_istoricAur.length) return +_istoricAur[_istoricAur.length-1].ron_gram_24k;
@@ -1489,18 +1539,40 @@ async function incarcaTranzactii(){
 }
 
 // ── calcule pe o pozitie ──
-function trCalc(t, pretAcum){
-  const grame = +t.grame;
-  const intrare = +t.pret_intrare * grame + (+t.costuri_intrare || 0);
+// Distinctia esentiala la bursa: VALOAREA pozitiei nu e acelasi lucru cu BANII TAI.
+// La levier 10, o pozitie de 100.000 inseamna 10.000 din buzunarul tau (marja),
+// dar pierderea se calculeaza pe cei 100.000.
+function trCalc(t){
+  const cant   = +t.cantitate;
+  const unit   = t.unitate || 'gram';
+  const moneda = t.moneda  || 'RON';
+  const levier = Math.max(1, +t.levier || 1);
   const deschisa = !t.data_iesire;
-  const pretIes = deschisa ? pretAcum : +t.pret_iesire;
-  const iesire = pretIes * grame - (+t.costuri_iesire || 0);
-  const pl = iesire - intrare;
-  const plPct = intrare ? pl / intrare * 100 : 0;
+
+  const pretPiata = trPretPiata(unit, moneda);
+  const pretIes = deschisa ? pretPiata : +t.pret_iesire;
+
+  const valoareIntrare = +t.pret_intrare * cant;          // valoarea pozitiei la intrare
+  const marja = valoareIntrare / levier + (+t.costuri_intrare || 0);  // ce ai scos tu din buzunar
+  const cunoscut = pretIes !== null && pretIes !== undefined;
+
+  const valoareAcum = cunoscut ? pretIes * cant : null;
+  const pl = cunoscut
+    ? (pretIes - +t.pret_intrare) * cant - (+t.costuri_intrare || 0) - (+t.costuri_iesire || 0)
+    : null;
+  const plPctPret  = cunoscut ? (pretIes / +t.pret_intrare - 1) * 100 : null;  // cat s-a miscat pretul
+  const plPctBanii = cunoscut && marja ? pl / marja * 100 : null;              // cat ai facut TU
+
   const zile = Math.max(1, Math.round(
     ((deschisa ? new Date() : new Date(t.data_iesire)) - new Date(t.data_intrare)) / 86400000));
-  const anualizat = intrare ? (Math.pow(1 + pl/intrare, 365/zile) - 1) * 100 : 0;
-  return { grame, intrare, iesire, pl, plPct, zile, anualizat, deschisa, pretIes };
+  const anualizat = (cunoscut && marja && pl > -marja)
+    ? (Math.pow(1 + pl/marja, 365/zile) - 1) * 100 : null;
+
+  return { cant, unit, moneda, levier, deschisa, cunoscut, pretIes,
+           valoareIntrare, valoareAcum, marja, pl, plPctPret, plPctBanii, zile, anualizat,
+           plLei: cunoscut ? trInLei(pl, moneda) : null,
+           marjaLei: trInLei(marja, moneda),
+           valoareLei: cunoscut ? trInLei(valoareAcum, moneda) : trInLei(valoareIntrare, moneda) };
 }
 
 function renderTranzactii(){
@@ -1508,16 +1580,17 @@ function renderTranzactii(){
   const box = document.getElementById('tr-kpi');
   if (!box) return;
 
-  const deschise = _tranzactii.filter(t => !t.data_iesire).map(t => ({ t, c: trCalc(t, pret) }));
-  const inchise  = _tranzactii.filter(t =>  t.data_iesire).map(t => ({ t, c: trCalc(t, pret) }));
+  const deschise = _tranzactii.filter(t => !t.data_iesire).map(t => ({ t, c: trCalc(t) }));
+  const inchise  = _tranzactii.filter(t =>  t.data_iesire).map(t => ({ t, c: trCalc(t) }));
 
-  const expunere   = deschise.reduce((s,x) => s + x.c.intrare, 0);
-  const grameTotal = deschise.reduce((s,x) => s + x.c.grame, 0);
-  const valoareAzi = grameTotal * pret;
-  const plNereal   = deschise.reduce((s,x) => s + x.c.pl, 0);
-  const plReal     = inchise.reduce((s,x) => s + x.c.pl, 0);
-  const investitInchis = inchise.reduce((s,x) => s + x.c.intrare, 0);
-  const randamentMeu = investitInchis ? plReal / investitInchis * 100 : null;
+  // totalurile se aduna in LEI, altfel adun dolari cu euro
+  const marjaTotal  = deschise.reduce((s,x) => s + x.c.marjaLei, 0);
+  const valoareTotal= deschise.reduce((s,x) => s + (x.c.valoareLei||0), 0);
+  const plNereal    = deschise.reduce((s,x) => s + (x.c.plLei||0), 0);
+  const plReal      = inchise.reduce((s,x) => s + (x.c.plLei||0), 0);
+  const marjaInchis = inchise.reduce((s,x) => s + x.c.marjaLei, 0);
+  const randamentMeu = marjaInchis ? plReal / marjaInchis * 100 : null;
+  const cuLevier = deschise.some(x => x.c.levier > 1) || inchise.some(x => x.c.levier > 1);
 
   // reper: cat facea daca doar cumparai la prima tranzactie si stateai
   let reper = null, dataPrima = null;
@@ -1532,19 +1605,20 @@ function renderTranzactii(){
 
   box.innerHTML = `
     <div class="kpi">
-      <div class="lbl">Expunere acum</div>
-      <div class="val">${fmt0(expunere)}</div>
-      <div class="sub">lei în ${deschise.length} poziții · ${fmt(grameTotal,1)} g</div>
+      <div class="lbl">Banii tăi în piață</div>
+      <div class="val">${fmt0(marjaTotal)}</div>
+      <div class="sub">lei marjă · ${deschise.length} poziții${
+        cuLevier ? ` · poziții de <b>${fmt0(valoareTotal)}</b> lei` : ''}</div>
     </div>
     <div class="kpi ${plNereal>=0?'green':'red'}">
       <div class="lbl">Câștig/pierdere pe hârtie</div>
       <div class="val">${plNereal>=0?'+':''}${fmt0(plNereal)}</div>
-      <div class="sub">valoare azi ${fmt0(valoareAzi)} lei</div>
+      <div class="sub">${marjaTotal ? `${plNereal>=0?'+':''}${fmt(plNereal/marjaTotal*100,1)}% din banii tăi` : 'lei'}</div>
     </div>
     <div class="kpi ${plReal>=0?'green':'red'}">
       <div class="lbl">Realizat (poziții închise)</div>
       <div class="val">${plReal>=0?'+':''}${fmt0(plReal)}</div>
-      <div class="sub">${inchise.length ? `din ${fmt0(investitInchis)} lei investiți` : 'nicio poziție închisă'}</div>
+      <div class="sub">${inchise.length ? `din ${fmt0(marjaInchis)} lei angajați` : 'nicio poziție închisă'}</div>
     </div>
     <div class="kpi gold">
       <div class="lbl">Tu vs. „cumpăr și stau"</div>
@@ -1554,61 +1628,85 @@ function renderTranzactii(){
         : `tu ${fmt(randamentMeu,1)}% · piața ${fmt(reper,1)}% din ${dataPrima}`}</div>
     </div>`;
 
-  renderRiscExpunere(expunere, grameTotal, pret);
-  renderPozitii(deschise, inchise, pret);
-  renderFormularTranzactie(pret);
+  renderRiscExpunere(deschise, marjaTotal, valoareTotal);
+  renderPozitii(deschise, inchise);
+  renderFormularTranzactie();
 }
 
-function renderRiscExpunere(expunere, grame, pret){
+function renderRiscExpunere(deschise, marjaTotal, valoareTotal){
   const box = document.getElementById('tr-risc');
-  if (!expunere){ box.innerHTML = ''; return; }
-  const val = grame * pret;
-  const scenarii = [
-    ['o zi obișnuită', 1.22], ['o zi proastă', 3], ['cea mai neagră zi din 4 ani', 11]
-  ];
-  const procentCapital = _capitalAlocat ? expunere / _capitalAlocat * 100 : null;
+  if (!deschise.length){ box.innerHTML = ''; return; }
+
+  const scenarii = [['o zi obișnuită', 1.22], ['o zi proastă', 3], ['cea mai neagră zi din 4 ani', 11]];
+  const procentCapital = _capitalAlocat ? marjaTotal / _capitalAlocat * 100 : null;
+  const levierMax = Math.max(...deschise.map(x => x.c.levier));
+
+  // La ce miscare de pret se evapora toata marja
+  const pierdereTotala = marjaTotal ? marjaTotal / valoareTotal * 100 : 100;
 
   box.innerHTML = `
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Cât riști, în lei</div>
+      <div style="font-weight:700;font-size:13px;margin-bottom:2px">Cât riști, în lei</div>
+      <div style="font-size:11px;color:var(--sub);margin-bottom:10px">
+        Pierderea se calculează pe <b>valoarea poziției</b> (${fmt0(valoareTotal)} lei), nu pe cât ai depus tu (${fmt0(marjaTotal)} lei).
+      </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
-        ${scenarii.map(([et,p]) => `
-          <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+        ${scenarii.map(([et,p]) => {
+          const pierdere = valoareTotal * p / 100;
+          const dinBanii = marjaTotal ? pierdere / marjaTotal * 100 : 0;
+          const sters = dinBanii >= 100;
+          return `<div style="background:#fff;border-radius:8px;padding:10px;text-align:center${sters?';outline:2px solid var(--red)':''}">
             <div style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">${et}</div>
             <div style="font-size:11px;color:var(--sub)">−${p}%</div>
-            <div style="font-size:19px;font-weight:800;color:var(--red)">−${fmt0(val*p/100)}</div>
-          </div>`).join('')}
+            <div style="font-size:19px;font-weight:800;color:var(--red)">−${fmt0(pierdere)}</div>
+            <div style="font-size:11px;font-weight:700;color:${sters?'var(--red)':'var(--sub)'}">
+              ${sters ? 'ÎȚI ȘTERGE TOT' : `${fmt(dinBanii,0)}% din banii tăi`}</div>
+          </div>`;
+        }).join('')}
       </div>
+
+      ${levierMax > 1 ? `
+        <div class="alert alert-red" style="font-size:12px;text-align:left;padding:12px;margin-bottom:10px">
+          ⚠ Ai levier ${fmt(levierMax,0)}:1. O scădere de doar <b>${fmt(pierdereTotala,1)}%</b> îți șterge toată marja
+          și primești apel în marjă. Aurul a avut ${pierdereTotala < 3 ? 'zeci de zile' : '14 zile în 4 ani'}
+          cu scăderi mai mari de atât.
+        </div>` : ''}
+
       <div style="font-size:12px;color:var(--sub)">
         ${procentCapital!==null
-          ? `Ai expus <b style="color:#1e293b">${fmt(procentCapital,0)}%</b> din capitalul alocat de ${fmt0(_capitalAlocat)} lei.`
+          ? `Ai angajat <b style="color:#1e293b">${fmt(procentCapital,0)}%</b> din capitalul alocat de ${fmt0(_capitalAlocat)} lei.`
           : `<b>Nu ai setat capitalul alocat.</b> Fără el nu pot spune dacă expunerea e mare sau mică.`}
         <button class="mini-btn" style="margin-left:6px" onclick="seteazaCapital()">setează capitalul</button>
       </div>
     </div>`;
 }
 
-function renderPozitii(deschise, inchise, pret){
+function renderPozitii(deschise, inchise){
   const d = document.getElementById('tr-deschise');
   if (!deschise.length){
     d.innerHTML = '<div style="color:var(--sub);font-size:12px">Nicio poziție deschisă.</div>';
   } else {
     d.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:8px">Poziții deschise</div>
       <div style="overflow-x:auto"><table class="tbl"><thead><tr>
-        <th>Intrare</th><th style="text-align:right">Preț</th><th style="text-align:right">Grame</th>
-        <th style="text-align:right">Investit</th><th style="text-align:right">Valoare azi</th>
-        <th style="text-align:right">Câștig/pierdere</th><th>Zile</th><th>De ce am intrat</th><th></th>
+        <th>Intrare</th><th>Instrument</th><th style="text-align:right">Preț intrare</th>
+        <th style="text-align:right">Cantitate</th><th style="text-align:right">Banii tăi</th>
+        <th style="text-align:right">Preț acum</th><th style="text-align:right">Câștig/pierdere</th>
+        <th>Zile</th><th>De ce am intrat</th><th></th>
       </tr></thead><tbody>` +
       deschise.map(({t,c}) => `<tr>
         <td>${t.data_intrare}</td>
-        <td style="text-align:right">${fmt(+t.pret_intrare,2)}</td>
-        <td style="text-align:right">${fmt(c.grame,1)}</td>
-        <td style="text-align:right">${fmt0(c.intrare)}</td>
-        <td style="text-align:right">${fmt0(c.grame*pret)}</td>
-        <td style="text-align:right"><b class="${c.pl>=0?'var-up':'var-down'}">${c.pl>=0?'+':''}${fmt0(c.pl)}</b>
-          <span style="font-size:11px;color:var(--sub)"> (${c.plPct>=0?'+':''}${fmt(c.plPct,1)}%)</span></td>
+        <td style="font-size:11px">${escH(t.instrument || trUM(c.unit))}
+          ${c.levier>1?`<br><b style="color:var(--red)">levier ${fmt(c.levier,0)}:1</b>`:''}</td>
+        <td style="text-align:right">${fmt(+t.pret_intrare,2)} <span style="font-size:10px;color:var(--sub)">${trSimbol(c.moneda)}</span></td>
+        <td style="text-align:right">${fmt(c.cant,3)} <span style="font-size:10px;color:var(--sub)">${trUM(c.unit)}</span></td>
+        <td style="text-align:right">${fmt0(c.marjaLei)} <span style="font-size:10px;color:var(--sub)">lei</span>
+          ${c.levier>1?`<br><span style="font-size:10px;color:var(--sub)">poziție ${fmt0(c.valoareLei)}</span>`:''}</td>
+        <td style="text-align:right">${c.cunoscut ? fmt(c.pretIes,2) : '<span style="color:var(--sub);font-size:11px">scrie-l manual</span>'}</td>
+        <td style="text-align:right">${c.cunoscut ? `<b class="${c.pl>=0?'var-up':'var-down'}">${c.pl>=0?'+':''}${fmt0(c.plLei)} lei</b>
+          <br><span style="font-size:11px;color:var(--sub)">preț ${c.plPctPret>=0?'+':''}${fmt(c.plPctPret,1)}% →
+          <b class="${c.plPctBanii>=0?'var-up':'var-down'}">tu ${c.plPctBanii>=0?'+':''}${fmt(c.plPctBanii,1)}%</b></span>` : '—'}</td>
         <td>${c.zile}</td>
-        <td style="font-size:11px;color:var(--sub);max-width:220px">${escH(t.motiv_intrare||'—')}</td>
+        <td style="font-size:11px;color:var(--sub);max-width:200px">${escH(t.motiv_intrare||'—')}</td>
         <td style="text-align:right"><button class="mini-btn" onclick="inchidePozitie('${t.id}')">închide</button>
           <button class="mini-btn" style="color:var(--red)" onclick="stergePozitie('${t.id}')">✕</button></td>
       </tr>`).join('') + '</tbody></table></div>';
@@ -1625,34 +1723,91 @@ function renderPozitii(deschise, inchise, pret){
       <th style="text-align:right">Anualizat</th><th>De ce</th><th></th>
     </tr></thead><tbody>` +
     inchise.map(({t,c}) => `<tr>
-      <td>${t.data_intrare} → ${t.data_iesire}<br><span style="font-size:10px;color:var(--sub)">${c.zile} zile</span></td>
+      <td>${t.data_intrare} → ${t.data_iesire}<br><span style="font-size:10px;color:var(--sub)">${c.zile} zile${
+        c.levier>1?` · levier ${fmt(c.levier,0)}:1`:''}</span></td>
       <td style="text-align:right">${fmt(+t.pret_intrare,2)}</td>
       <td style="text-align:right">${fmt(+t.pret_iesire,2)}</td>
-      <td style="text-align:right">${fmt(c.grame,1)}</td>
-      <td style="text-align:right"><b class="${c.pl>=0?'var-up':'var-down'}">${c.pl>=0?'+':''}${fmt0(c.pl)}</b>
-        <span style="font-size:11px;color:var(--sub)"> (${c.plPct>=0?'+':''}${fmt(c.plPct,1)}%)</span></td>
-      <td style="text-align:right;font-size:11px;color:var(--sub)">${fmt(c.anualizat,0)}%</td>
+      <td style="text-align:right">${fmt(c.cant,3)}<br><span style="font-size:10px;color:var(--sub)">${trUM(c.unit)}</span></td>
+      <td style="text-align:right"><b class="${c.pl>=0?'var-up':'var-down'}">${c.pl>=0?'+':''}${fmt0(c.plLei)} lei</b>
+        <br><span style="font-size:11px;color:var(--sub)">preț ${c.plPctPret>=0?'+':''}${fmt(c.plPctPret,1)}% →
+        tu ${c.plPctBanii>=0?'+':''}${fmt(c.plPctBanii,1)}%</span></td>
+      <td style="text-align:right;font-size:11px;color:var(--sub)">${c.anualizat===null?'—':fmt(c.anualizat,0)+'%'}</td>
       <td style="font-size:11px;color:var(--sub);max-width:200px">${escH(t.motiv_intrare||'—')}
         ${t.motiv_iesire?`<br><i>ieșire: ${escH(t.motiv_iesire)}</i>`:''}</td>
       <td style="text-align:right"><button class="mini-btn" style="color:var(--red)" onclick="stergePozitie('${t.id}')">✕</button></td>
     </tr>`).join('') + '</tbody></table></div>';
 }
 
-function renderFormularTranzactie(pret){
+let _trInstrument = 'cfd';
+function trAlegeInstrument(id){ _trInstrument = id; renderFormularTranzactie(); }
+
+function renderFormularTranzactie(){
+  const ins = TR_INSTRUMENTE.find(i => i.id === _trInstrument) || TR_INSTRUMENTE[1];
+  const pretPiata = trPretPiata(ins.unitate, ins.moneda);
+  const valPret = pretPiata !== null ? pretPiata.toFixed(2) : '';
+
   document.getElementById('tr-formular').innerHTML = `
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Poziție nouă</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px">
-        <div><label>Data intrării</label><input type="date" id="tr-data" value="${new Date().toISOString().slice(0,10)}"></div>
-        <div><label>Preț (lei/gram)</label><input type="number" step="0.01" id="tr-pret" value="${fmt(pret,2).replace(/\./g,'').replace(',','.')}"></div>
-        <div><label>Grame</label><input type="number" step="0.001" id="tr-grame" placeholder="0"></div>
-        <div><label>Costuri (comision)</label><input type="number" step="0.01" id="tr-costuri" value="0"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Poziție nouă</div>
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${TR_INSTRUMENTE.map(i => `<button class="mini-btn" onclick="trAlegeInstrument('${i.id}')"
+          style="${i.id===_trInstrument?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${i.et}</button>`).join('')}
       </div>
+      <div style="font-size:11px;color:var(--sub);margin-bottom:10px">
+        Se tranzacționează în <b>${trUM(ins.unitate)}</b>, cotat în <b>${ins.moneda}</b>${
+          ins.unitate==='uncie' ? ` · 1 uncie troy = ${OZ_G} g` : ''}.
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:10px">
+        <div><label>Data intrării</label><input type="date" id="tr-data" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div><label>Preț / ${trUM(ins.unitate)} (${ins.moneda})</label>
+          <input type="number" step="0.01" id="tr-pret" value="${valPret}" placeholder="0"></div>
+        <div><label>Câte ${trUM(ins.unitate)}</label><input type="number" step="0.001" id="tr-cant" placeholder="0"></div>
+        <div><label>Levier (1 = fără)</label><input type="number" step="1" id="tr-levier" value="${ins.levier}"></div>
+        <div><label>Costuri (${ins.moneda})</label><input type="number" step="0.01" id="tr-costuri" value="0"></div>
+      </div>
+
+      <div id="tr-previzualizare" style="font-size:12px;background:#fff;border-radius:8px;padding:10px;margin-bottom:10px;color:var(--sub)">
+        Completează cantitatea ca să-ți arăt cât înseamnă în bani.
+      </div>
+
       <label>De ce intru — scrie-ți raționamentul acum, nu după</label>
       <input id="tr-motiv" placeholder="ex: a scăzut sub media de 50 de zile și dolarul slăbește" style="margin-bottom:10px">
       <button class="mini-btn" onclick="adaugaPozitie()"
         style="width:100%;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px">➕ Adaugă poziția</button>
     </div>`;
+
+  ['tr-pret','tr-cant','tr-levier'].forEach(id =>
+    document.getElementById(id).addEventListener('input', previzualizeazaPozitie));
+  previzualizeazaPozitie();
+}
+
+/** Arata pe loc ce inseamna cifrele introduse — inainte sa apese butonul. */
+function previzualizeazaPozitie(){
+  const ins = TR_INSTRUMENTE.find(i => i.id === _trInstrument) || TR_INSTRUMENTE[1];
+  const box = document.getElementById('tr-previzualizare');
+  if (!box) return;
+  const p = parseFloat(document.getElementById('tr-pret').value);
+  const q = parseFloat(document.getElementById('tr-cant').value);
+  const l = Math.max(1, parseFloat(document.getElementById('tr-levier').value) || 1);
+  if (!(p > 0) || !(q > 0)) {
+    box.innerHTML = 'Completează cantitatea ca să-ți arăt cât înseamnă în bani.';
+    return;
+  }
+  const valoare = p * q;
+  const marja = valoare / l;
+  const valLei = trInLei(valoare, ins.moneda), marjaLei = trInLei(marja, ins.moneda);
+  const grame = ins.unitate === 'uncie' ? q * OZ_G : (ins.unitate === 'gram' ? q : null);
+  const pragLichidare = 100 / l;
+
+  box.innerHTML = `
+    Poziție de <b style="color:#1e293b">${fmt0(valoare)} ${trSimbol(ins.moneda)}</b>
+    (${fmt0(valLei)} lei)${grame ? ` · aproximativ <b style="color:#1e293b">${fmt(grame,0)} g</b> de aur` : ''}<br>
+    Din buzunarul tău: <b style="color:#1e293b">${fmt0(marja)} ${trSimbol(ins.moneda)}</b> (${fmt0(marjaLei)} lei)
+    ${l > 1 ? `<br><span style="color:var(--red);font-weight:700">
+      O scădere de ${fmt(pragLichidare,1)}% îți șterge toată marja.</span>
+      <span style="font-size:11px">Aurul se mișcă în medie 1,22% pe zi, iar cea mai neagră zi din 4 ani a fost −11%.</span>` : ''}`;
 }
 
 async function trSalveaza(metoda, cale, corp){
@@ -1665,15 +1820,23 @@ async function trSalveaza(metoda, cale, corp){
 }
 
 async function adaugaPozitie(){
-  const g = parseFloat(document.getElementById('tr-grame').value);
+  const ins = TR_INSTRUMENTE.find(i => i.id === _trInstrument) || TR_INSTRUMENTE[1];
+  const q = parseFloat(document.getElementById('tr-cant').value);
   const p = parseFloat(document.getElementById('tr-pret').value);
+  const l = Math.max(1, parseFloat(document.getElementById('tr-levier').value) || 1);
   const motiv = document.getElementById('tr-motiv').value.trim();
-  if (!(g > 0) || !(p > 0)) { alert('Completează prețul și gramele.'); return; }
+  if (!(q > 0) || !(p > 0)) { alert('Completează prețul și cantitatea.'); return; }
   if (!motiv) { alert('Scrie de ce intri. Fără motiv, jurnalul nu te învață nimic — e singurul câmp pe care insist.'); return; }
+
+  if (l > 1) {
+    const prag = 100 / l;
+    if (!confirm(`Poziție cu levier ${l}:1.\n\nO scădere de ${prag.toFixed(1)}% îți șterge toată marja și primești apel în marjă.\n\nAurul are, în medie, o mișcare de 1,22% pe zi. Cea mai neagră zi din ultimii 4 ani a fost −11%.\n\nContinui?`)) return;
+  }
   try {
     await trSalveaza('POST', 'tranzactii_aur', [{
       data_intrare: document.getElementById('tr-data').value,
-      pret_intrare: p, grame: g,
+      pret_intrare: p, cantitate: q, levier: l,
+      unitate: ins.unitate, moneda: ins.moneda, instrument: ins.et,
       costuri_intrare: parseFloat(document.getElementById('tr-costuri').value) || 0,
       motiv_intrare: motiv
     }]);
