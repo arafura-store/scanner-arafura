@@ -254,6 +254,22 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
+      <!-- JURNAL DE TRANZACTII + EXPUNERE                      -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="section" style="margin-top:24px">
+        <h2>💼 Jurnal de tranzacții
+          <span class="meta" id="tr-meta"></span>
+        </h2>
+        <div class="body">
+          <div id="tr-kpi" class="kpi-grid" style="margin-bottom:16px"></div>
+          <div id="tr-risc" style="margin-bottom:16px"></div>
+          <div id="tr-deschise" style="margin-bottom:16px"></div>
+          <div id="tr-inchise" style="margin-bottom:16px"></div>
+          <div id="tr-formular"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
       <!-- RAPOARTE LUNARE PERFECTA — valori contracte +      -->
       <!-- registru casa, importate automat din Drive          -->
       <!-- ═══════════════════════════════════════════════════ -->
@@ -574,6 +590,7 @@ async function loadAll(silent=false) {
     renderRapoarteLunare();
     _istoricAur = istoricAur || [];
     renderFluctuatii();
+    incarcaTranzactii();
   } catch(e) {
     document.getElementById('spinner').textContent = '❌ Eroare: ' + e.message;
   }
@@ -1442,6 +1459,263 @@ function renderComDis() {
       options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}}}}
     });
   }, 50);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  JURNAL DE TRANZACTII AUR
+//  Reperul cheie: nu "am castigat?", ci "am castigat MAI MULT decat
+//  daca doar cumparam si stateam?". Fara comparatia asta, orice jurnal
+//  te minte frumos intr-o piata care creste oricum.
+// ══════════════════════════════════════════════════════════════
+let _tranzactii = [];
+let _capitalAlocat = 0;
+
+function trPretCurent(){
+  if (_ultimaCotatie && +_ultimaCotatie.pret_24k) return +_ultimaCotatie.pret_24k;
+  if (_istoricAur.length) return +_istoricAur[_istoricAur.length-1].ron_gram_24k;
+  return 0;
+}
+
+async function incarcaTranzactii(){
+  try {
+    const [t, s] = await Promise.all([
+      fetch(`${SUPA_URL}/tranzactii_aur?select=*&order=data_intrare.desc`, { headers: HEADERS }),
+      fetch(`${SUPA_URL}/setari_trading?cheie=eq.capital_alocat&select=valoare`, { headers: HEADERS })
+    ]);
+    _tranzactii = t.ok ? await t.json() : [];
+    if (s.ok) { const r = await s.json(); _capitalAlocat = r.length ? +r[0].valoare : 0; }
+  } catch(e) { _tranzactii = []; }
+  renderTranzactii();
+}
+
+// ── calcule pe o pozitie ──
+function trCalc(t, pretAcum){
+  const grame = +t.grame;
+  const intrare = +t.pret_intrare * grame + (+t.costuri_intrare || 0);
+  const deschisa = !t.data_iesire;
+  const pretIes = deschisa ? pretAcum : +t.pret_iesire;
+  const iesire = pretIes * grame - (+t.costuri_iesire || 0);
+  const pl = iesire - intrare;
+  const plPct = intrare ? pl / intrare * 100 : 0;
+  const zile = Math.max(1, Math.round(
+    ((deschisa ? new Date() : new Date(t.data_iesire)) - new Date(t.data_intrare)) / 86400000));
+  const anualizat = intrare ? (Math.pow(1 + pl/intrare, 365/zile) - 1) * 100 : 0;
+  return { grame, intrare, iesire, pl, plPct, zile, anualizat, deschisa, pretIes };
+}
+
+function renderTranzactii(){
+  const pret = trPretCurent();
+  const box = document.getElementById('tr-kpi');
+  if (!box) return;
+
+  const deschise = _tranzactii.filter(t => !t.data_iesire).map(t => ({ t, c: trCalc(t, pret) }));
+  const inchise  = _tranzactii.filter(t =>  t.data_iesire).map(t => ({ t, c: trCalc(t, pret) }));
+
+  const expunere   = deschise.reduce((s,x) => s + x.c.intrare, 0);
+  const grameTotal = deschise.reduce((s,x) => s + x.c.grame, 0);
+  const valoareAzi = grameTotal * pret;
+  const plNereal   = deschise.reduce((s,x) => s + x.c.pl, 0);
+  const plReal     = inchise.reduce((s,x) => s + x.c.pl, 0);
+  const investitInchis = inchise.reduce((s,x) => s + x.c.intrare, 0);
+  const randamentMeu = investitInchis ? plReal / investitInchis * 100 : null;
+
+  // reper: cat facea daca doar cumparai la prima tranzactie si stateai
+  let reper = null, dataPrima = null;
+  if (_tranzactii.length && _istoricAur.length){
+    dataPrima = _tranzactii.map(t => t.data_intrare).sort()[0];
+    const r0 = _istoricAur.find(r => r.data >= dataPrima);
+    if (r0) reper = (pret / +r0.ron_gram_24k - 1) * 100;
+  }
+
+  document.getElementById('tr-meta').textContent =
+    `${deschise.length} deschise · ${inchise.length} închise · preț curent ${fmt(pret,2)} lei/g`;
+
+  box.innerHTML = `
+    <div class="kpi">
+      <div class="lbl">Expunere acum</div>
+      <div class="val">${fmt0(expunere)}</div>
+      <div class="sub">lei în ${deschise.length} poziții · ${fmt(grameTotal,1)} g</div>
+    </div>
+    <div class="kpi ${plNereal>=0?'green':'red'}">
+      <div class="lbl">Câștig/pierdere pe hârtie</div>
+      <div class="val">${plNereal>=0?'+':''}${fmt0(plNereal)}</div>
+      <div class="sub">valoare azi ${fmt0(valoareAzi)} lei</div>
+    </div>
+    <div class="kpi ${plReal>=0?'green':'red'}">
+      <div class="lbl">Realizat (poziții închise)</div>
+      <div class="val">${plReal>=0?'+':''}${fmt0(plReal)}</div>
+      <div class="sub">${inchise.length ? `din ${fmt0(investitInchis)} lei investiți` : 'nicio poziție închisă'}</div>
+    </div>
+    <div class="kpi gold">
+      <div class="lbl">Tu vs. „cumpăr și stau"</div>
+      <div class="val">${randamentMeu===null||reper===null ? '—'
+        : `${randamentMeu-reper>=0?'+':''}${fmt(randamentMeu-reper,1)}%`}</div>
+      <div class="sub">${randamentMeu===null||reper===null ? 'după prima poziție închisă'
+        : `tu ${fmt(randamentMeu,1)}% · piața ${fmt(reper,1)}% din ${dataPrima}`}</div>
+    </div>`;
+
+  renderRiscExpunere(expunere, grameTotal, pret);
+  renderPozitii(deschise, inchise, pret);
+  renderFormularTranzactie(pret);
+}
+
+function renderRiscExpunere(expunere, grame, pret){
+  const box = document.getElementById('tr-risc');
+  if (!expunere){ box.innerHTML = ''; return; }
+  const val = grame * pret;
+  const scenarii = [
+    ['o zi obișnuită', 1.22], ['o zi proastă', 3], ['cea mai neagră zi din 4 ani', 11]
+  ];
+  const procentCapital = _capitalAlocat ? expunere / _capitalAlocat * 100 : null;
+
+  box.innerHTML = `
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px">Cât riști, în lei</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+        ${scenarii.map(([et,p]) => `
+          <div style="background:#fff;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">${et}</div>
+            <div style="font-size:11px;color:var(--sub)">−${p}%</div>
+            <div style="font-size:19px;font-weight:800;color:var(--red)">−${fmt0(val*p/100)}</div>
+          </div>`).join('')}
+      </div>
+      <div style="font-size:12px;color:var(--sub)">
+        ${procentCapital!==null
+          ? `Ai expus <b style="color:#1e293b">${fmt(procentCapital,0)}%</b> din capitalul alocat de ${fmt0(_capitalAlocat)} lei.`
+          : `<b>Nu ai setat capitalul alocat.</b> Fără el nu pot spune dacă expunerea e mare sau mică.`}
+        <button class="mini-btn" style="margin-left:6px" onclick="seteazaCapital()">setează capitalul</button>
+      </div>
+    </div>`;
+}
+
+function renderPozitii(deschise, inchise, pret){
+  const d = document.getElementById('tr-deschise');
+  if (!deschise.length){
+    d.innerHTML = '<div style="color:var(--sub);font-size:12px">Nicio poziție deschisă.</div>';
+  } else {
+    d.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:8px">Poziții deschise</div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr>
+        <th>Intrare</th><th style="text-align:right">Preț</th><th style="text-align:right">Grame</th>
+        <th style="text-align:right">Investit</th><th style="text-align:right">Valoare azi</th>
+        <th style="text-align:right">Câștig/pierdere</th><th>Zile</th><th>De ce am intrat</th><th></th>
+      </tr></thead><tbody>` +
+      deschise.map(({t,c}) => `<tr>
+        <td>${t.data_intrare}</td>
+        <td style="text-align:right">${fmt(+t.pret_intrare,2)}</td>
+        <td style="text-align:right">${fmt(c.grame,1)}</td>
+        <td style="text-align:right">${fmt0(c.intrare)}</td>
+        <td style="text-align:right">${fmt0(c.grame*pret)}</td>
+        <td style="text-align:right"><b class="${c.pl>=0?'var-up':'var-down'}">${c.pl>=0?'+':''}${fmt0(c.pl)}</b>
+          <span style="font-size:11px;color:var(--sub)"> (${c.plPct>=0?'+':''}${fmt(c.plPct,1)}%)</span></td>
+        <td>${c.zile}</td>
+        <td style="font-size:11px;color:var(--sub);max-width:220px">${escH(t.motiv_intrare||'—')}</td>
+        <td style="text-align:right"><button class="mini-btn" onclick="inchidePozitie('${t.id}')">închide</button>
+          <button class="mini-btn" style="color:var(--red)" onclick="stergePozitie('${t.id}')">✕</button></td>
+      </tr>`).join('') + '</tbody></table></div>';
+  }
+
+  const i = document.getElementById('tr-inchise');
+  if (!inchise.length){ i.innerHTML = ''; return; }
+  const castig = inchise.filter(x => x.c.pl > 0).length;
+  i.innerHTML = `<div style="font-weight:700;font-size:13px;margin:14px 0 8px">
+      Poziții închise — ${castig} din ${inchise.length} pe plus (${fmt(castig/inchise.length*100,0)}%)</div>
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Perioadă</th><th style="text-align:right">Intrare</th><th style="text-align:right">Ieșire</th>
+      <th style="text-align:right">Grame</th><th style="text-align:right">Rezultat</th>
+      <th style="text-align:right">Anualizat</th><th>De ce</th><th></th>
+    </tr></thead><tbody>` +
+    inchise.map(({t,c}) => `<tr>
+      <td>${t.data_intrare} → ${t.data_iesire}<br><span style="font-size:10px;color:var(--sub)">${c.zile} zile</span></td>
+      <td style="text-align:right">${fmt(+t.pret_intrare,2)}</td>
+      <td style="text-align:right">${fmt(+t.pret_iesire,2)}</td>
+      <td style="text-align:right">${fmt(c.grame,1)}</td>
+      <td style="text-align:right"><b class="${c.pl>=0?'var-up':'var-down'}">${c.pl>=0?'+':''}${fmt0(c.pl)}</b>
+        <span style="font-size:11px;color:var(--sub)"> (${c.plPct>=0?'+':''}${fmt(c.plPct,1)}%)</span></td>
+      <td style="text-align:right;font-size:11px;color:var(--sub)">${fmt(c.anualizat,0)}%</td>
+      <td style="font-size:11px;color:var(--sub);max-width:200px">${escH(t.motiv_intrare||'—')}
+        ${t.motiv_iesire?`<br><i>ieșire: ${escH(t.motiv_iesire)}</i>`:''}</td>
+      <td style="text-align:right"><button class="mini-btn" style="color:var(--red)" onclick="stergePozitie('${t.id}')">✕</button></td>
+    </tr>`).join('') + '</tbody></table></div>';
+}
+
+function renderFormularTranzactie(pret){
+  document.getElementById('tr-formular').innerHTML = `
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Poziție nouă</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:10px">
+        <div><label>Data intrării</label><input type="date" id="tr-data" value="${new Date().toISOString().slice(0,10)}"></div>
+        <div><label>Preț (lei/gram)</label><input type="number" step="0.01" id="tr-pret" value="${fmt(pret,2).replace(/\./g,'').replace(',','.')}"></div>
+        <div><label>Grame</label><input type="number" step="0.001" id="tr-grame" placeholder="0"></div>
+        <div><label>Costuri (comision)</label><input type="number" step="0.01" id="tr-costuri" value="0"></div>
+      </div>
+      <label>De ce intru — scrie-ți raționamentul acum, nu după</label>
+      <input id="tr-motiv" placeholder="ex: a scăzut sub media de 50 de zile și dolarul slăbește" style="margin-bottom:10px">
+      <button class="mini-btn" onclick="adaugaPozitie()"
+        style="width:100%;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px">➕ Adaugă poziția</button>
+    </div>`;
+}
+
+async function trSalveaza(metoda, cale, corp){
+  const r = await fetch(`${SUPA_URL}/${cale}`, {
+    method: metoda,
+    headers: { ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+    body: corp ? JSON.stringify(corp) : undefined
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+
+async function adaugaPozitie(){
+  const g = parseFloat(document.getElementById('tr-grame').value);
+  const p = parseFloat(document.getElementById('tr-pret').value);
+  const motiv = document.getElementById('tr-motiv').value.trim();
+  if (!(g > 0) || !(p > 0)) { alert('Completează prețul și gramele.'); return; }
+  if (!motiv) { alert('Scrie de ce intri. Fără motiv, jurnalul nu te învață nimic — e singurul câmp pe care insist.'); return; }
+  try {
+    await trSalveaza('POST', 'tranzactii_aur', [{
+      data_intrare: document.getElementById('tr-data').value,
+      pret_intrare: p, grame: g,
+      costuri_intrare: parseFloat(document.getElementById('tr-costuri').value) || 0,
+      motiv_intrare: motiv
+    }]);
+    incarcaTranzactii();
+  } catch(e){ alert('Nu am putut salva:\n' + (e.message||e)); }
+}
+
+async function inchidePozitie(id){
+  const t = _tranzactii.find(x => x.id === id);
+  const pretSug = fmt(trPretCurent(),2);
+  const pret = prompt(`La ce preț ieși? (lei/gram)\n\nPrețul pieței acum: ${pretSug}`, pretSug.replace(/\./g,'').replace(',','.'));
+  if (pret === null) return;
+  const p = parseFloat(String(pret).replace(',','.'));
+  if (!(p > 0)) { alert('Preț invalid.'); return; }
+  const costuri = parseFloat(prompt('Costuri de ieșire (comision, spread) în lei:', '0') || '0') || 0;
+  const motiv = prompt('De ce ieși? (se salvează în jurnal)', '') || '';
+  try {
+    await trSalveaza('PATCH', `tranzactii_aur?id=eq.${id}`, {
+      data_iesire: new Date().toISOString().slice(0,10),
+      pret_iesire: p, costuri_iesire: costuri, motiv_iesire: motiv
+    });
+    incarcaTranzactii();
+  } catch(e){ alert('Nu am putut închide:\n' + (e.message||e)); }
+}
+
+async function stergePozitie(id){
+  if (!confirm('Ștergi poziția din jurnal?\n\nJurnalul are valoare doar dacă e complet — inclusiv tranzacțiile proaste.')) return;
+  try { await trSalveaza('DELETE', `tranzactii_aur?id=eq.${id}`); incarcaTranzactii(); }
+  catch(e){ alert('Nu am putut șterge:\n' + (e.message||e)); }
+}
+
+async function seteazaCapital(){
+  const v = prompt('Ce sumă (în lei) aloci pentru tranzacționare?\n\nO folosesc ca să-ți spun ce procent ai expus.', _capitalAlocat || '');
+  if (v === null) return;
+  const n = parseFloat(String(v).replace(',','.'));
+  if (!(n >= 0)) { alert('Sumă invalidă.'); return; }
+  try {
+    await trSalveaza('POST', 'setari_trading?on_conflict=cheie',
+      [{ cheie:'capital_alocat', valoare:n }]);
+    _capitalAlocat = n;
+    renderTranzactii();
+  } catch(e){ alert('Nu am putut salva:\n' + (e.message||e)); }
 }
 
 // ══════════════════════════════════════════════════════════════
