@@ -19,7 +19,7 @@ Rulare locala pentru test:
     python scripts/cotatii_aur.py --test     (nu scrie in DB, nu trimite mailuri)
 """
 
-import os, re, sys, json, argparse
+import os, re, sys, json, time, argparse
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import urllib.request, urllib.error, urllib.parse
@@ -128,9 +128,24 @@ def get_curs():
         return eur_ron, eur_ron / float(r["USD"]), "BCE (frankfurter) — REZERVA"
 
 
+def cu_reincercari(fn, nume, incercari=3, pauza=10):
+    """Runnerele GitHub au ocazional pene scurte de DNS/retea (Errno -2).
+    Fara reincercari, o pana de 2 secunde amana alerta cu 15 minute."""
+    ultima = None
+    for i in range(1, incercari + 1):
+        try:
+            return fn()
+        except Exception as e:
+            ultima = e
+            log(f"  {nume}: incercarea {i}/{incercari} a esuat ({e})")
+            if i < incercari:
+                time.sleep(pauza)
+    raise ultima
+
+
 def calculeaza():
-    xau = get_xau_usd()
-    eur_ron, usd_ron, sursa = get_curs()
+    xau = cu_reincercari(get_xau_usd, "XAU")
+    eur_ron, usd_ron, sursa = cu_reincercari(get_curs, "CURS")
     eur_usd  = eur_ron / usd_ron
     eur_gram = (xau / eur_usd) / OZ_IN_GRAME
     curs_aj  = eur_ron - AJUSTARE_CURS
