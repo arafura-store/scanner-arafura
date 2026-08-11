@@ -229,6 +229,31 @@ body{font-family:Arial,sans-serif;background:var(--bg);color:#1e293b;font-size:1
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
+      <!-- FLUCTUATII AUR — istoric 5 ani + descompunere       -->
+      <!-- cat din miscarea in lei vine de la aur si cat de la -->
+      <!-- cursul valutar                                       -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="section" style="margin-top:24px">
+        <h2>📊 Fluctuații aur
+          <span class="meta" id="fl-meta"></span>
+        </h2>
+        <div class="body">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+            <div id="fl-intervale" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+            <div style="flex:1"></div>
+            <div id="fl-unitati" style="display:flex;gap:5px"></div>
+          </div>
+
+          <div id="fl-kpi" class="kpi-grid" style="margin-bottom:16px"></div>
+
+          <div class="chart-wrap" style="height:320px;margin-bottom:16px"><canvas id="ch-fluct"></canvas></div>
+
+          <div id="fl-descompunere"></div>
+          <div id="fl-context" style="margin-top:14px"></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
       <!-- RAPOARTE LUNARE PERFECTA — valori contracte +      -->
       <!-- registru casa, importate automat din Drive          -->
       <!-- ═══════════════════════════════════════════════════ -->
@@ -516,14 +541,15 @@ async function loadAll(silent=false) {
   document.getElementById('last-upd').textContent = silent ? '🔄 sync...' : 'Se actualizeaza...';
 
   try {
-    const [contracte, pvuri, verif, cotatii, istoric, valoriLunar, casaLunar] = await Promise.all([
+    const [contracte, pvuri, verif, cotatii, istoric, valoriLunar, casaLunar, istoricAur] = await Promise.all([
       fetchAll('contracte_amanet', 'select=*'),
       fetchAll('pv_executare', 'select=nr_pv,magazin,data_doc,perioada'),
       fetchAll('verificari_amanet', 'select=*&order=data_verificare.desc'),
       fetchAll('cotatii_aur', 'select=*&order=data_snapshot.desc.nullslast,data_ora.desc&limit=60'),
       fetchAll('istoric_amanet', 'select=*&order=luna.asc'),
       fetchAll('valori_contracte_lunar', 'select=*&order=an.asc,luna.asc'),
-      fetchAll('registru_casa_lunar',    'select=*&order=an.asc,luna.asc')
+      fetchAll('registru_casa_lunar',    'select=*&order=an.asc,luna.asc'),
+      fetchAll('istoric_aur_zilnic', 'select=*&order=data.asc')
     ]);
 
     // Filtrez magazinele inchise (valori reziduale) inca de la sursa
@@ -546,6 +572,8 @@ async function loadAll(silent=false) {
     renderVerifSumar(verif);
     populeazaLuniRef();
     renderRapoarteLunare();
+    _istoricAur = istoricAur || [];
+    renderFluctuatii();
   } catch(e) {
     document.getElementById('spinner').textContent = '❌ Eroare: ' + e.message;
   }
@@ -1414,6 +1442,233 @@ function renderComDis() {
       options: {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{ticks:{font:{size:10}}}, x:{ticks:{font:{size:10}}}}}
     });
   }, 50);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  FLUCTUATII AUR — istoric zilnic 5 ani (tabela istoric_aur_zilnic)
+//  Ideea centrala: pretul in LEI se misca din doua motive care se pot
+//  aduna sau anula — aurul international si cursul valutar. Panoul de
+//  descompunere separa cele doua contributii, ceva ce nu vezi pe site-uri.
+// ══════════════════════════════════════════════════════════════
+let _istoricAur = [];
+let _flInterval = '1a';
+let _flUnitate  = 'ron';
+
+const FL_INTERVALE = [
+  { id:'5z', et:'5 zile',  zile:5 },
+  { id:'1L', et:'1 lună',  zile:31 },
+  { id:'3L', et:'3 luni',  zile:92 },
+  { id:'1a', et:'1 an',    zile:366 },
+  { id:'5a', et:'5 ani',   zile:99999 },
+];
+
+function flSetInterval(id){ _flInterval = id; renderFluctuatii(); }
+function flSetUnitate(u){ _flUnitate = u; renderFluctuatii(); }
+
+function flValoare(r){ return _flUnitate === 'ron' ? +r.ron_gram_24k : +r.xau_usd; }
+function flUM(){ return _flUnitate === 'ron' ? 'RON/gram' : 'USD/uncie'; }
+
+function flProcent(v, zecimale=2){
+  const s = v >= 0 ? '+' : '';
+  const cls = v >= 0 ? 'var-up' : 'var-down';
+  return `<span class="${cls}">${s}${fmt(v, zecimale)}%</span>`;
+}
+
+function renderFluctuatii(){
+  const box = document.getElementById('fl-kpi');
+  if (!box) return;
+
+  if (!_istoricAur.length){
+    box.innerHTML = '';
+    document.getElementById('fl-descompunere').innerHTML =
+      `<div style="background:#fef3c7;border-left:4px solid var(--gold);border-radius:6px;padding:12px;font-size:12px;color:#92400e">
+         <b>Istoricul nu e încă încărcat.</b> Trebuie creată tabela <code>istoric_aur_zilnic</code> și rulat scriptul de umplere.
+       </div>`;
+    return;
+  }
+
+  // ── butoane ──
+  document.getElementById('fl-intervale').innerHTML = FL_INTERVALE.map(i =>
+    `<button onclick="flSetInterval('${i.id}')" class="mini-btn"
+      style="${i.id===_flInterval?'background:var(--navy);color:#fff;border-color:var(--navy)':''}">${i.et}</button>`).join('');
+  document.getElementById('fl-unitati').innerHTML =
+    [['ron','RON/gram'],['usd','USD/uncie']].map(([u,e]) =>
+      `<button onclick="flSetUnitate('${u}')" class="mini-btn"
+        style="${u===_flUnitate?'background:var(--gold);color:var(--navy);border-color:var(--gold)':''}">${e}</button>`).join('');
+
+  // ── feliez seria ──
+  const cfg = FL_INTERVALE.find(i => i.id === _flInterval);
+  const serie = _istoricAur.slice(-Math.min(cfg.zile, _istoricAur.length));
+  const primul = serie[0], ultimul = serie[serie.length-1];
+  const val0 = flValoare(primul), val1 = flValoare(ultimul);
+  const variatie = val0 ? (val1 - val0) / val0 * 100 : 0;
+
+  const valori = serie.map(flValoare);
+  const minim = Math.min(...valori), maxim = Math.max(...valori);
+
+  document.getElementById('fl-meta').textContent =
+    `${_istoricAur.length} zile · ${_istoricAur[0].data} → ${ultimul.data}`;
+
+  // ── KPI ──
+  box.innerHTML = `
+    <div class="kpi gold">
+      <div class="lbl">Închidere ${ultimul.data}</div>
+      <div class="val">${fmt(val1, 2)}</div>
+      <div class="sub">${flUM()}</div>
+    </div>
+    <div class="kpi ${variatie>=0?'green':'red'}">
+      <div class="lbl">Variație pe ${cfg.et}</div>
+      <div class="val">${variatie>=0?'+':''}${fmt(variatie,2)}%</div>
+      <div class="sub">${variatie>=0?'+':''}${fmt(val1-val0,2)} de la ${primul.data}</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Minim pe ${cfg.et}</div>
+      <div class="val">${fmt(minim,2)}</div>
+      <div class="sub">${flProcent((val1-minim)/minim*100)} față de minim</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Maxim pe ${cfg.et}</div>
+      <div class="val">${fmt(maxim,2)}</div>
+      <div class="sub">${flProcent((val1-maxim)/maxim*100)} față de maxim</div>
+    </div>`;
+
+  renderFluctChart(serie);
+  renderDescompunere(primul, ultimul, cfg);
+  renderContextAur(ultimul);
+}
+
+function renderFluctChart(serie){
+  if (_charts.fluct) _charts.fluct.destroy();
+  const et = serie.map(r => r.data);
+  const v  = serie.map(flValoare);
+
+  const seturi = [{
+    label: flUM(), data: v, borderColor: '#856404', backgroundColor: 'rgba(255,215,0,0.13)',
+    fill: true, tension: 0.25, pointRadius: 0, borderWidth: 2
+  }];
+
+  // medii mobile — descriptive, doar cand seria e destul de lunga
+  const media = (n) => v.map((_, i) => i < n-1 ? null
+    : v.slice(i-n+1, i+1).reduce((a,b)=>a+b,0) / n);
+  if (v.length >= 60)  seturi.push({ label:'medie 50 zile', data:media(50),
+    borderColor:'#2E75B6', borderWidth:1.5, pointRadius:0, borderDash:[6,4], fill:false, tension:0.25 });
+  if (v.length >= 220) seturi.push({ label:'medie 200 zile', data:media(200),
+    borderColor:'#C00000', borderWidth:1.5, pointRadius:0, borderDash:[2,3], fill:false, tension:0.25 });
+
+  _charts.fluct = new Chart(document.getElementById('ch-fluct'), {
+    type:'line',
+    data:{ labels: et, datasets: seturi },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      plugins:{
+        legend:{ display: seturi.length > 1, labels:{ boxWidth:18, font:{size:11} } },
+        tooltip:{ callbacks:{ label: c => `${c.dataset.label}: ${fmt(c.parsed.y,2)}` } }
+      },
+      scales:{
+        x:{ ticks:{ maxTicksLimit:10, font:{size:10} }, grid:{ display:false } },
+        y:{ ticks:{ callback: v => fmt(v,0), font:{size:10} } }
+      }
+    }
+  });
+}
+
+// ── DESCOMPUNERE: cat din miscarea in lei vine de la aur, cat de la curs ──
+function renderDescompunere(primul, ultimul, cfg){
+  const box = document.getElementById('fl-descompunere');
+
+  const r0 = +primul.ron_gram_24k, r1 = +ultimul.ron_gram_24k;
+  const x0 = +primul.xau_usd,      x1 = +ultimul.xau_usd;
+  const c0 = +primul.usd_ron,      c1 = +ultimul.usd_ron;
+  if (!r0 || !x0 || !c0) { box.innerHTML = ''; return; }
+
+  const total = (r1/r0 - 1) * 100;
+  const aur   = (x1/x0 - 1) * 100;
+  const curs  = (c1/c0 - 1) * 100;
+
+  // cat la suta din miscare a fost data de fiecare (pe marimi absolute)
+  const sumaAbs = Math.abs(aur) + Math.abs(curs) || 1;
+  const pAur = Math.abs(aur) / sumaAbs * 100;
+
+  const seAduna = (aur >= 0) === (curs >= 0);
+  const explicatie = seAduna
+    ? (aur >= 0 ? 'Ambele au împins prețul <b>în sus</b>.' : 'Ambele au împins prețul <b>în jos</b>.')
+    : (Math.abs(aur) > Math.abs(curs)
+        ? 'Cele două au tras în direcții opuse — <b>aurul a decis</b>, cursul a frânat.'
+        : 'Cele două au tras în direcții opuse — <b>cursul a decis</b>, aurul a frânat.');
+
+  box.innerHTML = `
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:2px">De unde vine mișcarea, pe ${cfg.et}</div>
+      <div style="font-size:11px;color:var(--sub);margin-bottom:12px">
+        Prețul tău în lei depinde de două lucruri: cât valorează aurul în dolari și cât valorează dolarul în lei.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;margin-bottom:12px">
+        <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid var(--gold)">
+          <div style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">Total în lei</div>
+          <div style="font-size:22px;font-weight:800">${flProcent(total)}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid var(--blue)">
+          <div style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">din care aurul</div>
+          <div style="font-size:22px;font-weight:800">${flProcent(aur)}</div>
+        </div>
+        <div style="background:#fff;border-radius:8px;padding:10px;border-left:4px solid var(--orange)">
+          <div style="font-size:10px;color:var(--sub);font-weight:700;text-transform:uppercase">din care cursul</div>
+          <div style="font-size:22px;font-weight:800">${flProcent(curs)}</div>
+        </div>
+      </div>
+
+      <div style="height:10px;border-radius:5px;overflow:hidden;display:flex;margin-bottom:6px">
+        <div style="width:${fmt(pAur,1)}%;background:var(--blue)"></div>
+        <div style="width:${fmt(100-pAur,1)}%;background:var(--orange)"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub);margin-bottom:10px">
+        <span>aurul ${fmt(pAur,0)}% din mișcare</span><span>cursul ${fmt(100-pAur,0)}%</span>
+      </div>
+
+      <div style="font-size:12px;background:#fff;border-radius:8px;padding:10px">
+        ${explicatie}
+        Aurul a trecut de la ${fmt(x0,2)} la ${fmt(x1,2)} USD/uncie, iar dolarul de la ${fmt(c0,4)} la ${fmt(c1,4)} lei.
+      </div>
+    </div>`;
+}
+
+function renderContextAur(ultimul){
+  const box = document.getElementById('fl-context');
+  const an = _istoricAur.slice(-366);
+  const valAn = an.map(flValoare);
+  const min52 = Math.min(...valAn), max52 = Math.max(...valAn);
+  const acum = flValoare(ultimul);
+  const pozitie = max52 > min52 ? (acum - min52) / (max52 - min52) * 100 : 50;
+
+  // cat se misca aurul intr-o zi obisnuita (media abaterilor zilnice, ultimele 90 zile)
+  const ult = _istoricAur.slice(-91).map(flValoare);
+  let sumaMisc = 0, n = 0;
+  for (let i = 1; i < ult.length; i++){ if (ult[i-1]) { sumaMisc += Math.abs(ult[i]/ult[i-1]-1)*100; n++; } }
+  const miscMedie = n ? sumaMisc/n : 0;
+
+  box.innerHTML = `
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px">
+      <div style="font-weight:700;font-size:13px;margin-bottom:10px">Unde ne aflăm față de ultimul an</div>
+      <div style="position:relative;height:34px;margin-bottom:6px">
+        <div style="position:absolute;top:14px;left:0;right:0;height:6px;border-radius:3px;
+                    background:linear-gradient(90deg,var(--green),#fde68a,var(--red))"></div>
+        <div style="position:absolute;top:6px;left:calc(${fmt(Math.max(0,Math.min(100,pozitie)),1)}% - 2px);
+                    width:4px;height:22px;background:var(--navy);border-radius:2px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--sub)">
+        <span>minim 12 luni<br><b style="color:#1e293b;font-size:13px">${fmt(min52,2)}</b></span>
+        <span style="text-align:center">acum<br><b style="color:var(--gold-d);font-size:13px">${fmt(acum,2)}</b><br>
+          ${fmt(pozitie,0)}% din interval</span>
+        <span style="text-align:right">maxim 12 luni<br><b style="color:#1e293b;font-size:13px">${fmt(max52,2)}</b></span>
+      </div>
+      <div style="margin-top:12px;font-size:12px;background:#fff;border-radius:8px;padding:10px;color:var(--sub)">
+        Într-o zi obișnuită din ultimele 3 luni, prețul s-a mișcat cu <b style="color:#1e293b">${fmt(miscMedie,2)}%</b>
+        — adică aproximativ <b style="color:#1e293b">${fmt(acum*miscMedie/100,2)} ${_flUnitate==='ron'?'lei pe gram':'dolari pe uncie'}</b>.
+        Folosește-l ca reper: o mișcare sub atât e zgomot obișnuit, nu un semnal.
+      </div>
+    </div>`;
 }
 
 // ── PRET AUR LIVE (la cerere, buton ⚡ LIVE) ──

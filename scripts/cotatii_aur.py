@@ -438,8 +438,25 @@ def main():
     log(f"  24K = {c['p24']:.2f} RON/g  (XAU {c['xau_usd']:.2f} USD/oz, "
         f"EUR/USD {c['eur_usd']:.4f}, curs {c['curs_bnr']:.4f} — {c['sursa']})")
 
-    face_snapshot(c, acum, args.test)
+    a_salvat = face_snapshot(c, acum, args.test)
     n = verifica_alerte(c, acum, args.test)
+
+    # O data pe zi, odata cu snapshotul de dimineata, improspatez si istoricul
+    # zilnic folosit de sectiunea de fluctuatii (ultimele 10 zile, se auto-repara).
+    if a_salvat and slot_curent(acum) == "08:00" and not args.test:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import istoric_aur
+            log("Improspatez istoricul zilnic...")
+            randuri = istoric_aur.construieste(
+                istoric_aur.aur_zilnic("1mo"),
+                istoric_aur.valute_zilnic(acum.date() - timedelta(days=20), acum.date()))
+            randuri = [r for r in randuri if r["data"] >= (acum.date() - timedelta(days=10)).isoformat()]
+            if randuri and istoric_aur.salveaza(randuri):
+                log(f"  istoric: {len(randuri)} zile actualizate")
+        except Exception as e:
+            log(f"  istoricul nu s-a putut improspata: {e}")
+
     log(f"Gata. {n} alerte declansate.")
 
 
