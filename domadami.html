@@ -821,6 +821,18 @@ body.is-viewer .role-banner.viewer{display:block}
       <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-contracte">
         <div id="contracte-alerta"></div>
+
+        <!-- Formular act — se deschide peste pagina -->
+        <div id="doc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;overflow-y:auto"
+             onclick="if(event.target===this)inchideDocModal()">
+          <div style="background:#fff;border-radius:12px;max-width:620px;margin:24px auto;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)">
+            <div style="background:var(--navy);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center">
+              <h3 id="doc-modal-titlu" style="font-size:15px;margin:0">Act nou</h3>
+              <button onclick="inchideDocModal()" style="background:transparent;border:1px solid #fff;color:#fff;padding:4px 12px;border-radius:6px;cursor:pointer;font-weight:700">✕</button>
+            </div>
+            <div style="padding:18px" id="doc-modal-body"></div>
+          </div>
+        </div>
         <div class="card">
           <div class="card-hdr">
             <h3>📁 Contracte si acte aditionale</h3>
@@ -4245,37 +4257,148 @@ function vezActe(chiriasId){
   alert(`${c?.nume||''}\n${'─'.repeat(34)}\n\n${linii || 'Niciun act introdus.'}`);
 }
 
-async function deschideDocNou(chiriasId){
+function inchideDocModal(){ document.getElementById('doc-modal').style.display = 'none'; }
+
+/** Un singur formular, cu tot ce scrie pe contract la vedere.
+ *  NU scrie nimic in tabelele folosite de facturare — totul merge in domadami_documente. */
+function deschideDocNou(chiriasId){
   if (!canEditDocumente()) { toast('Nu ai drepturi să adaugi acte','error'); return; }
-  const optChirias = _docChiriasi.filter(c=>c.activ).map(c => `${c.id} = ${c.nume}`).join('\n');
-  const cid = chiriasId || parseInt(prompt('Chiriașul (scrie numărul):\n\n'+optChirias) || '0');
-  if (!cid) return;
-  const chirias = _docChiriasi.find(c => c.id === cid);
-  if (!chirias) { toast('Chiriaș inexistent','error'); return; }
 
-  const acteExistente = _documente.filter(d => d.chirias_id === cid);
-  const tip = acteExistente.length
-    ? (confirm(`${chirias.nume} are deja ${acteExistente.length} act(e).\n\nOK = act adițional (prelungire)\nAnulează = contract nou`) ? 'act_aditional' : 'contract')
-    : 'contract';
+  const acte = chiriasId ? _documente.filter(d => d.chirias_id === chiriasId) : [];
+  const ultim = acte.sort((a,b)=>(b.valabil_pana||'').localeCompare(a.valabil_pana||''))[0];
+  const tipImplicit = acte.length ? 'act_aditional' : 'contract';
+  // la prelungire, continui de unde s-a terminat actul precedent
+  const deImplicit = ultim ? adaugaZi(ultim.valabil_pana) : '';
+  const panaImplicit = deImplicit ? adaugaAn(deImplicit) : '';
 
-  const numar = prompt('Numărul actului (de pe hârtie):') || '';
-  const de = prompt('Valabil DE LA (zz.ll.aaaa):', '');
-  const pana = prompt('Valabil PÂNĂ LA (zz.ll.aaaa):', '');
-  const d1 = parseData(de), d2 = parseData(pana);
-  if (!d1 || !d2) { toast('Date invalide — scrie în formatul zz.ll.aaaa','error'); return; }
-  if (d2 <= d1) { toast('Data de final trebuie să fie după cea de început','error'); return; }
+  document.getElementById('doc-modal-titlu').textContent =
+    chiriasId ? `Act nou — ${_docChiriasi.find(c=>c.id===chiriasId)?.nume || ''}` : 'Act nou';
 
-  const chirie = parseFloat((prompt('Chiria lunară (lasă gol dacă nu o știi):','') || '').replace(',','.'));
-  // Unitatea NU se cere: o stim deja din evidenta ocuparii (toti cei 24 sunt legati).
-  const unitId = _documente.find(d => d.chirias_id === cid)?.unitate_id
-              || _ocupare[cid] || null;
+  document.getElementById('doc-modal-body').innerHTML = `
+    <div style="display:grid;gap:12px">
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Chiriaș</label>
+        <select id="d-chirias" onchange="doc_schimbaChirias()" ${chiriasId?'disabled':''}
+                style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+          <option value="">— alege —</option>
+          ${_docChiriasi.filter(c=>c.activ).map(c =>
+            `<option value="${c.id}"${c.id===chiriasId?' selected':''}>${escH(c.nume)} — ${escH(numeUnitate(_ocupare[c.id]))}</option>`).join('')}
+        </select>
+        <div id="d-info" style="font-size:11px;color:#64748b;margin-top:4px"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Tipul actului</label>
+          <select id="d-tip" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+            <option value="contract"${tipImplicit==='contract'?' selected':''}>Contract (primul)</option>
+            <option value="act_aditional"${tipImplicit==='act_aditional'?' selected':''}>Act adițional (prelungire)</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Numărul actului</label>
+          <input id="d-numar" placeholder="cum scrie pe hârtie" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Valabil de la</label>
+          <input type="date" id="d-de" value="${deImplicit}" onchange="doc_completeazaPana()"
+                 style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Valabil până la</label>
+          <input type="date" id="d-pana" value="${panaImplicit}"
+                 style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Chiria lunară</label>
+          <input type="number" step="0.01" id="d-chirie" placeholder="opțional"
+                 style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+        </div>
+      </div>
+
+      <details style="border:1px solid #e2e8f0;border-radius:8px;padding:10px">
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#1F3864">
+          Datele de pe contract (opțional, dar utile mai târziu)</summary>
+        <div style="display:grid;gap:10px;margin-top:10px">
+          <div><label style="font-size:11px;color:#64748b">Numele complet, exact ca pe act</label>
+            <input id="d-nume" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+          <div><label style="font-size:11px;color:#64748b">Cum e descris spațiul în contract</label>
+            <input id="d-spatiu" placeholder="ex: spațiu comercial parter, 42 mp"
+                   style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:11px;color:#64748b">Telefon</label>
+              <input id="d-telefon" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+            <div><label style="font-size:11px;color:#64748b">Email</label>
+              <input id="d-email" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+          </div>
+          <div style="background:#fef3c7;border-radius:6px;padding:8px;font-size:11px;color:#92400e">
+            CNP-ul și CUI-ul le introducem <b>după</b> ce punem autentificarea reală — până atunci
+            baza e citibilă public și nu punem date personale în ea.
+          </div>
+        </div>
+      </details>
+
+      <div id="d-eroare" style="color:#C00000;font-size:12px;font-weight:700"></div>
+      <button onclick="salveazaDoc()" style="width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:15px;cursor:pointer">
+        Salvează actul</button>
+      <div style="font-size:11px;color:#64748b;text-align:center">
+        Nu se modifică nimic în facturare — datele stau separat până terminăm de introdus tot.
+      </div>
+    </div>`;
+
+  document.getElementById('doc-modal').style.display = 'block';
+  doc_schimbaChirias();
+}
+
+function adaugaZi(d){ const x = new Date(d); x.setDate(x.getDate()+1); return x.toISOString().slice(0,10); }
+function adaugaAn(d){ const x = new Date(d); x.setFullYear(x.getFullYear()+1); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10); }
+
+function doc_completeazaPana(){
+  const de = document.getElementById('d-de').value;
+  const pana = document.getElementById('d-pana');
+  if (de && !pana.value) pana.value = adaugaAn(de);
+}
+
+function doc_schimbaChirias(){
+  const cid = parseInt(document.getElementById('d-chirias').value || '0');
+  const info = document.getElementById('d-info');
+  if (!cid) { info.textContent = ''; return; }
+  const acte = _documente.filter(d => d.chirias_id === cid)
+                         .sort((a,b)=>(b.valabil_pana||'').localeCompare(a.valabil_pana||''));
+  info.innerHTML = acte.length
+    ? `Are deja ${acte.length} act(e). Ultimul e valabil până la <b>${dataRo(acte[0].valabil_pana)}</b>.`
+    : 'Nu are încă niciun act introdus.';
+}
+
+async function salveazaDoc(){
+  const err = document.getElementById('d-eroare');
+  err.textContent = '';
+  const cid = parseInt(document.getElementById('d-chirias').value || '0');
+  const de = document.getElementById('d-de').value;
+  const pana = document.getElementById('d-pana').value;
+  if (!cid)  { err.textContent = 'Alege chiriașul.'; return; }
+  if (!de || !pana) { err.textContent = 'Completează ambele date de valabilitate.'; return; }
+  if (pana <= de)   { err.textContent = 'Data de final trebuie să fie după cea de început.'; return; }
+
+  const tip = document.getElementById('d-tip').value;
+  const acte = _documente.filter(d => d.chirias_id === cid)
+                         .sort((a,b)=>(b.valabil_pana||'').localeCompare(a.valabil_pana||''));
+  const chirie = parseFloat(document.getElementById('d-chirie').value);
 
   const rand = {
-    chirias_id: cid, unitate_id: unitId, tip, numar: numar || null,
-    valabil_de: d1, valabil_pana: d2,
+    chirias_id: cid,
+    unitate_id: acte[0]?.unitate_id || _ocupare[cid] || null,
+    tip, numar: document.getElementById('d-numar').value.trim() || null,
+    valabil_de: de, valabil_pana: pana,
     chirie_lunara: isNaN(chirie) ? null : chirie,
-    parinte_id: tip === 'act_aditional'
-      ? (acteExistente.sort((a,b)=>(b.valabil_pana||'').localeCompare(a.valabil_pana||''))[0]?.id || null) : null,
+    parinte_id: tip === 'act_aditional' ? (acte[0]?.id || null) : null,
+    nume_complet: document.getElementById('d-nume').value.trim() || null,
+    spatiu_text:  document.getElementById('d-spatiu').value.trim() || null,
+    telefon:      document.getElementById('d-telefon').value.trim() || null,
+    email:        document.getElementById('d-email').value.trim() || null,
     introdus_de: currentUser?.id || null
   };
   try {
@@ -4283,8 +4406,9 @@ async function deschideDocNou(chiriasId){
       headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
       body: JSON.stringify([rand]) });
     toast('Act salvat','success');
+    inchideDocModal();
     renderContracte();
-  } catch(e){ toast('Nu am putut salva: '+e.message,'error'); }
+  } catch(e){ err.textContent = 'Nu am putut salva: ' + e.message; }
 }
 
 /** "12.08.2026" sau "2026-08-12" -> "2026-08-12" */
