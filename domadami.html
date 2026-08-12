@@ -836,7 +836,6 @@ body.is-viewer .role-banner.viewer{display:block}
         <div class="card">
           <div class="card-hdr">
             <h3>📁 Contracte si acte aditionale</h3>
-            <button class="btn btn-primary" id="btn-doc-nou" onclick="deschideDocNou()" style="padding:6px 14px;font-size:12px">➕ Adaugă act</button>
           </div>
           <div class="card-body">
             <div id="contracte-sumar" style="margin-bottom:14px"></div>
@@ -4235,7 +4234,6 @@ async function renderContracte(){
         </td></tr>`;
     }).join('') + '</tbody></table></div>';
 
-  document.getElementById('btn-doc-nou').style.display = canEditDocumente() ? '' : 'none';
 }
 
 function canEditDocumente(){ return ['admin','manager','contabilitate'].includes(currentUser?.rol); }
