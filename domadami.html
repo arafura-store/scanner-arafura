@@ -898,7 +898,8 @@ if ('serviceWorker' in navigator) {
 // ═══════════════════════════════════════════════════════════════
 // CONFIG SUPABASE
 // ═══════════════════════════════════════════════════════════════
-const SUPA_URL = 'https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1';
+const SUPA_BASE = 'https://bxsfzfnpejkmwxkuoshb.supabase.co';
+const SUPA_URL = SUPA_BASE + '/rest/v1';
 const SUPA_KEY = 'sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw';
 const HEADERS  = { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY };
 const HEADERS_WRITE = { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' };
@@ -966,6 +967,10 @@ async function login() {
     if (rows.length === 0) { err.textContent='Utilizator sau parola incorecte'; err.style.display='block'; return; }
     currentUser = rows[0];
     localStorage.setItem('dm_user', JSON.stringify(currentUser));
+    // Sesiune reala Supabase — necesara DOAR pentru documentele scanate, care stau
+    // intr-un spatiu privat. Nu blocheaza intrarea: daca esueaza, aplicatia merge
+    // normal, doar scanurile nu se pot deschide sau incarca.
+    autentificaStocare(currentUser.email, p);
     // update ultim_login (best-effort, nu blocheaza)
     fetch(`${SUPA_URL}/domadami_utilizatori?id=eq.${currentUser.id}`, {
       method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
@@ -977,9 +982,36 @@ async function login() {
   }
 }
 
+// ── SESIUNE PENTRU DOCUMENTELE SCANATE ────────────────────────────────
+// Contractele contin date personale, deci stau intr-un spatiu PRIVAT: fara
+// sesiune valida nu se pot citi, nici cu cheia publica din pagina.
+// Utilizatorul scrie tot "bogdan" + parola; emailul il stim din tabelul lui.
+let _tokenStocare = null;
+
+async function autentificaStocare(email, parola) {
+  if (!email || !parola) return false;
+  try {
+    const r = await fetch(`${SUPA_BASE}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: parola })
+    });
+    if (!r.ok) { console.warn('sesiune documente indisponibila'); _tokenStocare = null; return false; }
+    const d = await r.json();
+    _tokenStocare = d.access_token || null;
+    if (_tokenStocare) sessionStorage.setItem('dm_stoc', _tokenStocare);
+    return !!_tokenStocare;
+  } catch(e){ _tokenStocare = null; return false; }
+}
+
+function areAccesLaScanuri(){ return !!(_tokenStocare || sessionStorage.getItem('dm_stoc')); }
+function tokenStocare(){ return _tokenStocare || sessionStorage.getItem('dm_stoc'); }
+
 function logout() {
   localStorage.removeItem('dm_user');
   sessionStorage.removeItem('dm_user');
+  sessionStorage.removeItem('dm_stoc');
+  _tokenStocare = null;
   currentUser = null;
   document.body.classList.remove('is-admin');
   document.getElementById('login-screen').style.display='flex';
@@ -4246,16 +4278,93 @@ function vezActe(chiriasId){
   const c = _docChiriasi.find(x => x.id === chiriasId);
   const acte = _documente.filter(d => d.chirias_id === chiriasId)
                          .sort((a,b) => (a.valabil_de||'').localeCompare(b.valabil_de||''));
-  const linii = acte.map((a,i) => {
-    const z = zilePanaLa(a.valabil_pana);
-    const ultimul = i === acte.length-1;
-    return `${ultimul?'➤ ':'  '}${a.tip==='contract'?'Contract':'Act adițional'} ${a.numar||''}\n`
-         + `   ${dataRo(a.valabil_de)} → ${dataRo(a.valabil_pana)}`
-         + (ultimul ? (z<0?`  [EXPIRAT de ${Math.abs(z)} zile]`:`  [mai are ${z} zile]`) : '  [înlocuit]')
-         + (a.chirie_lunara?`\n   chirie ${a.chirie_lunara} ${a.moneda||'RON'}`:'')
-         + (a.fisier_cale?'\n   scan atașat':'\n   fără scan');
-  }).join('\n\n');
-  alert(`${c?.nume||''}\n${'─'.repeat(34)}\n\n${linii || 'Niciun act introdus.'}`);
+
+  document.getElementById('doc-modal-titlu').textContent = c?.nume || 'Acte';
+  document.getElementById('doc-modal-body').innerHTML = acte.length ? `
+    <div style="display:grid;gap:10px">
+      ${acte.map((a,i) => {
+        const z = zilePanaLa(a.valabil_pana);
+        const ultimul = i === acte.length-1;
+        const cul = !ultimul ? '#94a3b8' : z<0 ? '#C00000' : z<=DOC_PRAG_GALBEN ? '#f59e0b' : '#10b981';
+        const stare = !ultimul ? 'înlocuit de un act mai nou'
+          : z<0 ? `EXPIRAT de ${Math.abs(z)} zile` : `mai are ${z} zile`;
+        return `<div style="border:1px solid #e2e8f0;border-left:5px solid ${cul};border-radius:8px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+            <div>
+              <b>${a.tip==='contract'?'Contract':'Act adițional'} ${escH(a.numar||'')}</b>
+              ${ultimul?'<span style="font-size:10px;background:#1F3864;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">ACTUAL</span>':''}
+              <div style="font-size:12px;color:#64748b;margin-top:2px">
+                ${dataRo(a.valabil_de)} → ${dataRo(a.valabil_pana)} · <span style="color:${cul};font-weight:700">${stare}</span>
+                ${a.chirie_lunara?` · chirie ${fmt(a.chirie_lunara,0)} ${a.moneda||'RON'}`:''}
+              </div>
+            </div>
+            <div style="text-align:right;white-space:nowrap">
+              ${a.fisier_cale
+                ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:11px" onclick="deschideScan('${escH(a.fisier_cale)}')">📄 Vezi scanul</button>`
+                : (canEditDocumente()
+                    ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="alegeScan(${a.id})">📎 Atașează scan</button>`
+                    : '<span style="font-size:11px;color:#94a3b8">fără scan</span>')}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+      <input type="file" id="doc-fisier" accept="application/pdf,image/*" style="display:none">
+      ${areAccesLaScanuri() ? '' : `<div style="background:#fef3c7;border-radius:6px;padding:10px;font-size:11px;color:#92400e">
+        Sesiunea pentru documente nu e activă. Ieși și intră din nou în aplicație ca să poți deschide sau atașa scanuri.</div>`}
+    </div>` : '<div style="color:#64748b">Niciun act introdus.</div>';
+  document.getElementById('doc-modal').style.display = 'block';
+}
+
+let _actPentruScan = null;
+function alegeScan(actId){
+  if (!areAccesLaScanuri()) { toast('Ieși și intră din nou — sesiunea pentru documente lipsește','error'); return; }
+  _actPentruScan = actId;
+  const inp = document.getElementById('doc-fisier');
+  inp.value = '';
+  inp.onchange = () => incarcaScan(inp.files[0]);
+  inp.click();
+}
+
+async function incarcaScan(fisier){
+  if (!fisier || !_actPentruScan) return;
+  if (fisier.size > 25 * 1024 * 1024) { toast('Fișierul e prea mare (peste 25 MB)','error'); return; }
+  const act = _documente.find(d => d.id === _actPentruScan);
+  const ext = (fisier.name.match(/\.[A-Za-z0-9]+$/) || ['.pdf'])[0].toLowerCase();
+  // cale previzibila: chirias/tip-numar-data.ext
+  const cale = `${act.chirias_id}/${act.tip}-${(act.numar||act.id).toString().replace(/[^\w-]/g,'')}-${act.valabil_de}${ext}`;
+
+  toast('Se încarcă...','info');
+  try {
+    const r = await fetch(`${SUPA_BASE}/storage/v1/object/contracte/${encodeURI(cale)}`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tokenStocare(),
+                 'x-upsert': 'true', 'Content-Type': fisier.type || 'application/octet-stream' },
+      body: fisier
+    });
+    if (!r.ok) throw new Error((await r.text()).slice(0,160));
+    await api(`/domadami_documente?id=eq.${_actPentruScan}`, { method:'PATCH',
+      headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+      body: JSON.stringify({ fisier_cale: cale }) });
+    toast('Scan atașat','success');
+    _actPentruScan = null;
+    await renderContracte();
+    vezActe(act.chirias_id);
+  } catch(e){ toast('Nu am putut încărca: ' + e.message,'error'); }
+}
+
+/** Link temporar de 60 de secunde — fisierul ramane privat. */
+async function deschideScan(cale){
+  if (!areAccesLaScanuri()) { toast('Ieși și intră din nou — sesiunea pentru documente lipsește','error'); return; }
+  try {
+    const r = await fetch(`${SUPA_BASE}/storage/v1/object/sign/contracte/${encodeURI(cale)}`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tokenStocare(), 'Content-Type':'application/json' },
+      body: JSON.stringify({ expiresIn: 60 })
+    });
+    if (!r.ok) throw new Error((await r.text()).slice(0,160));
+    const d = await r.json();
+    window.open(SUPA_BASE + '/storage/v1' + d.signedURL, '_blank');
+  } catch(e){ toast('Nu am putut deschide: ' + e.message,'error'); }
 }
 
 function inchideDocModal(){ document.getElementById('doc-modal').style.display = 'none'; }
