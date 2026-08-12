@@ -4503,13 +4503,17 @@ function deschideDocNou(chiriasId){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
         <div>
           <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Valabil de la</label>
-          <input type="date" id="d-de" value="${deImplicit}" onchange="doc_completeazaPana()"
+          <input id="d-de" value="${deImplicit ? dataRo(deImplicit) : ''}" placeholder="zz.ll.aaaa" inputmode="numeric"
+                 oninput="doc_verificaData('d-de');doc_completeazaPana()"
                  style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+          <div id="d-de-ok" style="font-size:11px;margin-top:3px;min-height:14px"></div>
         </div>
         <div>
           <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Valabil până la</label>
-          <input type="date" id="d-pana" value="${panaImplicit}"
+          <input id="d-pana" value="${panaImplicit ? dataRo(panaImplicit) : ''}" placeholder="zz.ll.aaaa" inputmode="numeric"
+                 oninput="doc_verificaData('d-pana')"
                  style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+          <div id="d-pana-ok" style="font-size:11px;margin-top:3px;min-height:14px"></div>
         </div>
         <div>
           <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Chiria lunară</label>
@@ -4556,9 +4560,27 @@ function adaugaZi(d){ const x = new Date(d); x.setDate(x.getDate()+1); return x.
 function adaugaAn(d){ const x = new Date(d); x.setFullYear(x.getFullYear()+1); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10); }
 
 function doc_completeazaPana(){
-  const de = document.getElementById('d-de').value;
+  const de = parseData(document.getElementById('d-de').value);
   const pana = document.getElementById('d-pana');
-  if (de && !pana.value) pana.value = adaugaAn(de);
+  if (de && !pana.value.trim()) { pana.value = dataRo(adaugaAn(de)); doc_verificaData('d-pana'); }
+}
+
+/** Confirmare vizuala: ii arata cum a inteles data, ca sa nu greseasca zi cu luna. */
+function doc_verificaData(id){
+  const el = document.getElementById(id);
+  const ok = document.getElementById(id + '-ok');
+  if (!el || !ok) return;
+  const brut = el.value.trim();
+  if (!brut) { ok.textContent = ''; el.style.borderColor = '#e2e8f0'; return; }
+  const d = parseData(brut);
+  if (d) {
+    ok.innerHTML = '<span style="color:#10b981">✓ ' +
+      new Date(d).toLocaleDateString('ro-RO',{day:'numeric',month:'long',year:'numeric'}) + '</span>';
+    el.style.borderColor = '#10b981';
+  } else {
+    ok.innerHTML = '<span style="color:#C00000">scrie ca 01.03.2019</span>';
+    el.style.borderColor = '#C00000';
+  }
 }
 
 function doc_schimbaChirias(){
@@ -4576,10 +4598,10 @@ async function salveazaDoc(){
   const err = document.getElementById('d-eroare');
   err.textContent = '';
   const cid = parseInt(document.getElementById('d-chirias').value || '0');
-  const de = document.getElementById('d-de').value;
-  const pana = document.getElementById('d-pana').value;
+  const de = parseData(document.getElementById('d-de').value);
+  const pana = parseData(document.getElementById('d-pana').value);
   if (!cid)  { err.textContent = 'Alege chiriașul.'; return; }
-  if (!de || !pana) { err.textContent = 'Completează ambele date de valabilitate.'; return; }
+  if (!de || !pana) { err.textContent = 'Datele trebuie scrise ca 01.03.2019 — zi, lună, an.'; return; }
   if (pana <= de)   { err.textContent = 'Data de final trebuie să fie după cea de început.'; return; }
 
   const tip = document.getElementById('d-tip').value;
