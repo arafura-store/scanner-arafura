@@ -4228,7 +4228,7 @@ async function renderContracte(){
         <td style="text-align:center">${s ? s.acte.length : 0}</td>
         <td style="text-align:center">${s ? (cuScan===s.acte.length ? '✅' : `${cuScan}/${s.acte.length}`) : '—'}</td>
         <td style="text-align:right;white-space:nowrap">
-          ${canEditDocumente() ? `<button class="btn btn-secondary" style="padding:3px 7px;font-size:11px" onclick="editChirias(${c.id})" title="Corectează numele sau unitatea">✏️</button>` : ''}
+          ${canEditDocumente() ? `<button class="btn btn-secondary" style="padding:3px 7px;font-size:11px" onclick="editUnitateChirias(${c.id})" title="Corectează numele sau unitatea">✏️</button>` : ''}
           ${s ? `<button class="btn btn-secondary" style="padding:3px 8px;font-size:11px" onclick="vezActe(${c.id})">Vezi</button>` : ''}
           ${canEditDocumente() ? `<button class="btn btn-primary" style="padding:3px 8px;font-size:11px" onclick="deschideDocNou(${c.id})">+ act</button>` : ''}
         </td></tr>`;
@@ -4265,7 +4265,7 @@ function inchideDocModal(){ document.getElementById('doc-modal').style.display =
  *  (vezi domadami_calcule, cheia e unitate_id). Numele e doar eticheta; schimbarea
  *  unitatii schimba doar PE CINE facturezi pentru spatiul ala, nu cat costa spatiul.
  *  Lunile deja calculate raman neatinse, rezultatele fiind salvate. */
-function editChirias(cid){
+function editUnitateChirias(cid){
   if (!canEditDocumente()) { toast('Nu ai drepturi','error'); return; }
   const c = _docChiriasi.find(x => x.id === cid);
   if (!c) return;
