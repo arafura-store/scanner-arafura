@@ -4220,7 +4220,7 @@ async function renderContracte(){
         : s.stare==='expira' ? `expiră în ${s.zile} zile` : `valabil ${s.zile} zile`;
       const cuScan = s ? s.acte.filter(a => a.fisier_cale).length : 0;
       return `<tr${s?.stare==='expirat' ? ' style="background:#fef2f2"' : ''}>
-        <td><b>${escH(c.nume)}</b><br><span style="font-size:11px;color:#64748b">${escH(c.observatii||'')}</span></td>
+        <td><b>${escH(c.nume)}</b></td>
         <td style="font-size:12px">${escH(numeUnitate(u?.unitate_id || _ocupare[c.id]))}</td>
         <td style="font-size:12px">${u ? `${u.tip==='contract'?'Contract':'Act adițional'} ${escH(u.numar||'')}` : '—'}</td>
         <td style="font-size:12px">${u ? dataRo(u.valabil_pana) : '—'}</td>
@@ -4239,7 +4239,9 @@ async function renderContracte(){
 }
 
 function canEditDocumente(){ return ['admin','manager','contabilitate'].includes(currentUser?.rol); }
-function numeUnitate(id){ const u = _docUnitati.find(x => x.id === id); return u ? `${u.cod} ${u.nume||''}`.trim() : '—'; }
+/** In coloana Unitate vrem doar identificarea spatiului, curata: "Mag. 21 Etaj 1".
+ *  Codul (MAG_21) e pentru masini, nu pentru oameni — nu-l mai afisez. */
+function numeUnitate(id){ const u = _docUnitati.find(x => x.id === id); return u ? (u.nume || u.cod) : '—'; }
 function dataRo(d){ return d ? new Date(d).toLocaleDateString('ro-RO') : '—'; }
 
 function vezActe(chiriasId){
@@ -4286,7 +4288,7 @@ function editChirias(cid){
 
       <div><label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Unitatea ocupată</label>
         <select id="e-unitate" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
-          ${_docUnitati.map(u => `<option value="${u.id}"${u.id===_ocupare[cid]?' selected':''}>${escH(u.cod)} — ${escH(u.nume||'')}</option>`).join('')}
+          ${_docUnitati.map(u => `<option value="${u.id}"${u.id===_ocupare[cid]?' selected':''}>${escH(u.nume||u.cod)}</option>`).join('')}
         </select>
         <div style="font-size:11px;color:#64748b;margin-top:4px">
           Schimbă doar <b>pe cine facturezi</b> pentru spațiul ăsta. Costurile se calculează per unitate,
