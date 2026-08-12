@@ -4105,7 +4105,7 @@ async function renderAnalizaFurnizori() {
 //  Valabilitatea reala = ULTIMUL act din lant, nu contractul initial.
 // ═══════════════════════════════════════════════════════════════
 const DOC_PRAG_GALBEN = 30;   // zile pana la expirare -> atentionare
-let _documente = [], _docChiriasi = [], _docUnitati = [];
+let _documente = [], _docChiriasi = [], _docUnitati = [], _ocupare = {};
 
 function zilePanaLa(data){
   if (!data) return null;
@@ -4134,12 +4134,16 @@ function stareContracte(){
 async function renderContracte(){
   const lista = document.getElementById('contracte-lista');
   try {
-    const [docs, chiriasi, unitati] = await Promise.all([
+    const [docs, chiriasi, unitati, ocupare] = await Promise.all([
       api('/domadami_documente?select=*&order=valabil_pana.desc'),
       api('/domadami_chiriasi?select=id,nume,tip,activ,observatii&order=nume.asc'),
-      api('/domadami_unitati?select=id,cod,nume&order=ordine.asc')
+      api('/domadami_unitati?select=id,cod,nume&order=ordine.asc'),
+      api('/domadami_contracte_chirie?select=chirias_id,unitate_id,data_end')
     ]);
     _documente = docs || []; _docChiriasi = chiriasi || []; _docUnitati = unitati || [];
+    // cine sta unde, din evidenta ocuparii — ca sa nu-l intrebam pe Bogdan
+    _ocupare = {};
+    (ocupare || []).filter(o => !o.data_end).forEach(o => { _ocupare[o.chirias_id] = o.unitate_id; });
   } catch(e){
     lista.innerHTML = `<div class="alert alert-danger">Nu am putut încărca: ${escH(e.message)}</div>`;
     return;
@@ -4205,7 +4209,7 @@ async function renderContracte(){
       const cuScan = s ? s.acte.filter(a => a.fisier_cale).length : 0;
       return `<tr${s?.stare==='expirat' ? ' style="background:#fef2f2"' : ''}>
         <td><b>${escH(c.nume)}</b><br><span style="font-size:11px;color:#64748b">${escH(c.observatii||'')}</span></td>
-        <td style="font-size:12px">${u ? escH(numeUnitate(u.unitate_id)) : '—'}</td>
+        <td style="font-size:12px">${escH(numeUnitate(u?.unitate_id || _ocupare[c.id]))}</td>
         <td style="font-size:12px">${u ? `${u.tip==='contract'?'Contract':'Act adițional'} ${escH(u.numar||'')}` : '—'}</td>
         <td style="font-size:12px">${u ? dataRo(u.valabil_pana) : '—'}</td>
         <td style="text-align:center"><span class="badge" style="background:${cul};color:#fff;white-space:nowrap">${text}</span></td>
@@ -4262,8 +4266,9 @@ async function deschideDocNou(chiriasId){
   if (d2 <= d1) { toast('Data de final trebuie să fie după cea de început','error'); return; }
 
   const chirie = parseFloat((prompt('Chiria lunară (lasă gol dacă nu o știi):','') || '').replace(',','.'));
+  // Unitatea NU se cere: o stim deja din evidenta ocuparii (toti cei 24 sunt legati).
   const unitId = _documente.find(d => d.chirias_id === cid)?.unitate_id
-              || parseInt(prompt('Unitatea (scrie numărul):\n\n'+_docUnitati.map(u=>`${u.id} = ${u.cod} ${u.nume||''}`).join('\n')) || '0') || null;
+              || _ocupare[cid] || null;
 
   const rand = {
     chirias_id: cid, unitate_id: unitId, tip, numar: numar || null,
