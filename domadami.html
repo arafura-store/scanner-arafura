@@ -4137,7 +4137,7 @@ async function renderContracte(){
     const [docs, chiriasi, unitati] = await Promise.all([
       api('/domadami_documente?select=*&order=valabil_pana.desc'),
       api('/domadami_chiriasi?select=id,nume,tip,activ,observatii&order=nume.asc'),
-      api('/domadami_unitati?select=id,cod,denumire&order=cod.asc')
+      api('/domadami_unitati?select=id,cod,nume&order=ordine.asc')
     ]);
     _documente = docs || []; _docChiriasi = chiriasi || []; _docUnitati = unitati || [];
   } catch(e){
@@ -4222,7 +4222,7 @@ async function renderContracte(){
 }
 
 function canEditDocumente(){ return ['admin','manager','contabilitate'].includes(currentUser?.rol); }
-function numeUnitate(id){ const u = _docUnitati.find(x => x.id === id); return u ? `${u.cod} ${u.denumire||''}`.trim() : '—'; }
+function numeUnitate(id){ const u = _docUnitati.find(x => x.id === id); return u ? `${u.cod} ${u.nume||''}`.trim() : '—'; }
 function dataRo(d){ return d ? new Date(d).toLocaleDateString('ro-RO') : '—'; }
 
 function vezActe(chiriasId){
@@ -4263,7 +4263,7 @@ async function deschideDocNou(chiriasId){
 
   const chirie = parseFloat((prompt('Chiria lunară (lasă gol dacă nu o știi):','') || '').replace(',','.'));
   const unitId = _documente.find(d => d.chirias_id === cid)?.unitate_id
-              || parseInt(prompt('Unitatea (scrie numărul):\n\n'+_docUnitati.map(u=>`${u.id} = ${u.cod} ${u.denumire||''}`).join('\n')) || '0') || null;
+              || parseInt(prompt('Unitatea (scrie numărul):\n\n'+_docUnitati.map(u=>`${u.id} = ${u.cod} ${u.nume||''}`).join('\n')) || '0') || null;
 
   const rand = {
     chirias_id: cid, unitate_id: unitId, tip, numar: numar || null,
