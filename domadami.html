@@ -4329,7 +4329,8 @@ function vezActe(chiriasId){
                 : (canEditDocumente()
                     ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="alegeScan(${a.id})">📎 Atașează scan</button>`
                     : '<span style="font-size:11px;color:#94a3b8">fără scan</span>')}
-              ${canEditDocumente() ? `<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;color:#C00000" onclick="stergeAct(${a.id},${chiriasId})" title="Șterge actul">✕</button>` : ''}
+              ${canEditDocumente() ? `<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px" onclick="inchideDocModal();deschideDocNou(${chiriasId},${a.id})" title="Modifică actul">✏️</button>
+              <button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;color:#C00000" onclick="stergeAct(${a.id},${chiriasId})" title="Șterge actul">✕</button>` : ''}
             </div>
           </div>
         </div>`;
@@ -4509,18 +4510,24 @@ async function salveazaChiriasCorectat(cid){
 
 /** Un singur formular, cu tot ce scrie pe contract la vedere.
  *  NU scrie nimic in tabelele folosite de facturare — totul merge in domadami_documente. */
-function deschideDocNou(chiriasId){
-  if (!canEditDocumente()) { toast('Nu ai drepturi să adaugi acte','error'); return; }
+let _actInEditare = null;
 
-  const acte = chiriasId ? _documente.filter(d => d.chirias_id === chiriasId) : [];
+function deschideDocNou(chiriasId, actId){
+  if (!canEditDocumente()) { toast('Nu ai drepturi să adaugi acte','error'); return; }
+  _actInEditare = actId ? _documente.find(d => d.id === actId) : null;
+  const e = _actInEditare;
+  if (e) chiriasId = e.chirias_id;
+
+  const acte = chiriasId ? _documente.filter(d => d.chirias_id === chiriasId && d.id !== actId) : [];
   const ultim = acte.sort((a,b)=>(b.valabil_pana||'').localeCompare(a.valabil_pana||''))[0];
-  const tipImplicit = acte.length ? 'act_aditional' : 'contract';
+  const tipImplicit = e ? e.tip : (acte.length ? 'act_aditional' : 'contract');
   // la prelungire, continui de unde s-a terminat actul precedent
-  const deImplicit = ultim ? adaugaZi(ultim.valabil_pana) : '';
-  const panaImplicit = deImplicit ? adaugaAn(deImplicit) : '';
+  const deImplicit = e ? e.valabil_de : (ultim ? adaugaZi(ultim.valabil_pana) : '');
+  const panaImplicit = e ? e.valabil_pana : (deImplicit ? adaugaAn(deImplicit) : '');
 
   document.getElementById('doc-modal-titlu').textContent =
-    chiriasId ? `Act nou — ${_docChiriasi.find(c=>c.id===chiriasId)?.nume || ''}` : 'Act nou';
+    (_actInEditare ? 'Modifică actul — ' : 'Act nou — ') +
+    (_docChiriasi.find(c=>c.id===chiriasId)?.nume || '');
 
   document.getElementById('doc-modal-body').innerHTML = `
     <div style="display:grid;gap:12px">
@@ -4545,7 +4552,7 @@ function deschideDocNou(chiriasId){
         </div>
         <div>
           <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Numărul actului</label>
-          <input id="d-numar" placeholder="cum scrie pe hârtie" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+          <input id="d-numar" value="${e ? escH(e.numar||'') : ''}" placeholder="cum scrie pe hârtie" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
         </div>
       </div>
 
@@ -4566,7 +4573,7 @@ function deschideDocNou(chiriasId){
         </div>
         <div>
           <label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Chiria lunară</label>
-          <input type="number" step="0.01" id="d-chirie" placeholder="opțional"
+          <input type="number" step="0.01" id="d-chirie" placeholder="opțional" value="${e && e.chirie_lunara ? e.chirie_lunara : ''}"
                  style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
         </div>
       </div>
@@ -4576,15 +4583,15 @@ function deschideDocNou(chiriasId){
           Datele de pe contract (opțional, dar utile mai târziu)</summary>
         <div style="display:grid;gap:10px;margin-top:10px">
           <div><label style="font-size:11px;color:#64748b">Numele complet, exact ca pe act</label>
-            <input id="d-nume" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+            <input id="d-nume" value="${e ? escH(e.nume_complet||'') : ''}" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
           <div><label style="font-size:11px;color:#64748b">Cum e descris spațiul în contract</label>
-            <input id="d-spatiu" placeholder="ex: spațiu comercial parter, 42 mp"
+            <input id="d-spatiu" value="${e ? escH(e.spatiu_text||'') : ''}" placeholder="ex: spațiu comercial parter, 42 mp"
                    style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div><label style="font-size:11px;color:#64748b">Telefon</label>
-              <input id="d-telefon" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+              <input id="d-telefon" value="${e ? escH(e.telefon||'') : ''}" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
             <div><label style="font-size:11px;color:#64748b">Email</label>
-              <input id="d-email" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+              <input id="d-email" value="${e ? escH(e.email||'') : ''}" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
           </div>
           <div style="background:#fef3c7;border-radius:6px;padding:8px;font-size:11px;color:#92400e">
             CNP-ul și CUI-ul le introducem <b>după</b> ce punem autentificarea reală — până atunci
@@ -4595,7 +4602,7 @@ function deschideDocNou(chiriasId){
 
       <div id="d-eroare" style="color:#C00000;font-size:12px;font-weight:700"></div>
       <button onclick="salveazaDoc()" style="width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:15px;cursor:pointer">
-        Salvează actul</button>
+        ${e ? 'Salvează modificările' : 'Salvează actul'}</button>
       <div style="font-size:11px;color:#64748b;text-align:center">
         Nu se modifică nimic în facturare — datele stau separat până terminăm de introdus tot.
       </div>
@@ -4660,24 +4667,36 @@ async function salveazaDoc(){
 
   const rand = {
     chirias_id: cid,
-    unitate_id: acte[0]?.unitate_id || _ocupare[cid] || null,
+    unitate_id: _actInEditare?.unitate_id || acte[0]?.unitate_id || _ocupare[cid] || null,
     tip, numar: document.getElementById('d-numar').value.trim() || null,
     valabil_de: de, valabil_pana: pana,
     chirie_lunara: isNaN(chirie) ? null : chirie,
-    parinte_id: tip === 'act_aditional' ? (acte[0]?.id || null) : null,
     nume_complet: document.getElementById('d-nume').value.trim() || null,
     spatiu_text:  document.getElementById('d-spatiu').value.trim() || null,
     telefon:      document.getElementById('d-telefon').value.trim() || null,
-    email:        document.getElementById('d-email').value.trim() || null,
-    introdus_de: currentUser?.id || null
+    email:        document.getElementById('d-email').value.trim() || null
   };
+  const idEditat = _actInEditare?.id || null;
+  if (!idEditat) {
+    rand.parinte_id = tip === 'act_aditional' ? (acte[0]?.id || null) : null;
+    rand.introdus_de = currentUser?.id || null;
+  }
   try {
-    await api('/domadami_documente', { method:'POST',
-      headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
-      body: JSON.stringify([rand]) });
-    toast('Act salvat','success');
+    if (idEditat) {
+      await api(`/domadami_documente?id=eq.${idEditat}`, { method:'PATCH',
+        headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+        body: JSON.stringify(rand) });
+      toast('Modificat','success');
+    } else {
+      await api('/domadami_documente', { method:'POST',
+        headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+        body: JSON.stringify([rand]) });
+      toast('Act salvat','success');
+    }
+    _actInEditare = null;
     inchideDocModal();
-    renderContracte();
+    await renderContracte();
+    vezActe(cid);
   } catch(e){ err.textContent = 'Nu am putut salva: ' + e.message; }
 }
 
