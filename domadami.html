@@ -4229,6 +4229,7 @@ async function renderContracte(){
         <td style="text-align:center">${s ? s.acte.length : 0}</td>
         <td style="text-align:center">${s ? (cuScan===s.acte.length ? '✅' : `${cuScan}/${s.acte.length}`) : '—'}</td>
         <td style="text-align:right;white-space:nowrap">
+          ${canEditDocumente() ? `<button class="btn btn-secondary" style="padding:3px 7px;font-size:11px" onclick="editChirias(${c.id})" title="Corectează numele sau unitatea">✏️</button>` : ''}
           ${s ? `<button class="btn btn-secondary" style="padding:3px 8px;font-size:11px" onclick="vezActe(${c.id})">Vezi</button>` : ''}
           ${canEditDocumente() ? `<button class="btn btn-primary" style="padding:3px 8px;font-size:11px" onclick="deschideDocNou(${c.id})">+ act</button>` : ''}
         </td></tr>`;
@@ -4258,6 +4259,82 @@ function vezActe(chiriasId){
 }
 
 function inchideDocModal(){ document.getElementById('doc-modal').style.display = 'none'; }
+
+/** Corectarea datelor chiriasului si a unitatii ocupate.
+ *  De ce e sigur: repartizarea utilitatilor se calculeaza PER UNITATE, nu per chirias
+ *  (vezi domadami_calcule, cheia e unitate_id). Numele e doar eticheta; schimbarea
+ *  unitatii schimba doar PE CINE facturezi pentru spatiul ala, nu cat costa spatiul.
+ *  Lunile deja calculate raman neatinse, rezultatele fiind salvate. */
+function editChirias(cid){
+  if (!canEditDocumente()) { toast('Nu ai drepturi','error'); return; }
+  const c = _docChiriasi.find(x => x.id === cid);
+  if (!c) return;
+  const areActe = _documente.some(d => d.chirias_id === cid);
+
+  document.getElementById('doc-modal-titlu').textContent = 'Corectează — ' + c.nume;
+  document.getElementById('doc-modal-body').innerHTML = `
+    <div style="display:grid;gap:12px">
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px">
+        <div><label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Denumirea persoanei / firmei</label>
+          <input id="e-nume" value="${escH(c.nume)}" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+        <div><label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Tip</label>
+          <select id="e-tip" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+            <option value="persoana_fizica"${c.tip==='persoana_fizica'?' selected':''}>Persoană fizică</option>
+            <option value="firma"${c.tip==='firma'?' selected':''}>Firmă</option>
+          </select></div>
+      </div>
+
+      <div><label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Unitatea ocupată</label>
+        <select id="e-unitate" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px">
+          ${_docUnitati.map(u => `<option value="${u.id}"${u.id===_ocupare[cid]?' selected':''}>${escH(u.cod)} — ${escH(u.nume||'')}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:#64748b;margin-top:4px">
+          Schimbă doar <b>pe cine facturezi</b> pentru spațiul ăsta. Costurile se calculează per unitate,
+          deci sumele nu se modifică, iar lunile deja calculate rămân cum sunt.
+        </div>
+      </div>
+
+      <div><label style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase">Notă (unde e G1, G2...)</label>
+        <input id="e-obs" value="${escH(c.observatii||'')}" style="width:100%;padding:9px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px"></div>
+
+      <div id="e-eroare" style="color:#C00000;font-size:12px;font-weight:700"></div>
+      <button onclick="salveazaChiriasCorectat(${cid})" style="width:100%;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:700;font-size:15px;cursor:pointer">
+        Salvează corectura</button>
+      ${areActe ? '' : `<div style="font-size:11px;color:#64748b;text-align:center">Chiriașul nu are încă acte introduse.</div>`}
+    </div>`;
+  document.getElementById('doc-modal').style.display = 'block';
+}
+
+async function salveazaChiriasCorectat(cid){
+  const err = document.getElementById('e-eroare');
+  err.textContent = '';
+  const nume = document.getElementById('e-nume').value.trim();
+  if (!nume) { err.textContent = 'Denumirea nu poate fi goală.'; return; }
+  const unitNoua = parseInt(document.getElementById('e-unitate').value || '0');
+  const unitVeche = _ocupare[cid];
+
+  if (unitNoua !== unitVeche) {
+    const ocupanta = Object.entries(_ocupare).find(([k,v]) => v === unitNoua && +k !== cid);
+    const cineE = ocupanta ? _docChiriasi.find(x => x.id === +ocupanta[0])?.nume : null;
+    if (cineE && !confirm(`Unitatea ${numeUnitate(unitNoua)} e atribuită acum lui ${cineE}.\n\nDacă o muți, vor apărea doi chiriași pe același spațiu.\n\nContinui?`)) return;
+  }
+
+  try {
+    await api(`/domadami_chiriasi?id=eq.${cid}`, { method:'PATCH',
+      headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+      body: JSON.stringify({ nume, tip: document.getElementById('e-tip').value,
+                             observatii: document.getElementById('e-obs').value.trim() || null }) });
+
+    if (unitNoua && unitNoua !== unitVeche) {
+      await api(`/domadami_contracte_chirie?chirias_id=eq.${cid}&data_end=is.null`, { method:'PATCH',
+        headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+        body: JSON.stringify({ unitate_id: unitNoua }) });
+    }
+    toast('Corectat','success');
+    inchideDocModal();
+    renderContracte();
+  } catch(e){ err.textContent = 'Nu am putut salva: ' + e.message; }
+}
 
 /** Un singur formular, cu tot ce scrie pe contract la vedere.
  *  NU scrie nimic in tabelele folosite de facturare — totul merge in domadami_documente. */
