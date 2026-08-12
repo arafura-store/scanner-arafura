@@ -293,6 +293,7 @@ body.is-viewer .role-banner.viewer{display:block}
     <div class="nav-item" data-page="centralizator" onclick="goPage('centralizator',this)"><span class="ico">📋</span><span>Centralizator</span></div>
     <div class="nav-item" data-page="analiza" onclick="goPage('analiza',this)"><span class="ico">📈</span><span>Analiza furnizori</span></div>
     <div class="nav-item" data-page="chiriasi" onclick="goPage('chiriasi',this)"><span class="ico">👥</span><span>Chiriasi & Unitati</span></div>
+    <div class="nav-item" data-page="contracte" onclick="goPage('contracte',this)"><span class="ico">📁</span><span>Contracte</span><span id="nav-contracte-badge" style="margin-left:auto;font-size:10px;font-weight:800;padding:1px 6px;border-radius:8px;display:none"></span></div>
     <div class="nav-sep-lbl">ADMINISTRARE</div>
     <div class="nav-item" data-page="fisa" onclick="goPage('fisa',this)"><span class="ico">📜</span><span>Fisa postului</span></div>
     <div class="nav-item role-admin" data-page="setari" onclick="goPage('setari',this)"><span class="ico">⚙️</span><span>Setari</span></div>
@@ -814,6 +815,25 @@ body.is-viewer .role-banner.viewer{display:block}
       </div>
 
       <!-- ═══════════════════════════════════════════════════ -->
+      <!-- CONTRACTE — evidenta valabilitatii + alerte          -->
+      <!-- Valabilitatea reala se citeste din ULTIMUL act al    -->
+      <!-- lantului, nu din contractul initial.                 -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="page" id="page-contracte">
+        <div id="contracte-alerta"></div>
+        <div class="card">
+          <div class="card-hdr">
+            <h3>📁 Contracte si acte aditionale</h3>
+            <button class="btn btn-primary" id="btn-doc-nou" onclick="deschideDocNou()" style="padding:6px 14px;font-size:12px">➕ Adaugă act</button>
+          </div>
+          <div class="card-body">
+            <div id="contracte-sumar" style="margin-bottom:14px"></div>
+            <div id="contracte-lista" class="spinner">Se incarca...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
       <!-- FISA POSTULUI — rol + atributii                      -->
       <!-- ═══════════════════════════════════════════════════ -->
       <div class="page" id="page-fisa">
@@ -1076,7 +1096,8 @@ const PAGE_TITLES = {
   raja:'💧 RAJA — Apa', polaris:'🗑️ POLARIS — Salubritate',
   situatie:'📊 Situatie ansamblu — facturi + citiri + distributie',
   centralizator:'📋 Centralizator lunar', analiza:'📈 Analiză furnizori',
-  chiriasi:'👥 Chiriasi si Unitati', fisa:'📜 Fisa postului', setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
+  chiriasi:'👥 Chiriasi si Unitati', contracte:'📁 Contracte si acte aditionale',
+  fisa:'📜 Fisa postului', setari:'⚙️ Setari', utilizatori:'🔐 Utilizatori'
 };
 function goPage(pageId, navEl) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1105,6 +1126,7 @@ function refreshPage(pageId) {
     analiza: renderAnalizaFurnizori,
     fisa: renderFisaPostului,
     chiriasi: renderChiriasi,
+    contracte: renderContracte,
     setari: renderSetari,
     utilizatori: renderUtilizatori
   };
@@ -4073,6 +4095,202 @@ async function renderAnalizaFurnizori() {
 // ═══════════════════════════════════════════════════════════════
 // CHIRIASI
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  CONTRACTE SI ACTE ADITIONALE
+//  Atentie la distinctia dintre cele doua tabele:
+//   - domadami_contracte_chirie = OCUPARE (cine sta unde, pentru repartizarea utilitatilor)
+//   - domadami_documente        = ACTE JURIDICE (valabilitate, scan, chirie)
+//  Un chirias poate sta in spatiu in timp ce actul aditional a expirat — exact
+//  problema pe care o rezolvam aici.
+//  Valabilitatea reala = ULTIMUL act din lant, nu contractul initial.
+// ═══════════════════════════════════════════════════════════════
+const DOC_PRAG_GALBEN = 30;   // zile pana la expirare -> atentionare
+let _documente = [], _docChiriasi = [], _docUnitati = [];
+
+function zilePanaLa(data){
+  if (!data) return null;
+  const azi = new Date(); azi.setHours(0,0,0,0);
+  return Math.round((new Date(data) - azi) / 86400000);
+}
+
+/** Pentru fiecare chirias: ultimul act valabil din lant + starea lui. */
+function stareContracte(){
+  const perChirias = {};
+  _documente.forEach(d => {
+    const c = perChirias[d.chirias_id] || (perChirias[d.chirias_id] = { acte: [], ultim: null });
+    c.acte.push(d);
+    if (!c.ultim || d.valabil_pana > c.ultim.valabil_pana) c.ultim = d;
+  });
+  Object.values(perChirias).forEach(c => {
+    c.acte.sort((a,b) => (a.valabil_de || '').localeCompare(b.valabil_de || ''));
+    c.zile = c.ultim ? zilePanaLa(c.ultim.valabil_pana) : null;
+    c.stare = c.zile === null ? 'necunoscut'
+            : c.zile < 0 ? 'expirat'
+            : c.zile <= DOC_PRAG_GALBEN ? 'expira' : 'valabil';
+  });
+  return perChirias;
+}
+
+async function renderContracte(){
+  const lista = document.getElementById('contracte-lista');
+  try {
+    const [docs, chiriasi, unitati] = await Promise.all([
+      api('/domadami_documente?select=*&order=valabil_pana.desc'),
+      api('/domadami_chiriasi?select=id,nume,tip,activ,observatii&order=nume.asc'),
+      api('/domadami_unitati?select=id,cod,denumire&order=cod.asc')
+    ]);
+    _documente = docs || []; _docChiriasi = chiriasi || []; _docUnitati = unitati || [];
+  } catch(e){
+    lista.innerHTML = `<div class="alert alert-danger">Nu am putut încărca: ${escH(e.message)}</div>`;
+    return;
+  }
+
+  const stari = stareContracte();
+  const activi = _docChiriasi.filter(c => c.activ);
+  const fara = activi.filter(c => !stari[c.id]);
+  const expirate = activi.filter(c => stari[c.id]?.stare === 'expirat');
+  const curand   = activi.filter(c => stari[c.id]?.stare === 'expira');
+  const valabile = activi.filter(c => stari[c.id]?.stare === 'valabil');
+
+  // bulina din meniu
+  const badge = document.getElementById('nav-contracte-badge');
+  if (badge){
+    const n = expirate.length + curand.length;
+    badge.style.display = n ? 'inline-block' : 'none';
+    badge.textContent = n;
+    badge.style.background = expirate.length ? '#C00000' : '#f59e0b';
+    badge.style.color = '#fff';
+  }
+
+  // banner mare cand exista expirate
+  document.getElementById('contracte-alerta').innerHTML = expirate.length
+    ? `<div class="alert alert-danger" style="font-size:15px;font-weight:700;border-width:3px;margin-bottom:14px">
+         🔴 ${expirate.length} ${expirate.length===1?'contract EXPIRAT':'contracte EXPIRATE'} —
+         ${expirate.map(c => escH(c.nume)).join(', ')}
+       </div>` : '';
+
+  document.getElementById('contracte-sumar').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+      ${[['🔴 Expirate', expirate.length, '#C00000'],
+         [`🟡 Expiră în ${DOC_PRAG_GALBEN} zile`, curand.length, '#f59e0b'],
+         ['🟢 Valabile', valabile.length, '#10b981'],
+         ['⚪ Fără act introdus', fara.length, '#94a3b8']].map(([et,n,cul]) => `
+        <div style="background:#fff;border-radius:10px;padding:12px;border-left:5px solid ${cul};box-shadow:0 1px 3px rgba(0,0,0,.06)">
+          <div style="font-size:11px;color:#64748b;font-weight:700">${et}</div>
+          <div style="font-size:26px;font-weight:800;color:${cul}">${n}</div>
+        </div>`).join('')}
+    </div>`;
+
+  const ordine = { expirat:0, expira:1, necunoscut:2, valabil:3 };
+  const sortati = [...activi].sort((a,b) => {
+    const sa = stari[a.id]?.stare || 'necunoscut', sb = stari[b.id]?.stare || 'necunoscut';
+    if (ordine[sa] !== ordine[sb]) return ordine[sa] - ordine[sb];
+    const za = stari[a.id]?.zile, zb = stari[b.id]?.zile;
+    return (za ?? 99999) - (zb ?? 99999);
+  });
+
+  lista.className = '';
+  lista.innerHTML = `<div style="overflow-x:auto"><table class="tbl"><thead><tr>
+      <th>Chiriaș</th><th>Unitate</th><th>Ultimul act</th><th>Valabil până</th>
+      <th style="text-align:center">Stare</th><th style="text-align:right">Chirie</th>
+      <th style="text-align:center">Acte</th><th style="text-align:center">Scan</th><th></th>
+    </tr></thead><tbody>` +
+    sortati.map(c => {
+      const s = stari[c.id];
+      const u = s?.ultim;
+      const cul = !s ? '#94a3b8' : s.stare==='expirat' ? '#C00000' : s.stare==='expira' ? '#f59e0b' : '#10b981';
+      const text = !s ? 'fără act introdus'
+        : s.stare==='expirat' ? `EXPIRAT de ${Math.abs(s.zile)} zile`
+        : s.stare==='expira' ? `expiră în ${s.zile} zile` : `valabil ${s.zile} zile`;
+      const cuScan = s ? s.acte.filter(a => a.fisier_cale).length : 0;
+      return `<tr${s?.stare==='expirat' ? ' style="background:#fef2f2"' : ''}>
+        <td><b>${escH(c.nume)}</b><br><span style="font-size:11px;color:#64748b">${escH(c.observatii||'')}</span></td>
+        <td style="font-size:12px">${u ? escH(numeUnitate(u.unitate_id)) : '—'}</td>
+        <td style="font-size:12px">${u ? `${u.tip==='contract'?'Contract':'Act adițional'} ${escH(u.numar||'')}` : '—'}</td>
+        <td style="font-size:12px">${u ? dataRo(u.valabil_pana) : '—'}</td>
+        <td style="text-align:center"><span class="badge" style="background:${cul};color:#fff;white-space:nowrap">${text}</span></td>
+        <td style="text-align:right;font-size:12px">${u?.chirie_lunara ? fmt(u.chirie_lunara,0)+' '+(u.moneda||'RON') : '—'}</td>
+        <td style="text-align:center">${s ? s.acte.length : 0}</td>
+        <td style="text-align:center">${s ? (cuScan===s.acte.length ? '✅' : `${cuScan}/${s.acte.length}`) : '—'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${s ? `<button class="btn btn-secondary" style="padding:3px 8px;font-size:11px" onclick="vezActe(${c.id})">Vezi</button>` : ''}
+          ${canEditDocumente() ? `<button class="btn btn-primary" style="padding:3px 8px;font-size:11px" onclick="deschideDocNou(${c.id})">+ act</button>` : ''}
+        </td></tr>`;
+    }).join('') + '</tbody></table></div>';
+
+  document.getElementById('btn-doc-nou').style.display = canEditDocumente() ? '' : 'none';
+}
+
+function canEditDocumente(){ return ['admin','manager','contabilitate'].includes(currentUser?.rol); }
+function numeUnitate(id){ const u = _docUnitati.find(x => x.id === id); return u ? `${u.cod} ${u.denumire||''}`.trim() : '—'; }
+function dataRo(d){ return d ? new Date(d).toLocaleDateString('ro-RO') : '—'; }
+
+function vezActe(chiriasId){
+  const c = _docChiriasi.find(x => x.id === chiriasId);
+  const acte = _documente.filter(d => d.chirias_id === chiriasId)
+                         .sort((a,b) => (a.valabil_de||'').localeCompare(b.valabil_de||''));
+  const linii = acte.map((a,i) => {
+    const z = zilePanaLa(a.valabil_pana);
+    const ultimul = i === acte.length-1;
+    return `${ultimul?'➤ ':'  '}${a.tip==='contract'?'Contract':'Act adițional'} ${a.numar||''}\n`
+         + `   ${dataRo(a.valabil_de)} → ${dataRo(a.valabil_pana)}`
+         + (ultimul ? (z<0?`  [EXPIRAT de ${Math.abs(z)} zile]`:`  [mai are ${z} zile]`) : '  [înlocuit]')
+         + (a.chirie_lunara?`\n   chirie ${a.chirie_lunara} ${a.moneda||'RON'}`:'')
+         + (a.fisier_cale?'\n   scan atașat':'\n   fără scan');
+  }).join('\n\n');
+  alert(`${c?.nume||''}\n${'─'.repeat(34)}\n\n${linii || 'Niciun act introdus.'}`);
+}
+
+async function deschideDocNou(chiriasId){
+  if (!canEditDocumente()) { toast('Nu ai drepturi să adaugi acte','error'); return; }
+  const optChirias = _docChiriasi.filter(c=>c.activ).map(c => `${c.id} = ${c.nume}`).join('\n');
+  const cid = chiriasId || parseInt(prompt('Chiriașul (scrie numărul):\n\n'+optChirias) || '0');
+  if (!cid) return;
+  const chirias = _docChiriasi.find(c => c.id === cid);
+  if (!chirias) { toast('Chiriaș inexistent','error'); return; }
+
+  const acteExistente = _documente.filter(d => d.chirias_id === cid);
+  const tip = acteExistente.length
+    ? (confirm(`${chirias.nume} are deja ${acteExistente.length} act(e).\n\nOK = act adițional (prelungire)\nAnulează = contract nou`) ? 'act_aditional' : 'contract')
+    : 'contract';
+
+  const numar = prompt('Numărul actului (de pe hârtie):') || '';
+  const de = prompt('Valabil DE LA (zz.ll.aaaa):', '');
+  const pana = prompt('Valabil PÂNĂ LA (zz.ll.aaaa):', '');
+  const d1 = parseData(de), d2 = parseData(pana);
+  if (!d1 || !d2) { toast('Date invalide — scrie în formatul zz.ll.aaaa','error'); return; }
+  if (d2 <= d1) { toast('Data de final trebuie să fie după cea de început','error'); return; }
+
+  const chirie = parseFloat((prompt('Chiria lunară (lasă gol dacă nu o știi):','') || '').replace(',','.'));
+  const unitId = _documente.find(d => d.chirias_id === cid)?.unitate_id
+              || parseInt(prompt('Unitatea (scrie numărul):\n\n'+_docUnitati.map(u=>`${u.id} = ${u.cod} ${u.denumire||''}`).join('\n')) || '0') || null;
+
+  const rand = {
+    chirias_id: cid, unitate_id: unitId, tip, numar: numar || null,
+    valabil_de: d1, valabil_pana: d2,
+    chirie_lunara: isNaN(chirie) ? null : chirie,
+    parinte_id: tip === 'act_aditional'
+      ? (acteExistente.sort((a,b)=>(b.valabil_pana||'').localeCompare(a.valabil_pana||''))[0]?.id || null) : null,
+    introdus_de: currentUser?.id || null
+  };
+  try {
+    await api('/domadami_documente', { method:'POST',
+      headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+      body: JSON.stringify([rand]) });
+    toast('Act salvat','success');
+    renderContracte();
+  } catch(e){ toast('Nu am putut salva: '+e.message,'error'); }
+}
+
+/** "12.08.2026" sau "2026-08-12" -> "2026-08-12" */
+function parseData(s){
+  s = String(s||'').trim();
+  let m = s.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? s : null;
+}
+
 async function renderChiriasi() {
   try {
     const [chiriasi, contracte] = await Promise.all([
