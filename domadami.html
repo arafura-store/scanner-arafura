@@ -948,8 +948,13 @@ async function api(path, opts={}) {
     const txt = await r.text();
     throw new Error(`HTTP ${r.status}: ${txt.substring(0,200)}`);
   }
+  // Raspunsul poate fi GOL: 204 la stergere, dar si 201 la creare cand cerem
+  // 'Prefer: return=minimal'. Fara verificarea asta, r.json() arunca eroare
+  // desi operatia a reusit — si utilizatorul crede ca nu s-a salvat nimic.
   if (r.status === 204) return null;
-  return r.json();
+  const txt = await r.text();
+  if (!txt) return null;
+  try { return JSON.parse(txt); } catch { return null; }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4304,6 +4309,7 @@ function vezActe(chiriasId){
                 : (canEditDocumente()
                     ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="alegeScan(${a.id})">📎 Atașează scan</button>`
                     : '<span style="font-size:11px;color:#94a3b8">fără scan</span>')}
+              ${canEditDocumente() ? `<button class="btn btn-secondary" style="padding:4px 8px;font-size:11px;color:#C00000" onclick="stergeAct(${a.id},${chiriasId})" title="Șterge actul">✕</button>` : ''}
             </div>
           </div>
         </div>`;
@@ -4324,6 +4330,24 @@ function vezActe(chiriasId){
         : ''}
     </div>`;
   document.getElementById('doc-modal').style.display = 'block';
+}
+
+async function stergeAct(actId, chiriasId){
+  const a = _documente.find(d => d.id === actId);
+  if (!confirm(`Ștergi ${a?.tip==='contract'?'contractul':'actul adițional'} ${a?.numar||''}?
+
+Dacă are scan atașat, se șterge și el.`)) return;
+  try {
+    if (a?.fisier_cale && areAccesLaScanuri()) {
+      await fetch(`${SUPA_BASE}/storage/v1/object/contracte/${encodeURI(a.fisier_cale)}`, {
+        method:'DELETE', headers:{ 'apikey': SUPA_KEY, 'Authorization':'Bearer ' + tokenStocare() }
+      }).catch(()=>{});
+    }
+    await api(`/domadami_documente?id=eq.${actId}`, { method:'DELETE', headers: HEADERS });
+    toast('Act șters','success');
+    await renderContracte();
+    vezActe(chiriasId);
+  } catch(e){ toast('Nu am putut șterge: ' + e.message,'error'); }
 }
 
 let _actPentruScan = null;
