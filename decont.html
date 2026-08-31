@@ -753,10 +753,22 @@ async function stergeCheltuiala(id) {
   } catch (e) { showToast('Eroare'); }
 }
 
+let _trimitereInCurs = false;
 async function trimiteDecont() {
+  // Guard anti dubla-apasare: daca deja se trimite, ignora click-urile ulterioare.
+  // Motiv: pe 28.08.2026 s-a intamplat ca Nicu sa fi apasat de 2 ori, iar caietul
+  // a primit toate operatiunile duplicate. Vezi curatarea manuala de 34 randuri.
+  if (_trimitereInCurs) { showToast('⏳ Se trimite deja, așteaptă…'); return; }
+
   const drafturi = cheltuieliCurente.filter(d => d.status === 'nou');
   if (drafturi.length === 0) { showToast('Nicio cheltuială draft de trimis'); return; }
   if (!confirm(`Trimiți ${drafturi.length} operațiuni pentru verificare?\n\nNu vei mai putea modifica aceste operațiuni până la confirmare. Poți adăuga în continuare noi operațiuni.`)) return;
+
+  const btn = document.getElementById('btn-trimite');
+  const btnTextOrig = btn ? btn.textContent : '';
+  _trimitereInCurs = true;
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.style.cursor = 'wait'; btn.textContent = '⏳ Se trimite…'; }
+
   try {
     // Toate item-urile din acest batch primesc același timestamp submitted_at
     const submittedAt = new Date().toISOString();
@@ -793,7 +805,12 @@ async function trimiteDecont() {
     await incarcaDate();
     // Scroll sus
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (e) { showToast('Eroare: ' + e.message); }
+  } catch (e) {
+    showToast('Eroare: ' + e.message);
+  } finally {
+    _trimitereInCurs = false;
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.textContent = btnTextOrig; }
+  }
 }
 
 async function stergeIstoricDecont(idsStr, dtLabel) {
