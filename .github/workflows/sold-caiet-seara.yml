@@ -24,5 +24,7 @@ jobs:
         env:
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          CALLMEBOT_APIKEY_2: ${{ secrets.CALLMEBOT_APIKEY_LIVIA }}
+          CALLMEBOT_PHONE_2: ${{ secrets.CALLMEBOT_PHONE_LIVIA }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python scripts/sold_caiet_seara.py
