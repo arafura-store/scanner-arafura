@@ -134,11 +134,17 @@ def calculeaza_sold():
 def main():
     acum = datetime.now(TZ)
 
+    # Rulare manuala (buton "Run workflow" din GitHub Actions) → sare peste verificare ora.
+    # Folositor pentru testare imediata fara sa astepti pana la 20:00.
+    run_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+
     # Trimite DOAR la ora 20 (Romania) — cron ruleaza la 17 UTC + 18 UTC ca sa
     # acopere si ora de vara (UTC+3) si iarna (UTC+2). Un singur mesaj/zi.
-    if acum.hour != 20:
+    if not run_manual and acum.hour != 20:
         log(f"Nu e ora 20:00 in Romania (e {acum:%H:%M}), skip trimitere")
         return 0
+    if run_manual and acum.hour != 20:
+        log(f"Rulare manuala fortata la {acum:%H:%M} (in mod normal doar 20:00)")
 
     # Nu trimit in weekend (sambata/duminica) - restaurantul are alt program;
     # daca vrei si weekend, scoate conditia asta.
