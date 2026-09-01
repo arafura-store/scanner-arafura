@@ -1,0 +1,28 @@
+name: Sold caiet seara
+
+on:
+  schedule:
+    - cron: '0 17,18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sold-caiet-seara
+  cancel-in-progress: false
+
+jobs:
+  trimite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Trimite sold seara pe WhatsApp
+        env:
+          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
+          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python scripts/sold_caiet_seara.py
