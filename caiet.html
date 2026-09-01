@@ -1790,6 +1790,7 @@ function renderOperatiuni() {
     <thead><tr>
       <th>Completat</th><th>Data operațiune</th><th>Tip</th><th>Beneficiar</th>
       <th>Intrare</th><th style="padding-left:30px;">Ieșire</th>
+      <th style="text-align:center;" title="Soldul caietului dupa aceasta operatiune (istoric, calculat automat)">Sold după</th>
       <th style="padding-left:40px;">Observații</th><th>Completat de:</th><th></th>
     </tr></thead><tbody>`;
 
@@ -1864,6 +1865,7 @@ function renderOperatiuni() {
       <td style="font-weight:500; text-align:center;"><span class="clickable-ben" onclick="filtreazaBeneficiar('${benEsc}')" title="Click: filtrează după acest beneficiar">${escHtml(d.beneficiar)}</span></td>
       <td class="td-center">${intrareStr ? `<span class="intrare">${intrareStr}</span>` : ''}</td>
       <td class="td-center" style="padding-left:30px;">${iesireStr ? `<span class="iesire">${iesireStr}</span>` : ''}</td>
+      <td style="text-align:right; font-variant-numeric:tabular-nums; font-weight:600; padding:0 12px; color:${d.sold_dupa == null ? '#ccc' : (parseFloat(d.sold_dupa) < 0 ? '#c0392b' : '#1f3864')};">${d.sold_dupa == null ? '—' : parseFloat(d.sold_dupa).toLocaleString('ro-RO', {minimumFractionDigits:2})}</td>
       <td style="color:#888; font-size:12px; max-width:260px; padding-left:40px; text-align:center;">${obsDisplay}</td>
       <td style="text-align:center;">${completatDeHTML}</td>
       <td style="white-space:nowrap; text-align:center;">${poateEdita ? `<button class="btn-edit" onclick="editOperatiune(${d.id})" title="Editează">✎</button>${isAdmin ? `<button class="btn-del" onclick="stergeOperatiune(${d.id})" title="Șterge">✕</button>${isCorectat ? `<button class="btn-del" style="color:var(--green);" onclick="marcheazaVerificat(${d.id})" title="Verificat — șterge marcajul">✓</button>` : ''}` : ''}` : ''}</td>
