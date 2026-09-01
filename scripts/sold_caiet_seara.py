@@ -24,9 +24,18 @@ from zoneinfo import ZoneInfo
 SUPABASE_URL = "https://bxsfzfnpejkmwxkuoshb.supabase.co/rest/v1"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY") or "sb_publishable_naQ6WD91NngRNjTlV5fSJw_BInIyurw"
 
-# Destinatar unic — Eugen (primul telefon din secrets, fara sufix)
-CMB_PHONE = (os.environ.get("CALLMEBOT_PHONE") or "").strip()
-CMB_APIKEY = (os.environ.get("CALLMEBOT_APIKEY") or "").strip()
+# Destinatari WhatsApp — loop prin CALLMEBOT_PHONE, _2, _3... (pana la 5).
+# Pentru sold caiet, workflow-ul paseaza perechi dedicate (nu se amesteca cu cotatii aur).
+def _destinatari():
+    lista = []
+    for sufix in ("", "_2", "_3", "_4", "_5"):
+        tel = (os.environ.get(f"CALLMEBOT_PHONE{sufix}") or "").strip()
+        key = (os.environ.get(f"CALLMEBOT_APIKEY{sufix}") or "").strip()
+        if tel and key:
+            lista.append((tel, key))
+    return lista
+
+DESTINATARI = _destinatari()
 
 TZ = ZoneInfo("Europe/Bucharest")
 
@@ -67,19 +76,22 @@ def fmt_ron(n):
 
 
 def trimite_whatsapp(text):
-    if not CMB_PHONE or not CMB_APIKEY:
-        log("!! CALLMEBOT_PHONE / CALLMEBOT_APIKEY lipsesc — nu pot trimite")
+    if not DESTINATARI:
+        log("!! Nici un destinatar configurat (CALLMEBOT_PHONE + APIKEY lipsesc)")
         return False
-    url = "https://api.callmebot.com/whatsapp.php?" + urllib.parse.urlencode({
-        "phone": CMB_PHONE, "text": text, "apikey": CMB_APIKEY
-    })
-    st, corp = http(url, timeout=45)
-    masca = f"...{CMB_PHONE[-4:]}"
-    if st == 200 and "error" not in corp.lower()[:400]:
-        log(f"WhatsApp -> {masca}: trimis")
-        return True
-    log(f"WhatsApp -> {masca}: ESUAT (HTTP {st}) {corp[:200]}")
-    return False
+    reusite = 0
+    for tel, key in DESTINATARI:
+        url = "https://api.callmebot.com/whatsapp.php?" + urllib.parse.urlencode({
+            "phone": tel, "text": text, "apikey": key
+        })
+        st, corp = http(url, timeout=45)
+        masca = f"...{tel[-4:]}"
+        if st == 200 and "error" not in corp.lower()[:400]:
+            reusite += 1
+            log(f"WhatsApp -> {masca}: trimis")
+        else:
+            log(f"WhatsApp -> {masca}: ESUAT (HTTP {st}) {corp[:200]}")
+    return reusite > 0
 
 
 def calculeaza_sold():
