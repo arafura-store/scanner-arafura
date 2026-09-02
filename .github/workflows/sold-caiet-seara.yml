@@ -2,7 +2,7 @@ name: Sold caiet seara
 
 on:
   schedule:
-    - cron: '0 17,18 * * *'
+    - cron: '*/15 17,18,19 * * *'
   workflow_dispatch:
 
 concurrency:
