@@ -70,6 +70,32 @@ def api(path):
     return json.loads(body)
 
 
+def marcheaza_trimis(tip, data_str):
+    """INSERT idempotent in alerte_zilnice. Returneaza True daca era prima trimitere azi,
+    False daca deja s-a trimis (conflict PK). Foloseste Prefer: resolution=ignore-duplicates."""
+    hdrs = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation,resolution=ignore-duplicates",
+    }
+    body = json.dumps([{"tip": tip, "data": data_str}]).encode()
+    req = urllib.request.Request(
+        SUPABASE_URL + "/alerte_zilnice",
+        data=body, method="POST", headers=hdrs
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            corp = r.read().decode("utf-8", errors="replace")
+            # Daca returneaza [] = conflict ignorat (deja exista); daca returneaza [{...}] = INSERT nou
+            arr = json.loads(corp) if corp else []
+            return len(arr) > 0
+    except Exception as e:
+        log(f"EROARE marcheaza_trimis: {e}")
+        # In caz de eroare, tratam ca "deja trimis" ca sa nu spam-am cu retrimiteri
+        return False
+
+
 def fmt_ron(n):
     # Format romanesc: 34 905,00 RON
     return f"{n:,.2f}".replace(",", " ").replace(".", ",") + " RON"
@@ -134,17 +160,26 @@ def calculeaza_sold():
 def main():
     acum = datetime.now(TZ)
 
-    # Rulare manuala (buton "Run workflow" din GitHub Actions) → sare peste verificare ora.
-    # Folositor pentru testare imediata fara sa astepti pana la 20:00.
+    # Rulare manuala (buton "Run workflow" din GitHub Actions) → ignora verificarea orei
+    # si nu marcheaza in alerte_zilnice (test fara sa blocheze auto-runul de mai tarziu).
     run_manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
 
-    # Trimite DOAR la ora 20 (Romania) — cron ruleaza la 17 UTC + 18 UTC ca sa
-    # acopere si ora de vara (UTC+3) si iarna (UTC+2). Un singur mesaj/zi.
-    if not run_manual and acum.hour != 20:
-        log(f"Nu e ora 20:00 in Romania (e {acum:%H:%M}), skip trimitere")
+    # Trimite DOAR daca e dupa ora 20 (Romania). Cron ruleaza des in fereastra 17-19 UTC
+    # (= 20-22 RO vara, 21-22 RO iarna). Idempotent: alerte_zilnice cu PK (tip, data)
+    # asigura un singur mesaj/zi chiar daca GitHub cron fire de mai multe ori.
+    if not run_manual and acum.hour < 20:
+        log(f"Nu e inca ora 20:00 in Romania (e {acum:%H:%M}), skip trimitere")
         return 0
-    if run_manual and acum.hour != 20:
-        log(f"Rulare manuala fortata la {acum:%H:%M} (in mod normal doar 20:00)")
+    if run_manual:
+        log(f"Rulare manuala fortata la {acum:%H:%M} (fara guard idempotenta)")
+    else:
+        # Guard idempotenta: incearca INSERT in alerte_zilnice. Daca deja s-a trimis
+        # azi, INSERT-ul returneaza gol (conflict PK) si sarim peste trimitere.
+        prima_data = marcheaza_trimis("SOLD_SEARA", acum.date().isoformat())
+        if not prima_data:
+            log(f"Deja am trimis mesajul SOLD_SEARA azi ({acum:%Y-%m-%d}), skip")
+            return 0
+        log(f"Prima rulare reusita pentru azi ({acum:%Y-%m-%d} {acum:%H:%M}), trimit")
 
     # Nu trimit in weekend (sambata/duminica) - restaurantul are alt program;
     # daca vrei si weekend, scoate conditia asta.
