@@ -126,9 +126,13 @@ def calculeaza_sold():
     all_rows = []
     offset = 0
     while True:
+        # ORDER BY id.asc OBLIGATORIU — fara el paginarea PostgREST poate rata/dubla randuri
+        # cand tabela depaseste cateva mii de randuri (bug activ pe 22.09.2026 cand s-a observat
+        # ca mesajul WhatsApp arata alt sold decat UI-ul caiet.html; UI foloseste exact
+        # acelasi query dar CU order=id.asc). Fix 2026-10-19.
         rows = api(
             f"/caiet?select=intrare,iesire,tip&data=lte.{today}"
-            f"&sters_la=is.null&limit=1000&offset={offset}"
+            f"&sters_la=is.null&order=id.asc&limit=1000&offset={offset}"
         )
         if not rows:
             break
