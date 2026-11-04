@@ -2224,20 +2224,37 @@ function closeAurLive() {
   document.body.style.overflow = '';
 }
 
+async function fetchEurUsd() {
+  // Primary: jsdelivr fawazahmed currency-api (CDN, CORS *, update zilnic)
+  try {
+    const r = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json');
+    if (r.ok) {
+      const d = await r.json();
+      const v = parseFloat(d?.eur?.usd);
+      if (v > 0) return v;
+    }
+  } catch (_) {}
+  // Fallback: open.er-api.com (CORS *, update zilnic)
+  const r = await fetch('https://open.er-api.com/v6/latest/EUR');
+  if (!r.ok) throw new Error('sursa pentru curs valutar nu răspunde');
+  const d = await r.json();
+  const v = parseFloat(d?.rates?.USD);
+  if (!(v > 0)) throw new Error('date invalide de la sursa EUR/USD');
+  return v;
+}
+
 async function refreshAurLive() {
   const box = document.getElementById('aur-live-body');
   box.innerHTML = '<div style="text-align:center;padding:40px;color:var(--sub);font-weight:700">Se ia prețul din piață…</div>';
 
   try {
-    const [xauResp, fxResp] = await Promise.all([
+    const [xauResp, eurUsd] = await Promise.all([
       fetch('https://api.gold-api.com/price/XAU'),
-      fetch('https://api.frankfurter.dev/v1/latest?base=EUR&symbols=USD')
+      fetchEurUsd()
     ]);
     if (!xauResp.ok) throw new Error('sursa pentru aur nu răspunde');
-    if (!fxResp.ok)  throw new Error('sursa pentru curs valutar nu răspunde');
 
     const xauUsd = parseFloat((await xauResp.json()).price);
-    const eurUsd = parseFloat((await fxResp.json()).rates.USD);
     if (!(xauUsd > 0) || !(eurUsd > 0)) throw new Error('date invalide de la surse');
 
     const cursBnr = _ultimaCotatie ? parseFloat(_ultimaCotatie.curs_bnr) : 0;
