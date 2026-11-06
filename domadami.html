@@ -2598,8 +2598,14 @@ async function calculeazaRaja() {
     };
     const forfaitToaleta = parseFloat(_setari.forfait_toaleta_comuna_mc) || 1;
     // FIX: filtrez pe contoare RAJA specific (nu prima citire globala)
+    // FIX 2026-11-06: prefera contor non-apa-calda pentru detectarea nr_luni_acoperite
+    // (apometrele apa calda sunt "shared" cu GAZE care poate avea alt nr_luni; RAJA foloseste nr-ul de pe apa rece / individuale)
+    const contoareRajaNonCalda = _contoare.filter(c => c.modul === 'RAJA' && c.tip !== 'apometru_apa_calda').map(c => c.id);
     const contoareRajaIds = _contoare.filter(c => c.modul === 'RAJA').map(c => c.id);
-    const facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna && contoareRajaIds.includes(c.contor_id));
+    let facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna && contoareRajaNonCalda.includes(c.contor_id));
+    if (!facturaRaja) {
+      facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna && contoareRajaIds.includes(c.contor_id));
+    }
     const nrLuniFactura = facturaRaja?.nr_luni_acoperite || 1;
 
     // Daca factura e cumulata pe N luni: agregez facturi din ultimele N luni (pentru pierderi + total factura in UI)
