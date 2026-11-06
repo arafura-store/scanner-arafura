@@ -3264,6 +3264,39 @@ async function renderCentralizator() {
       ...factPOLARIS.map(f => ({...f, modul:'POLARIS'}))
     ];
 
+    // FIX 2026-11-06: pentru module cu factura cumulata (nr_luni_factura>1 in breakdown),
+    // extind queryul facturi pe lunile anterioare — ca sa comparam mere cu mere la "TOTAL FACTURI FURNIZORI"
+    const extraFacturiPromises = [];
+    ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
+      const calc = calcule.find(c => c.modul === m && c.breakdown_json);
+      const nrLuni = parseInt(calc?.breakdown_json?.nr_luni_factura) || 1;
+      if (nrLuni > 1) {
+        const lunileExtras = [];
+        let an = intervalPerModul[m].pana.an;
+        let luna = intervalPerModul[m].pana.luna;
+        for (let i = 1; i < nrLuni; i++) {
+          luna--;
+          if (luna < 1) { luna = 12; an--; }
+          lunileExtras.push({ an, luna });
+        }
+        if (lunileExtras.length > 0) {
+          const filtru = lunileExtras.length === 1
+            ? `an=eq.${lunileExtras[0].an}&luna=eq.${lunileExtras[0].luna}`
+            : `or=(${lunileExtras.map(l => `and(an.eq.${l.an},luna.eq.${l.luna})`).join(',')})`;
+          extraFacturiPromises.push(
+            api(`/domadami_facturi?modul=eq.${m}&${filtru}&select=total_factura_lei,valoare_fara_tva,an,luna`)
+              .then(data => ({ modul: m, data }))
+          );
+        }
+      }
+    });
+    if (extraFacturiPromises.length > 0) {
+      const extraResults = await Promise.all(extraFacturiPromises);
+      extraResults.forEach(({ modul, data }) => {
+        data.forEach(f => facturi.push({ ...f, modul }));
+      });
+    }
+
     // Map: unitate_id -> { GAZE, ENEL, RAJA, POLARIS } costuri
     const matrix = {};
     _unitati.forEach(u => {
