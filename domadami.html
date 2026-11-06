@@ -1727,18 +1727,48 @@ async function calculeazaGaze() {
     const pPas = prevForContor(contorPas.id);
     if (!pGen || !pPas) { toast('Lipsesc indexuri ANTERIOARE pentru general/pasant', 'err'); return; }
 
-    const consumGen   = parseFloat(cGen.index_final) - parseFloat(pGen.index_final);
-    const consumPas   = parseFloat(cPas.index_final) - parseFloat(pPas.index_final);
+    const nrLuniFacturaGaze = parseInt(cGen?.nr_luni_acoperite) || 1;
+
+    // Pentru factura cumulata pe N luni: prev general/pasant = citirea de acum N luni (nu doar precedenta)
+    const prevMultiLunaGenPas = id => {
+      const idLunaStartGP = an*100 + luna - nrLuniFacturaGaze + 1;
+      const cand = allCitiri.filter(c => c.contor_id === id && (c.an*100+c.luna) < idLunaStartGP);
+      if (cand.length === 0) return null;
+      cand.sort((a,b) => (b.an*100+b.luna) - (a.an*100+a.luna));
+      return cand[0];
+    };
+    const pGenEff = nrLuniFacturaGaze > 1 ? prevMultiLunaGenPas(contorGen.id) : pGen;
+    const pPasEff = nrLuniFacturaGaze > 1 ? prevMultiLunaGenPas(contorPas.id) : pPas;
+    if (!pGenEff || !pPasEff) { toast('Lipsesc indexuri anterioare (cumulat) pentru general/pasant', 'err'); return; }
+
+    const consumGen   = parseFloat(cGen.index_final) - parseFloat(pGenEff.index_final);
+    const consumPas   = parseFloat(cPas.index_final) - parseFloat(pPasEff.index_final);
     const consumRamas = consumGen - consumPas;
-    const pretUnitar  = totalLei / consumGen;
-    const costPas     = consumPas * pretUnitar;
-    const costRamas   = totalLei - costPas;
+
+    // Daca factura e cumulata pe N luni: agregez facturi GAZE pe ultimele N luni (pentru totalLei real + diagnostic)
+    let totalLeiCumulat = totalLei;
+    let totalMcCumulat  = totalMc;
+    if (nrLuniFacturaGaze > 1) {
+      const idLunaStart = an*100 + luna - nrLuniFacturaGaze + 1;
+      const toateFacturiGaze = await api(`/domadami_facturi?modul=eq.GAZE&select=an,luna,valoare_fara_tva,total_consum`);
+      const inInterval = toateFacturiGaze.filter(ff => {
+        const idF = ff.an*100 + ff.luna;
+        return idF >= idLunaStart && idF <= (an*100 + luna);
+      });
+      totalLeiCumulat = inInterval.reduce((s,ff) => s + (parseFloat(ff.valoare_fara_tva) || 0), 0);
+      totalMcCumulat  = inInterval.reduce((s,ff) => s + (parseFloat(ff.total_consum)    || 0), 0);
+    }
+
+    // Pret unitar aplicat chiriasilor = DIN ULTIMA FACTURA (nu medie pe cumulat)
+    // Pentru cazul normal: ca pana acum (totalLei/consumGen). Pentru cumulat: pret din ultima factura (totalLei / totalMc oct).
+    const pretUnitar = nrLuniFacturaGaze > 1 ? (totalLei / totalMc) : (totalLei / consumGen);
+    const costPas    = consumPas * pretUnitar;
+    const costRamas  = totalLeiCumulat - costPas;
 
     // Apometre apa calda — per garsoniera (G1-G8)
     // FIX 2026-07-21: pentru factura cumulata pe N luni (nr_luni_acoperite),
     // consum apometru = index_curent - index_de_acum_N_luni (nu doar ultima citire anterioara).
     // Astfel, daca Bogdan a citit intermediar (ex: 20.04 intre 19.03 si 29.05), citirea intermediara nu subestimeaza consumul.
-    const nrLuniFacturaGaze = parseInt(cGen?.nr_luni_acoperite) || 1;
     const idLunaStart = an*100 + luna - nrLuniFacturaGaze + 1;  // luna start a intervalului
     const prevMultiLuna = id => {
       const candidates = allCitiri.filter(c => c.contor_id === id && (c.an*100+c.luna) < idLunaStart);
@@ -1841,13 +1871,15 @@ async function calculeazaGaze() {
     // Salvez calculele in baza
     salveazaCalcule('GAZE', an, luna, calculePentruSalvare);
 
+    const metaFacturaGz = nrLuniFacturaGaze > 1 ? `cumulat ${nrLuniFacturaGaze} luni` : 'luna curenta';
     const html = `
       <div class="kpi-grid" style="margin-bottom:18px">
-        <div class="kpi"><div class="lbl">Consum general</div><div class="val">${fmt(consumGen,2)} <small style="font-size:14px;color:var(--sub)">mc</small></div></div>
+        <div class="kpi"><div class="lbl">Consum general</div><div class="val">${fmt(consumGen,2)} <small style="font-size:14px;color:var(--sub)">mc</small></div><div class="meta">${metaFacturaGz}</div></div>
         <div class="kpi orange"><div class="lbl">Consum Farmacie (pasant)</div><div class="val">${fmt(consumPas,2)} <small style="font-size:14px;color:var(--sub)">mc</small></div></div>
-        <div class="kpi gold"><div class="lbl">Pret unitar gaz</div><div class="val">${fmt(pretUnitar,4)} <small style="font-size:14px;color:var(--sub)">RON/mc</small></div></div>
-        <div class="kpi green"><div class="lbl">Cost ramas (garsoniere)</div><div class="val">${fmt0(costRamas)} <small style="font-size:14px;color:var(--sub)">RON</small></div></div>
+        <div class="kpi gold"><div class="lbl">Pret unitar${nrLuniFacturaGaze > 1 ? ' (ultima factura)' : ''}</div><div class="val">${fmt(pretUnitar,4)} <small style="font-size:14px;color:var(--sub)">RON/mc</small></div></div>
+        <div class="kpi green"><div class="lbl">Cost ramas (garsoniere)</div><div class="val">${fmt0(costRamas)} <small style="font-size:14px;color:var(--sub)">RON</small></div><div class="meta">${nrLuniFacturaGaze > 1 ? `din ${fmt(totalLeiCumulat,2)} total` : ''}</div></div>
       </div>
+      ${nrLuniFacturaGaze > 1 ? `<div class="alert alert-info" style="margin-bottom:14px"><span class="ico">ℹ️</span><div><div class="title">Factura cumulata pe ${nrLuniFacturaGaze} luni</div>Farmacia e facturata la pretul din ultima factura (${fmt(pretUnitar,4)} RON/mc). Total factura cumulat: ${fmt(totalLeiCumulat,2)} RON. Cost ramas distribuit garsonierelor: ${fmt(costRamas,2)} RON.</div></div>` : ''}
       <table class="tbl">
         <thead><tr>
           <th>Garsoniera</th>
@@ -2109,8 +2141,27 @@ async function calculeazaEnel() {
     };
     const curForContor = id => allCitiri.find(c => c.contor_id === id && c.an === an && c.luna === luna);
 
-    // Pret unitar
+    // Pret unitar — DIN ULTIMA FACTURA (nu medie), aplicat pe consumul chiriasilor
     const pretUnitar = totalLei / totalKw;
+
+    // Determinare nr_luni_factura (din citirea curenta a oricarui contor ENEL)
+    const contoareEnelIds = _contoare.filter(c => c.modul === 'ENEL').map(c => c.id);
+    const nrLuniFactura = (allCitiri.find(c => c.an === an && c.luna === luna && contoareEnelIds.includes(c.contor_id))?.nr_luni_acoperite) || 1;
+
+    // Daca factura e cumulata pe N luni: agregez facturi din ultimele N luni
+    // (pentru pierderi + total factura in UI). Pretul aplicat chiriasilor ramane din ultima factura.
+    let totalLeiCumulat = totalLei;
+    let totalKwCumulat  = totalKw;
+    if (nrLuniFactura > 1) {
+      const idLunaStart = an*100 + luna - nrLuniFactura + 1;
+      const toateFacturiEnel = await api(`/domadami_facturi?modul=eq.ENEL&select=an,luna,valoare_fara_tva,total_consum`);
+      const inInterval = toateFacturiEnel.filter(ff => {
+        const idF = ff.an*100 + ff.luna;
+        return idF >= idLunaStart && idF <= (an*100 + luna);
+      });
+      totalLeiCumulat = inInterval.reduce((s,ff) => s + (parseFloat(ff.valoare_fara_tva) || 0), 0);
+      totalKwCumulat  = inInterval.reduce((s,ff) => s + (parseFloat(ff.total_consum)    || 0), 0);
+    }
 
     // Ocupare implicit: toate unitatile active ocupate, exceptie cele marcate explicit
     const isOcupat = u => {
@@ -2127,9 +2178,6 @@ async function calculeazaEnel() {
     const forfaitEtaj = parseFloat(_setari.forfait_iluminat_etaj_kw) || 10;
     const acStricat = _setari.contor_ac_etaj_stricat === 'true';
     const acForfait = parseFloat(_setari.contor_ac_etaj_forfait_kw) || 40;
-    // FIX: filtrez pe contoare ENEL specific (nu prima citire globala care poate fi din alt modul)
-    const contoareEnelIds = _contoare.filter(c => c.modul === 'ENEL').map(c => c.id);
-    const nrLuniFactura = (allCitiri.find(c => c.an === an && c.luna === luna && contoareEnelIds.includes(c.contor_id))?.nr_luni_acoperite) || 1;
 
     // Cost per unitate (suma contoare)
     const costPerUnitate = {};
@@ -2185,9 +2233,9 @@ async function calculeazaEnel() {
     const sumaIluminatEtaj = etajOcupate.length * forfaitEtaj * nrLuniFactura;
     const sumaAC = acStricat ? etajOcupate.length * acForfait * nrLuniFactura : Object.values(consumAC).reduce((a,b)=>a+b, 0);
     const sumaKwDistribuiti = sumaKwIndiv + sumaIluminatScari + sumaIluminatEtaj + sumaAC;
-    const pierderiKw = totalKw - sumaKwDistribuiti;
+    const pierderiKw = totalKwCumulat - sumaKwDistribuiti;
     const pierderiLei = pierderiKw * pretUnitar;
-    const pierderiPct = totalKw > 0 ? (pierderiKw / totalKw * 100) : 0;
+    const pierderiPct = totalKwCumulat > 0 ? (pierderiKw / totalKwCumulat * 100) : 0;
     const pragAlerta = parseFloat(_setari.prag_alerta_pierderi_pct) || 20;
     const pierderiAlerta = pierderiPct > pragAlerta;
 
@@ -2244,17 +2292,22 @@ async function calculeazaEnel() {
       </tr>`;
     }).join('');
 
+    const diferentaDomadami = totalLeiCumulat - totalCostUnitati;
+    const metaFactura = nrLuniFactura > 1 ? `cumulat ${nrLuniFactura} luni` : 'luna curenta';
     const html = `
       <div class="kpi-grid" style="margin-bottom:18px">
-        <div class="kpi"><div class="lbl">Total kw factura</div><div class="val">${fmt0(totalKw)}</div><div class="meta">${fmt0(sumaKwDistribuiti)} distribuiti</div></div>
-        <div class="kpi gold"><div class="lbl">Pret unitar</div><div class="val">${fmt(pretUnitar, 4)}</div><div class="meta">RON/kw</div></div>
+        <div class="kpi"><div class="lbl">Total kw factura</div><div class="val">${fmt0(totalKwCumulat)}</div><div class="meta">${metaFactura} · ${fmt0(sumaKwDistribuiti)} distribuiti</div></div>
+        <div class="kpi gold"><div class="lbl">Pret unitar ultima factura</div><div class="val">${fmt(pretUnitar, 4)}</div><div class="meta">RON/kw</div></div>
         <div class="kpi ${pierderiAlerta?'red':'green'}"><div class="lbl">Pierderi (DOMADAMI)</div><div class="val">${fmt0(pierderiKw)} kw</div><div class="meta">${fmt(pierderiLei, 2)} RON · ${fmt(pierderiPct, 1)}%</div></div>
         <div class="kpi orange"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalCostUnitati)} RON</div><div class="meta">${unitatiCuConsum.length} unitati</div></div>
+        ${nrLuniFactura > 1 ? `<div class="kpi ${diferentaDomadami >= 0 ? 'red' : 'green'}"><div class="lbl">Diferenta DOMADAMI</div><div class="val">${fmt(diferentaDomadami, 2)} RON</div><div class="meta">${diferentaDomadami >= 0 ? 'suporta' : 'castiga'} · ${fmt(totalLeiCumulat, 2)} factura − ${fmt(totalCostUnitati, 2)} facturat</div></div>` : ''}
       </div>
 
       ${pierderiAlerta ? `<div class="alert alert-danger"><span class="ico">🚨</span><div><div class="title">ALERTA: Pierderi peste pragul de ${pragAlerta}%</div>Pierderea curenta de ${fmt(pierderiPct, 1)}% (${fmt0(pierderiKw)} kw / ${fmt(pierderiLei, 2)} RON) depaseste pragul setat. Verifica fiecare contor!</div></div>` : ''}
 
       ${acStricat ? `<div class="alert alert-warning"><span class="ico">⚠️</span><div><div class="title">AC etaj stricat — forfait fix ${acForfait} kw/firma</div>${etajOcupate.length} firme etaj × ${acForfait} kw = ${etajOcupate.length * acForfait} kw alocati AC (NU se multiplica cu nr luni)</div></div>` : ''}
+
+      ${nrLuniFactura > 1 ? `<div class="alert alert-info"><span class="ico">ℹ️</span><div><div class="title">Factura cumulata pe ${nrLuniFactura} luni</div>Chiriasii sunt facturati cu pretul din ultima factura (${fmt(pretUnitar, 4)} RON/kw). Total factura cumulat (${nrLuniFactura} luni): ${fmt(totalLeiCumulat, 2)} RON. Diferenta ${diferentaDomadami >= 0 ? 'suportata' : 'castigata'} de DOMADAMI: ${fmt(Math.abs(diferentaDomadami), 2)} RON.</div></div>` : ''}
 
       <table class="tbl">
         <thead><tr>
@@ -2282,10 +2335,10 @@ async function calculeazaEnel() {
             <td class="num">${fmt(pierderiLei, 2)}</td>
           </tr>
           <tr style="background:#fef3c7">
-            <td>TOTAL FACTURA</td>
+            <td>TOTAL FACTURA${nrLuniFactura > 1 ? ` (cumulat ${nrLuniFactura} luni)` : ''}</td>
             <td class="num" colspan="3">—</td>
-            <td class="num">${fmt0(totalKw)}</td>
-            <td class="num">${fmt(totalLei, 2)}</td>
+            <td class="num">${fmt0(totalKwCumulat)}</td>
+            <td class="num">${fmt(totalLeiCumulat, 2)}</td>
           </tr>
         </tfoot>
       </table>
@@ -2537,6 +2590,7 @@ async function calculeazaRaja() {
     };
     const curForContor = id => allCitiri.find(c => c.contor_id === id && c.an === an && c.luna === luna);
 
+    // Pret unitar — DIN ULTIMA FACTURA (nu medie), aplicat pe consumul chiriasilor
     const pretUnitar = totalLei / totalMc;
     const isOcupat = u => {
       const o = ocupareLst.find(x => x.unitate_id === u.id);
@@ -2547,6 +2601,20 @@ async function calculeazaRaja() {
     const contoareRajaIds = _contoare.filter(c => c.modul === 'RAJA').map(c => c.id);
     const facturaRaja = allCitiri.find(c => c.an === an && c.luna === luna && contoareRajaIds.includes(c.contor_id));
     const nrLuniFactura = facturaRaja?.nr_luni_acoperite || 1;
+
+    // Daca factura e cumulata pe N luni: agregez facturi din ultimele N luni (pentru pierderi + total factura in UI)
+    let totalLeiCumulat = totalLei;
+    let totalMcCumulat  = totalMc;
+    if (nrLuniFactura > 1) {
+      const idLunaStart = an*100 + luna - nrLuniFactura + 1;
+      const toateFacturiRaja = await api(`/domadami_facturi?modul=eq.RAJA&select=an,luna,valoare_fara_tva,total_consum`);
+      const inInterval = toateFacturiRaja.filter(ff => {
+        const idF = ff.an*100 + ff.luna;
+        return idF >= idLunaStart && idF <= (an*100 + luna);
+      });
+      totalLeiCumulat = inInterval.reduce((s,ff) => s + (parseFloat(ff.valoare_fara_tva) || 0), 0);
+      totalMcCumulat  = inInterval.reduce((s,ff) => s + (parseFloat(ff.total_consum)    || 0), 0);
+    }
 
     // Consum apa rece + apa calda per unitate (din TOATE contoarele RAJA: rece + caldă + individuale)
     const consumApaPerUnitate = {};
@@ -2576,10 +2644,10 @@ async function calculeazaRaja() {
       }
     });
 
-    // Pierderi
-    const pierderiMc = totalMc - sumaMcDistribuiti;
+    // Pierderi (pe total cumulat cand factura acopera N luni)
+    const pierderiMc = totalMcCumulat - sumaMcDistribuiti;
     const pierderiLei = pierderiMc * pretUnitar;
-    const pierderiPct = totalMc > 0 ? (pierderiMc / totalMc * 100) : 0;
+    const pierderiPct = totalMcCumulat > 0 ? (pierderiMc / totalMcCumulat * 100) : 0;
     const pragAlerta = parseFloat(_setari.prag_alerta_pierderi_pct) || 20;
     const pierderiAlerta = pierderiPct > pragAlerta;
 
@@ -2636,15 +2704,20 @@ async function calculeazaRaja() {
       </tr>`;
     }).join('');
 
+    const diferentaDomadamiRaja = totalLeiCumulat - totalCostUnitati;
+    const metaFacturaRj = nrLuniFactura > 1 ? `cumulat ${nrLuniFactura} luni` : 'luna curenta';
     const html = `
       <div class="kpi-grid" style="margin-bottom:18px">
-        <div class="kpi"><div class="lbl">Total mc factura</div><div class="val">${fmt(totalMc, 2)}</div><div class="meta">${fmt(sumaMcDistribuiti, 2)} distribuiti</div></div>
-        <div class="kpi gold"><div class="lbl">Pret unitar (incl canalizare)</div><div class="val">${fmt(pretUnitar, 4)}</div><div class="meta">RON/mc</div></div>
+        <div class="kpi"><div class="lbl">Total mc factura</div><div class="val">${fmt(totalMcCumulat, 2)}</div><div class="meta">${metaFacturaRj} · ${fmt(sumaMcDistribuiti, 2)} distribuiti</div></div>
+        <div class="kpi gold"><div class="lbl">Pret unitar${nrLuniFactura > 1 ? ' ultima factura' : ''} (incl canalizare)</div><div class="val">${fmt(pretUnitar, 4)}</div><div class="meta">RON/mc</div></div>
         <div class="kpi ${pierderiAlerta?'red':'green'}"><div class="lbl">Pierderi (DOMADAMI)</div><div class="val">${fmt(pierderiMc, 2)} mc</div><div class="meta">${fmt(pierderiLei, 2)} RON · ${fmt(pierderiPct, 1)}%</div></div>
         <div class="kpi orange"><div class="lbl">Total facturat chiriasi</div><div class="val">${fmt0(totalCostUnitati)} RON</div><div class="meta">${unitatiCuConsum.length} unitati</div></div>
+        ${nrLuniFactura > 1 ? `<div class="kpi ${diferentaDomadamiRaja >= 0 ? 'red' : 'green'}"><div class="lbl">Diferenta DOMADAMI</div><div class="val">${fmt(diferentaDomadamiRaja, 2)} RON</div><div class="meta">${diferentaDomadamiRaja >= 0 ? 'suporta' : 'castiga'} · ${fmt(totalLeiCumulat, 2)} factura − ${fmt(totalCostUnitati, 2)} facturat</div></div>` : ''}
       </div>
 
       ${pierderiAlerta ? `<div class="alert alert-danger"><span class="ico">🚨</span><div><div class="title">ALERTA: Pierderi peste pragul de ${pragAlerta}%</div>Pierderea curenta de ${fmt(pierderiPct, 1)}% (${fmt(pierderiMc, 2)} mc / ${fmt(pierderiLei, 2)} RON) depaseste pragul setat. Verifica fiecare apometru!</div></div>` : ''}
+
+      ${nrLuniFactura > 1 ? `<div class="alert alert-info"><span class="ico">ℹ️</span><div><div class="title">Factura cumulata pe ${nrLuniFactura} luni</div>Chiriasii sunt facturati cu pretul din ultima factura (${fmt(pretUnitar, 4)} RON/mc). Total factura cumulat (${nrLuniFactura} luni): ${fmt(totalLeiCumulat, 2)} RON. Diferenta ${diferentaDomadamiRaja >= 0 ? 'suportata' : 'castigata'} de DOMADAMI: ${fmt(Math.abs(diferentaDomadamiRaja), 2)} RON.</div></div>` : ''}
 
       <table class="tbl">
         <thead><tr>
@@ -2670,10 +2743,10 @@ async function calculeazaRaja() {
             <td class="num">${fmt(pierderiLei, 2)}</td>
           </tr>
           <tr style="background:#fef3c7">
-            <td>TOTAL FACTURA</td>
+            <td>TOTAL FACTURA${nrLuniFactura > 1 ? ` (cumulat ${nrLuniFactura} luni)` : ''}</td>
             <td class="num" colspan="2">—</td>
-            <td class="num">${fmt(totalMc, 2)}</td>
-            <td class="num">${fmt(totalLei, 2)}</td>
+            <td class="num">${fmt(totalMcCumulat, 2)}</td>
+            <td class="num">${fmt(totalLeiCumulat, 2)}</td>
           </tr>
         </tfoot>
       </table>
