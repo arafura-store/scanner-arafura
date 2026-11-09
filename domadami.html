@@ -3246,58 +3246,52 @@ async function renderCentralizator() {
     const fRAJA = buildOrFilter(intervalPerModul.RAJA.luni);
     const fPOLARIS = buildOrFilter(intervalPerModul.POLARIS.luni);
 
-    const [calcGAZE, calcENEL, calcRAJA, calcPOLARIS, factGAZE, factENEL, factRAJA, factPOLARIS, chiriasi, contracte] = await Promise.all([
+    const [calcGAZE, calcENEL, calcRAJA, calcPOLARIS, chiriasi, contracte] = await Promise.all([
       api(`/domadami_calcule?modul=eq.GAZE&${fGAZE}&select=*`),
       api(`/domadami_calcule?modul=eq.ENEL&${fENEL}&select=*`),
       api(`/domadami_calcule?modul=eq.RAJA&${fRAJA}&select=*`),
       api(`/domadami_calcule?modul=eq.POLARIS&${fPOLARIS}&select=*`),
-      api(`/domadami_facturi?modul=eq.GAZE&${fGAZE}&select=total_factura_lei,valoare_fara_tva,an,luna`),
-      api(`/domadami_facturi?modul=eq.ENEL&${fENEL}&select=total_factura_lei,valoare_fara_tva,an,luna`),
-      api(`/domadami_facturi?modul=eq.RAJA&${fRAJA}&select=total_factura_lei,valoare_fara_tva,an,luna`),
-      api(`/domadami_facturi?modul=eq.POLARIS&${fPOLARIS}&select=total_factura_lei,valoare_fara_tva,an,luna`),
       api('/domadami_chiriasi?select=*'),
       api('/domadami_contracte_chirie?select=*&data_end=is.null')
     ]);
     const calcule = [...calcGAZE, ...calcENEL, ...calcRAJA, ...calcPOLARIS];
+
+    // FIX 2026-11-09: facturi aliniate pe perioada_pana_la (data sfarsit consum),
+    // nu pe factura.luna. Pentru ENEL factura.luna = luna EMITERE (nu consum) → includea
+    // in intervalul oct si factura cu consum mai, dublat facturat chiriasi in ciclul anterior.
+    // Perioada consum per modul: [de.luna - nrLuni + 1 .. pana.luna], din breakdown_json.nr_luni_factura.
+    const pad2 = n => String(n).padStart(2, '0');
+    const buildFacturiUrl = (m) => {
+      const interval = intervalPerModul[m];
+      if (!interval.luni.length) return null;
+      const calc = calcule.find(c => c.modul === m && c.breakdown_json);
+      const nrLuni = parseInt(calc?.breakdown_json?.nr_luni_factura) || 1;
+      // end = ultima zi a lunii "pana"
+      const endDt = new Date(interval.pana.an, interval.pana.luna, 0);
+      const endStr = `${endDt.getFullYear()}-${pad2(endDt.getMonth()+1)}-${pad2(endDt.getDate())}`;
+      // start = prima zi a (lunii "de" - nrLuni + 1)
+      let sLuna = interval.de.luna - nrLuni + 1;
+      let sAn = interval.de.an;
+      while (sLuna < 1) { sLuna += 12; sAn--; }
+      const startStr = `${sAn}-${pad2(sLuna)}-01`;
+      return `/domadami_facturi?modul=eq.${m}&perioada_pana_la=gte.${startStr}&perioada_pana_la=lte.${endStr}&select=total_factura_lei,valoare_fara_tva,an,luna,perioada_pana_la`;
+    };
+    const urlGAZE = buildFacturiUrl('GAZE');
+    const urlENEL = buildFacturiUrl('ENEL');
+    const urlRAJA = buildFacturiUrl('RAJA');
+    const urlPOLARIS = buildFacturiUrl('POLARIS');
+    const [factGAZE, factENEL, factRAJA, factPOLARIS] = await Promise.all([
+      urlGAZE ? api(urlGAZE) : Promise.resolve([]),
+      urlENEL ? api(urlENEL) : Promise.resolve([]),
+      urlRAJA ? api(urlRAJA) : Promise.resolve([]),
+      urlPOLARIS ? api(urlPOLARIS) : Promise.resolve([])
+    ]);
     const facturi = [
       ...factGAZE.map(f => ({...f, modul:'GAZE'})),
       ...factENEL.map(f => ({...f, modul:'ENEL'})),
       ...factRAJA.map(f => ({...f, modul:'RAJA'})),
       ...factPOLARIS.map(f => ({...f, modul:'POLARIS'}))
     ];
-
-    // FIX 2026-11-06: pentru module cu factura cumulata (nr_luni_factura>1 in breakdown),
-    // extind queryul facturi pe lunile anterioare — ca sa comparam mere cu mere la "TOTAL FACTURI FURNIZORI"
-    const extraFacturiPromises = [];
-    ['GAZE','ENEL','RAJA','POLARIS'].forEach(m => {
-      const calc = calcule.find(c => c.modul === m && c.breakdown_json);
-      const nrLuni = parseInt(calc?.breakdown_json?.nr_luni_factura) || 1;
-      if (nrLuni > 1) {
-        const lunileExtras = [];
-        let an = intervalPerModul[m].pana.an;
-        let luna = intervalPerModul[m].pana.luna;
-        for (let i = 1; i < nrLuni; i++) {
-          luna--;
-          if (luna < 1) { luna = 12; an--; }
-          lunileExtras.push({ an, luna });
-        }
-        if (lunileExtras.length > 0) {
-          const filtru = lunileExtras.length === 1
-            ? `an=eq.${lunileExtras[0].an}&luna=eq.${lunileExtras[0].luna}`
-            : `or=(${lunileExtras.map(l => `and(an.eq.${l.an},luna.eq.${l.luna})`).join(',')})`;
-          extraFacturiPromises.push(
-            api(`/domadami_facturi?modul=eq.${m}&${filtru}&select=total_factura_lei,valoare_fara_tva,an,luna`)
-              .then(data => ({ modul: m, data }))
-          );
-        }
-      }
-    });
-    if (extraFacturiPromises.length > 0) {
-      const extraResults = await Promise.all(extraFacturiPromises);
-      extraResults.forEach(({ modul, data }) => {
-        data.forEach(f => facturi.push({ ...f, modul }));
-      });
-    }
 
     // Map: unitate_id -> { GAZE, ENEL, RAJA, POLARIS } costuri
     const matrix = {};
