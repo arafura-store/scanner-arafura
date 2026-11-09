@@ -725,9 +725,10 @@ body.is-viewer .role-banner.viewer{display:block}
         <div class="card">
           <div class="card-hdr">
             <h3>📋 Centralizator — facturare combinată chiriași</h3>
-            <div style="display:flex;gap:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-secondary" onclick="exportCSV()">📥 Export CSV</button>
-              <button class="btn btn-secondary" onclick="window.print()">🖨️ Print</button>
+              <button class="btn btn-secondary" onclick="window.print()">🖨️ Print tabel</button>
+              <button class="btn btn-secondary" onclick="printToateFisele()" title="Deschide toate fisele chiriasi gata de printat (fiecare pe pagina separata)">📄 Print fise chiriasi</button>
               <button class="btn btn-primary" onclick="renderCentralizator()">🔄 Refresh</button>
             </div>
           </div>
@@ -3457,8 +3458,17 @@ async function renderCentralizator() {
 }
 
 async function openFisa(unitateId) {
+  const result = await _buildFisaHtmlComplet(unitateId);
+  if (!result) return;
+  document.getElementById('fisa-titlu').textContent = result.titlu;
+  document.getElementById('fisa-body').innerHTML = result.html;
+  document.getElementById('fisa-modal').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+}
+
+async function _buildFisaHtmlComplet(unitateId) {
   const u = _unitati.find(x => x.id === unitateId);
-  if (!u || !_centralizatorData) return;
+  if (!u || !_centralizatorData) return null;
   // Fetch citiri pt contoarele acestei unitati (RAJA + ENEL + apometre apa calda pt GAZE)
   const contoareUnit = _contoare.filter(c => c.activ && c.unitate_id === unitateId);
   const contoreIds = contoareUnit.map(c => c.id);
@@ -3488,7 +3498,7 @@ async function openFisa(unitateId) {
     const s2 = `${LUNI_RO[it.pana.luna-1].substring(0,3)} ${it.pana.an}`;
     return `${s1} → ${s2} (${it.luni.length}l)`;
   };
-  document.getElementById('fisa-titlu').textContent = `📄 Fisa ${u.cod} — ${ch || u.nume}`;
+  const _fisaTitlu = `📄 Fisa ${u.cod} — ${ch || u.nume}`;
 
   let html = `<div class="kpi-grid" style="grid-template-columns:1fr 1fr;margin-bottom:18px">
     <div class="kpi gold"><div class="lbl">TOTAL DE PLATA</div><div class="val">${fmt(total, 2)} RON</div></div>
@@ -3664,9 +3674,67 @@ async function openFisa(unitateId) {
     </div>`;
   });
 
-  document.getElementById('fisa-body').innerHTML = html;
-  document.getElementById('fisa-modal').style.display = 'block';
-  document.body.style.overflow = 'hidden';
+  return { titlu: _fisaTitlu, html, unitate: u };
+}
+
+async function printToateFisele() {
+  if (!_centralizatorData) { toast('Centralizator neincarcat — apasa Refresh mai intai', 'err'); return; }
+  const unitatiOrdonate = _unitati.filter(u => u.activ !== false).sort((a,b) => (a.ordine||0)-(b.ordine||0));
+  toast(`Generez ${unitatiOrdonate.length} fise, asteapta...`, 'info');
+  const rezultate = [];
+  for (const u of unitatiOrdonate) {
+    const r = _centralizatorData.matrix[u.id];
+    if (!r) continue;
+    const total = (r.GAZE||0) + (r.ENEL||0) + (r.RAJA||0) + (r.POLARIS||0);
+    if (total <= 0) continue;
+    const fisa = await _buildFisaHtmlComplet(u.id);
+    if (fisa) rezultate.push(fisa);
+  }
+  if (rezultate.length === 0) { toast('Nicio fisa de printat', 'err'); return; }
+
+  const w = window.open('', '_blank');
+  if (!w) { toast('Permite popup-uri pentru acest site', 'err'); return; }
+  const stiluri = `<style>
+    body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:20px;color:#111;font-size:12px;background:#fff}
+    .fisa-print{page-break-after:always;padding:16px;border-bottom:2px solid #333;margin-bottom:16px}
+    .fisa-print:last-child{page-break-after:auto;border-bottom:none}
+    .fisa-hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:3px solid #1e40af;margin-bottom:14px}
+    .fisa-hdr h2{margin:0;font-size:16px;color:#1e40af}
+    .fisa-hdr .date{font-size:11px;color:#666}
+    .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .kpi{padding:10px;border:1px solid #d1d5db;border-radius:6px;background:#f9fafb}
+    .kpi .lbl{font-size:10px;text-transform:uppercase;color:#6b7280;font-weight:700}
+    .kpi .val{font-size:18px;font-weight:800;color:#111;margin-top:3px}
+    .kpi .meta{font-size:10px;color:#6b7280}
+    .kpi.gold{background:#fef3c7;border-color:#f59e0b}
+    .card{border:1px solid #d1d5db;border-radius:6px;margin-bottom:10px;background:#fff}
+    .card-hdr{padding:8px 12px;background:#eff6ff;border-bottom:1px solid #d1d5db;border-radius:6px 6px 0 0}
+    .card-hdr h3{margin:0;font-size:13px;color:#1e40af}
+    .card-body{padding:10px 12px;font-size:11px;line-height:1.5}
+    b{color:#111}
+    @media print {
+      body{padding:10px}
+      .fisa-print{page-break-after:always;border-bottom:none}
+      button{display:none}
+    }
+    .toolbar{position:sticky;top:0;background:#1e40af;color:#fff;padding:10px;text-align:center;z-index:100}
+    .toolbar button{background:#fff;color:#1e40af;border:0;padding:8px 20px;font-weight:700;border-radius:6px;cursor:pointer;font-size:14px}
+    .toolbar button:hover{background:#fef3c7}
+  </style>`;
+  const azi = new Date().toLocaleDateString('ro-RO');
+  let docHtml = `<!doctype html><html><head><meta charset="utf-8"><title>Fise chiriasi — ${azi}</title>${stiluri}</head><body>`;
+  docHtml += `<div class="toolbar"><button onclick="window.print()">🖨️ Printeaza / Save as PDF</button> &nbsp; <button onclick="window.close()">✕ Inchide</button></div>`;
+  rezultate.forEach(f => {
+    docHtml += `<div class="fisa-print">
+      <div class="fisa-hdr"><h2>${escH(f.titlu)}</h2><div class="date">ARAFURA · ${azi}</div></div>
+      ${f.html}
+    </div>`;
+  });
+  docHtml += `</body></html>`;
+  w.document.open();
+  w.document.write(docHtml);
+  w.document.close();
+  toast(`${rezultate.length} fise generate — apasa Print in fereastra noua`, 'ok');
 }
 
 function closeFisa() {
