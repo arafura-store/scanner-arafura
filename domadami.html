@@ -1748,15 +1748,30 @@ async function calculeazaGaze() {
     // Daca factura e cumulata pe N luni: agregez facturi GAZE pe ultimele N luni (pentru totalLei real + diagnostic)
     let totalLeiCumulat = totalLei;
     let totalMcCumulat  = totalMc;
+    let nrFacturiEstimate = 0;
     if (nrLuniFacturaGaze > 1) {
-      const idLunaStart = an*100 + luna - nrLuniFacturaGaze + 1;
-      const toateFacturiGaze = await api(`/domadami_facturi?modul=eq.GAZE&select=an,luna,valoare_fara_tva,total_consum`);
-      const inInterval = toateFacturiGaze.filter(ff => {
-        const idF = ff.an*100 + ff.luna;
-        return idF >= idLunaStart && idF <= (an*100 + luna);
-      });
+      // FIX 2026-11-09: aliniere pe perioada_pana_la (consum real), nu pe factura.luna
+      const padLuni = n => String(n).padStart(2,'0');
+      let sLuna = luna - nrLuniFacturaGaze + 1;
+      let sAn = an;
+      while (sLuna < 1) { sLuna += 12; sAn--; }
+      const startStr = `${sAn}-${padLuni(sLuna)}-01`;
+      const endDt = new Date(an, luna, 0);
+      const endStr = `${endDt.getFullYear()}-${padLuni(endDt.getMonth()+1)}-${padLuni(endDt.getDate())}`;
+      const inInterval = await api(`/domadami_facturi?modul=eq.GAZE&perioada_pana_la=gte.${startStr}&perioada_pana_la=lte.${endStr}&select=an,luna,valoare_fara_tva,total_consum,perioada_pana_la`);
       totalLeiCumulat = inInterval.reduce((s,ff) => s + (parseFloat(ff.valoare_fara_tva) || 0), 0);
       totalMcCumulat  = inInterval.reduce((s,ff) => s + (parseFloat(ff.total_consum)    || 0), 0);
+      // FIX 2026-11-09: incasare "in avans" ca la ENEL — daca lipsesc facturi din perioada,
+      // estimez luna/lunile lipsa cu media pe facturile existente. Castig temporar firma
+      // = diferenta intre chiriasi facturati (5 luni) si facturi furnizor sosite (ex: 4 luni).
+      const nrLuniCuFactura = inInterval.length;
+      nrFacturiEstimate = Math.max(0, nrLuniFacturaGaze - nrLuniCuFactura);
+      if (nrFacturiEstimate > 0 && nrLuniCuFactura > 0) {
+        const mediaLeiPerLuna = totalLeiCumulat / nrLuniCuFactura;
+        const mediaMcPerLuna  = totalMcCumulat  / nrLuniCuFactura;
+        totalLeiCumulat += mediaLeiPerLuna * nrFacturiEstimate;
+        totalMcCumulat  += mediaMcPerLuna  * nrFacturiEstimate;
+      }
     }
 
     // Pret unitar aplicat chiriasilor = DIN ULTIMA FACTURA (nu medie pe cumulat)
@@ -1843,7 +1858,8 @@ async function calculeazaGaze() {
           total_elementi_firma: totalElementi,
           total_apa_calda_firma: totalApaCalda,
           cost_ramas_firma: costRamas,
-          nr_luni_factura: nrLuniFacturaGaze
+          nr_luni_factura: nrLuniFacturaGaze,
+          nr_facturi_estimate: nrFacturiEstimate
         }
       });
     });
@@ -1865,6 +1881,7 @@ async function calculeazaGaze() {
           pret_unitar: pretUnitar,
           cost_pasant: costPas,
           nr_luni_factura: nrLuniFacturaGaze,
+          nr_facturi_estimate: nrFacturiEstimate,
           nota: 'Farmacie are centrala termica proprie — plateste gazul consumat prin contorul pasant separat'
         }
       });
