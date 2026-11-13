@@ -73,10 +73,16 @@ body.is-contabilitate .card:has(#gz-citiri),
 body.is-contabilitate .card:has(#el-citiri),
 body.is-contabilitate .card:has(#rj-citiri){display:none!important}
 
+/* OPERATOR (teren): introduce doar citiri — fara salvare facturi, setari, nr. calorifere */
+body.is-operator .btn-save-factura,body.is-operator .btn-save-setari,body.is-operator .btn-edit-elementi{display:none!important}
+body.is-operator .setare-inp{pointer-events:none!important;background:#f3f4f6!important;opacity:0.75;cursor:not-allowed!important}
+
 /* Bannere informative per rol */
 .role-banner{display:none;padding:9px 18px;text-align:center;font-weight:700;font-size:13px;color:#fff}
 .role-banner.contabilitate{background:var(--blue)}
 .role-banner.viewer{background:var(--orange)}
+.role-banner.operator{background:#0f766e}
+body.is-operator .role-banner.operator{display:block}
 body.is-contabilitate .role-banner.contabilitate{display:block}
 body.is-viewer .role-banner.viewer{display:block}
 
@@ -266,7 +272,7 @@ body.is-viewer .role-banner.viewer{display:block}
     <h1>🏢 DOMADAMI</h1>
     <div class="sub">Gestiune Utilitati — Acces Restrictionat</div>
     <label>Utilizator</label>
-    <input type="text" id="lg-user" placeholder="bogdan / eugen / contabilitate" autocomplete="username">
+    <input type="text" id="lg-user" placeholder="utilizator" autocomplete="username">
     <label>Parola</label>
     <input type="password" id="lg-pass" placeholder="parola" autocomplete="current-password" onkeypress="if(event.key==='Enter')login()">
     <div class="err" id="lg-err">Utilizator sau parola incorecte</div>
@@ -304,6 +310,7 @@ body.is-viewer .role-banner.viewer{display:block}
 
   <div class="main">
     <div class="role-banner contabilitate">📝 Mod contabilitate — poți edita datele facturilor furnizorului, dar NU citirile contoarelor</div>
+    <div class="role-banner operator">📟 Mod teren — introduci citirile contoarelor; restul datelor sunt doar de vizualizat</div>
     <div class="role-banner viewer">📖 Mod vizualizare — vezi rapoartele, dar nu poți edita</div>
     <div class="topbar">
       <h2 id="page-title">Dashboard</h2>
@@ -930,12 +937,6 @@ const fmt = (n, d=2) => (n==null||isNaN(n)?'—':(+n).toLocaleString('ro-RO', {m
 const fmt0 = n => (n==null||isNaN(n)?'—':Math.round(+n).toLocaleString('ro-RO'));
 const escH = s => String(s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 
-async function sha256(text) {
-  const buf = new TextEncoder().encode(text);
-  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
-  return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
 function toast(msg, type='info') {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -943,12 +944,118 @@ function toast(msg, type='info') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-async function api(path, opts={}) {
-  const r = await fetch(SUPA_URL + path, { headers: HEADERS, ...opts });
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`HTTP ${r.status}: ${txt.substring(0,200)}`);
+// ═══════════════════════════════════════════════════════════════
+// SESIUNE — autentificare reala Supabase
+// Fiecare cerere pleaca in numele utilizatorului logat. Baza de date verifica
+// singura cine e si ce are voie (reguli RLS), deci cheia publica din pagina
+// nu mai deschide nimic de una singura.
+// ═══════════════════════════════════════════════════════════════
+/*<SESIUNE>*/
+const CHEIE_SESIUNE = 'dm_sesiune';
+let _sesiune = null;      // { access_token, refresh_token, expires_at (secunde), uid }
+let _reinnoire = null;    // o singura reinnoire in acelasi timp
+
+function aplicaToken(tok) {
+  HEADERS.Authorization = 'Bearer ' + tok;
+  HEADERS_WRITE.Authorization = 'Bearer ' + tok;
+}
+function citesteSesiune() {
+  try { return JSON.parse(localStorage.getItem(CHEIE_SESIUNE) || 'null'); } catch { return null; }
+}
+function pastreazaSesiune(d) {
+  _sesiune = {
+    access_token: d.access_token,
+    refresh_token: d.refresh_token,
+    expires_at: d.expires_at || (Math.floor(Date.now() / 1000) + (d.expires_in || 3600)),
+    uid: (d.user && d.user.id) || (_sesiune && _sesiune.uid) || null
+  };
+  localStorage.setItem(CHEIE_SESIUNE, JSON.stringify(_sesiune));
+  aplicaToken(_sesiune.access_token);
+}
+function stergeSesiune() {
+  _sesiune = null;
+  localStorage.removeItem(CHEIE_SESIUNE);
+  aplicaToken(SUPA_KEY);
+}
+function secundeRamase() {
+  return _sesiune ? _sesiune.expires_at - Math.floor(Date.now() / 1000) : 0;
+}
+
+/** Cere un token nou. Intoarce 'ok' | 'offline' | 'expirata'.
+ *  'offline' = nu am putut vorbi cu serverul (fara semnal sau server ocupat):
+ *  sesiunea RAMANE, incercam din nou mai tarziu. Doar un refuz clar o inchide. */
+function reinnoiesteSesiune() {
+  if (_reinnoire) return _reinnoire;
+  _reinnoire = (async () => {
+    // alt tab poate a reinnoit deja — preiau sesiunea lui in loc sa o stric
+    const dinStocare = citesteSesiune();
+    if (dinStocare && _sesiune && dinStocare.access_token !== _sesiune.access_token &&
+        dinStocare.expires_at - Math.floor(Date.now() / 1000) > 90) {
+      _sesiune = dinStocare; aplicaToken(_sesiune.access_token); return 'ok';
+    }
+    if (!_sesiune || !_sesiune.refresh_token) return 'expirata';
+    let r;
+    try {
+      r = await fetch(`${SUPA_BASE}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: _sesiune.refresh_token })
+      });
+    } catch { return 'offline'; }
+    if (r.ok) { pastreazaSesiune(await r.json()); return 'ok'; }
+    if (r.status === 400 || r.status === 401 || r.status === 403) return 'expirata';
+    return 'offline';
+  })().finally(() => { _reinnoire = null; });
+  return _reinnoire;
+}
+
+async function asiguraSesiune() {
+  if (!_sesiune || secundeRamase() > 90) return;
+  if (await reinnoiesteSesiune() === 'expirata') sesiuneExpirata();
+}
+
+function sesiuneExpirata() {
+  if (!currentUser && !_sesiune) return;
+  inchideLocal();
+  const err = document.getElementById('lg-err');
+  err.textContent = 'Sesiunea a expirat — intra din nou. Citirile nesincronizate raman salvate pe telefon.';
+  err.style.display = 'block';
+}
+
+function mesajEroare(status, txt) {
+  if (status === 401) return 'Sesiunea a expirat — intra din nou';
+  if (status === 403 || /42501|row-level security/i.test(txt || '')) return 'Nu ai drepturi pentru aceasta operatie';
+  return `HTTP ${status}: ${(txt || '').substring(0, 200)}`;
+}
+
+/** fetch catre Supabase, in numele utilizatorului logat.
+ *  - reinnoieste sesiunea daca e pe cale sa expire, si mai incearca o data la 401
+ *  - implicit ARUNCA eroare daca serverul refuza, ca "salvat" sa insemne salvat
+ *  - eroarea are .status cand serverul a raspuns; fara .status = lipsa de retea */
+async function sfetch(url, opts = {}, cfg = {}) {
+  await asiguraSesiune();
+  const cerere = () => fetch(url, {
+    ...opts,
+    headers: { ...(opts.headers || HEADERS), 'apikey': SUPA_KEY, 'Authorization': HEADERS.Authorization }
+  });
+  let r = await cerere();
+  if (r.status === 401 && _sesiune) {
+    const st = await reinnoiesteSesiune();
+    if (st === 'ok') r = await cerere();
+    else if (st === 'expirata') sesiuneExpirata();
   }
+  if (!r.ok && cfg.arunca !== false) {
+    const txt = await r.text().catch(() => '');
+    const e = new Error(mesajEroare(r.status, txt));
+    e.status = r.status;
+    throw e;
+  }
+  return r;
+}
+/*</SESIUNE>*/
+
+async function api(path, opts={}) {
+  const r = await sfetch(SUPA_URL + path, opts);
   // Raspunsul poate fi GOL: 204 la stergere, dar si 201 la creare cand cerem
   // 'Prefer: return=minimal'. Fara verificarea asta, r.json() arunca eroare
   // desi operatia a reusit — si utilizatorul crede ca nu s-a salvat nimic.
@@ -965,85 +1072,80 @@ async function login() {
   const u = document.getElementById('lg-user').value.trim().toLowerCase();
   const p = document.getElementById('lg-pass').value;
   const err = document.getElementById('lg-err');
+  const gresit = () => { err.textContent='Utilizator sau parola incorecte'; err.style.display='block'; };
   err.style.display = 'none';
   if (!u || !p) { err.textContent='Completeaza utilizator si parola'; err.style.display='block'; return; }
   try {
-    const hash = await sha256(p);
-    const rows = await api(`/domadami_utilizatori?username=eq.${encodeURIComponent(u)}&password_hash=eq.${hash}&activ=eq.true&select=id,username,rol,nume_afisat,email`);
-    if (rows.length === 0) { err.textContent='Utilizator sau parola incorecte'; err.style.display='block'; return; }
+    // Utilizatorul scrie tot "bogdan"; serverul stie ce email ii corespunde.
+    let email = u;
+    if (!u.includes('@')) {
+      const rq = await fetch(`${SUPA_URL}/rpc/domadami_email_login`, {
+        method: 'POST',
+        headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_username: u })
+      });
+      email = rq.ok ? await rq.json() : null;
+      if (!email) { gresit(); return; }
+    }
+    // Parola o verifica SERVERUL (Supabase Auth), nu pagina.
+    const r = await fetch(`${SUPA_BASE}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: p })
+    });
+    if (r.status === 400 || r.status === 401) { gresit(); return; }
+    if (r.status === 429) { err.textContent='Prea multe incercari — asteapta un minut'; err.style.display='block'; return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    pastreazaSesiune(d);
+
+    const rows = await api(`/domadami_utilizatori?auth_id=eq.${d.user.id}&activ=eq.true&select=id,username,rol,nume_afisat,email`);
+    if (!rows || rows.length === 0) {
+      stergeSesiune();
+      err.textContent='Contul acesta nu are acces la DOMADAMI'; err.style.display='block'; return;
+    }
     currentUser = rows[0];
     localStorage.setItem('dm_user', JSON.stringify(currentUser));
-    // Sesiune reala Supabase — necesara DOAR pentru documentele scanate, care stau
-    // intr-un spatiu privat. Nu blocheaza intrarea: daca esueaza, aplicatia merge
-    // normal, doar scanurile nu se pot deschide sau incarca.
-    autentificaStocare(currentUser.email, p);
     // update ultim_login (best-effort, nu blocheaza)
-    fetch(`${SUPA_URL}/domadami_utilizatori?id=eq.${currentUser.id}`, {
+    sfetch(`${SUPA_URL}/domadami_utilizatori?id=eq.${currentUser.id}`, {
       method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
       body: JSON.stringify({ ultim_login: new Date().toISOString() })
-    }).catch(() => {});
+    }, { arunca: false }).catch(() => {});
     showApp();
   } catch (e) {
     err.textContent='Eroare: ' + e.message; err.style.display='block';
   }
 }
 
-// ── SESIUNE PENTRU DOCUMENTELE SCANATE ────────────────────────────────
-// Contractele contin date personale, deci stau intr-un spatiu PRIVAT: fara
-// sesiune valida nu se pot citi, nici cu cheia publica din pagina.
-// Utilizatorul scrie tot "bogdan" + parola; emailul il stim din tabelul lui.
-let _tokenStocare = null;
+// ── DOCUMENTELE SCANATE ───────────────────────────────────────────────
+// Folosesc aceeasi sesiune ca restul aplicatiei — nu mai e nevoie de o
+// autentificare separata.
+function areAccesLaScanuri(){ return !!_sesiune; }
+function reconecteazaStocare(){ sesiuneExpirata(); }
 
-async function autentificaStocare(email, parola) {
-  if (!email || !parola) return false;
-  try {
-    const r = await fetch(`${SUPA_BASE}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: { 'apikey': SUPA_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: parola })
-    });
-    if (!r.ok) { console.warn('sesiune documente indisponibila'); _tokenStocare = null; return false; }
-    const d = await r.json();
-    _tokenStocare = d.access_token || null;
-    if (_tokenStocare) sessionStorage.setItem('dm_stoc', _tokenStocare);
-    return !!_tokenStocare;
-  } catch(e){ _tokenStocare = null; return false; }
-}
-
-/** Reconectare fara sa iasa din aplicatie — cere doar parola. */
-async function reconecteazaStocare(chiriasId){
-  const p = prompt(`Parola pentru ${currentUser?.username || ''}
-
-(aceeași pe care o folosești la intrarea în aplicație)`);
-  if (!p) return;
-  toast('Se conectează...','info');
-  const ok = await autentificaStocare(currentUser?.email, p);
-  if (ok) {
-    toast('Conectat — poți lucra cu scanurile','success');
-    if (chiriasId) vezActe(chiriasId);
-  } else {
-    alert(`Nu a mers.
-
-Parola pentru documente e cea pe care ai pus-o în Supabase pentru ${currentUser?.email || 'contul tău'}.
-
-Dacă nu ți-o amintești, o poți schimba de acolo:
-Authentication → Users → cele trei puncte de lângă utilizator → Reset password.`);
-  }
-}
-
-function areAccesLaScanuri(){ return !!(_tokenStocare || sessionStorage.getItem('dm_stoc')); }
-function tokenStocare(){ return _tokenStocare || sessionStorage.getItem('dm_stoc'); }
-
-function logout() {
+/** Curata starea locala si arata ecranul de intrare. NU sterge citirile
+ *  ramase in coada offline — se trimit dupa urmatoarea intrare. */
+function inchideLocal() {
   localStorage.removeItem('dm_user');
   sessionStorage.removeItem('dm_user');
   sessionStorage.removeItem('dm_stoc');
-  _tokenStocare = null;
+  stergeSesiune();
   currentUser = null;
-  document.body.classList.remove('is-admin');
+  document.body.classList.remove('is-admin', 'is-readonly', 'is-contabilitate', 'is-viewer', 'is-operator');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
   document.getElementById('lg-pass').value='';
+  document.getElementById('lg-err').style.display='none';
+}
+
+function logout() {
+  // anulez sesiunea si pe server (best-effort), apoi local
+  if (_sesiune) {
+    fetch(`${SUPA_BASE}/auth/v1/logout?scope=local`, {
+      method: 'POST', headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + _sesiune.access_token }
+    }).catch(() => {});
+  }
+  inchideLocal();
 }
 
 function showApp() {
@@ -1052,21 +1154,25 @@ function showApp() {
   document.getElementById('u-avatar').textContent = currentUser.nume_afisat.charAt(0).toUpperCase();
   document.getElementById('u-nume').textContent = currentUser.nume_afisat;
   document.getElementById('u-rol').textContent = currentUser.rol.charAt(0).toUpperCase() + currentUser.rol.slice(1);
-  document.body.classList.remove('is-admin', 'is-readonly', 'is-contabilitate', 'is-viewer');
+  document.body.classList.remove('is-admin', 'is-readonly', 'is-contabilitate', 'is-viewer', 'is-operator');
   if (currentUser.rol === 'admin') document.body.classList.add('is-admin');
+  if (currentUser.rol === 'operator') document.body.classList.add('is-operator');
   if (currentUser.rol === 'contabilitate') document.body.classList.add('is-contabilitate');
   if (currentUser.rol === 'viewer') document.body.classList.add('is-viewer');
   bootApp();
+  if (navigator.onLine && typeof flushOfflineQueue === 'function') setTimeout(flushOfflineQueue, 1500);
 }
 
 // Permisiuni in functie de rol:
-//   admin     : tot
-//   manager   : factura + citiri (operator teren)
-//   contabilitate : factura DA, citiri NU
-//   viewer    : nimic
+//   admin         : tot
+//   manager       : factura + citiri + chiriasi/contracte + nr. calorifere
+//   operator      : DOAR citiri (teren); vede tot restul
+//   contabilitate : factura + chiriasi/contracte DA, citiri NU
+//   viewer        : nimic
+// Aceleasi drepturi sunt impuse si de baza de date — aici doar ascund butoanele.
 function canEditFactura() {
   const r = currentUser?.rol;
-  if (r === 'admin' || r === 'manager' || r === 'operator' || r === 'contabilitate') return true;
+  if (r === 'admin' || r === 'manager' || r === 'contabilitate') return true;
   toast('Nu ai drepturi sa editezi facturi', 'err'); return false;
 }
 function canEditCitiri() {
@@ -1080,15 +1186,49 @@ function canEditSetari() {
 }
 // Compatibilitate cu codul vechi
 function canEdit() { return canEditCitiri(); }
+// Nr. de calorifere schimba impartirea costului la gaze: decizie, nu citire.
+function canEditConfig() {
+  if (['admin','manager'].includes(currentUser?.rol)) return true;
+  toast('Nu ai drepturi sa modifici configurarea', 'err'); return false;
+}
+// Datele chiriasilor: aceleasi roluri ca la contracte.
+function canEditChiriasi() {
+  if (['admin','manager','contabilitate'].includes(currentUser?.rol)) return true;
+  toast('Nu ai drepturi sa modifici chiriasii', 'err'); return false;
+}
 
-// Resume session (localStorage = persistent; sessionStorage = fallback)
-const stored = localStorage.getItem('dm_user') || sessionStorage.getItem('dm_user');
-if (stored) {
+// Reluarea sesiunii la deschiderea paginii. Fara sesiune reala nu se intra:
+// un "dm_user" ramas de la versiunea veche nu mai e suficient.
+(function reiaSesiunea() {
+  _sesiune = citesteSesiune();
+  const stored = localStorage.getItem('dm_user');
+  if (!_sesiune || !stored) { stergeSesiune(); localStorage.removeItem('dm_user'); return; }
   try {
+    aplicaToken(_sesiune.access_token);
     currentUser = JSON.parse(stored);
     showApp();
-  } catch {}
+    actualizeazaProfil();
+  } catch { inchideLocal(); }
+})();
+
+/** Rolul afisat vine mereu din baza de date, nu din ce a ramas in browser. */
+async function actualizeazaProfil() {
+  if (!_sesiune || !_sesiune.uid) return;
+  try {
+    const rows = await api(`/domadami_utilizatori?auth_id=eq.${_sesiune.uid}&activ=eq.true&select=id,username,rol,nume_afisat,email`);
+    if (!rows || rows.length === 0) { sesiuneExpirata(); return; }
+    const schimbat = JSON.stringify(rows[0]) !== JSON.stringify(currentUser);
+    currentUser = rows[0];
+    localStorage.setItem('dm_user', JSON.stringify(currentUser));
+    if (schimbat) showApp();
+  } catch { /* fara retea: raman cu ce am, serverul oricum verifica drepturile */ }
 }
+
+// Tin sesiunea vie cat timp aplicatia e deschisa si cand telefonul revine din standby.
+setInterval(() => { if (_sesiune && navigator.onLine) asiguraSesiune(); }, 4 * 60 * 1000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && _sesiune && navigator.onLine) asiguraSesiune();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // BOOT APP — incarca date initiale
@@ -1366,10 +1506,12 @@ function aplicaDataToate(prefix) {
 // ═══════════════════════════════════════════════════════════════
 async function salveazaCalcule(modul, an, luna, calculeArray) {
   if (!calculeArray || calculeArray.length === 0) return;
+  // Cine doar vizualizeaza poate recalcula pe ecran, dar nu rescrie rezultatele salvate.
+  if (!['admin','manager','operator','contabilitate'].includes(currentUser?.rol)) return;
   // FIX: sterg TOATE calculele vechi pentru (modul,an,luna) — apoi INSERT curat
   // Motiv: UPSERT nu sterge calculele orfane (chiriasi exclusi ulterior din calcul)
   try {
-    await fetch(`${SUPA_URL}/domadami_calcule?modul=eq.${modul}&an=eq.${an}&luna=eq.${luna}`, {
+    await sfetch(`${SUPA_URL}/domadami_calcule?modul=eq.${modul}&an=eq.${an}&luna=eq.${luna}`, {
       method: 'DELETE', headers: HEADERS_WRITE
     });
   } catch (e) { console.warn('Warning stergere calcule vechi:', e); }
@@ -1389,12 +1531,13 @@ async function salveazaCalcule(modul, an, luna, calculeArray) {
     calculat_la: new Date().toISOString()
   }));
   try {
-    await fetch(`${SUPA_URL}/domadami_calcule?on_conflict=unitate_id,modul,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_calcule?on_conflict=unitate_id,modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify(payload)
     });
   } catch (e) {
     console.error('Eroare salvare calcule:', e);
+    toast('Calculul s-a facut, dar NU s-a putut salva: ' + e.message, 'err');
   }
 }
 
@@ -1499,7 +1642,7 @@ async function salveazaFacturaGaze() {
   if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
   if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify({
         modul: 'GAZE', an, luna,
@@ -1527,7 +1670,7 @@ async function salveazaFacturaGaze() {
 function renderConfigElementi() {
   const garsoniere = _unitati.filter(u => u.tip === 'garsoniera').sort((a,b)=>a.ordine-b.ordine);
   const totalElementi = garsoniere.reduce((s,g) => s + (g.nr_elementi_calorifer || 0), 0);
-  const canEditNow = ['admin','manager','operator'].includes(currentUser?.rol);
+  const canEditNow = ['admin','manager'].includes(currentUser?.rol);
   let html = `<div class="alert alert-info" style="margin-bottom:12px"><span class="ico">ℹ️</span><div>
     Elementii caloriferului se folosesc <b>doar la lunile cu încălzire</b> (când bifezi sus). Cost căldură per garsonieră = (nr. elementi garsonieră / total elementi firmă) × cost rămas dupa apa caldă.
   </div></div>
@@ -1554,13 +1697,13 @@ function renderConfigElementi() {
 }
 
 async function editElementi(unitateId, valoareCurenta) {
-  if (!canEdit()) return;
+  if (!canEditConfig()) return;
   const nou = prompt(`Nr. elemenți calorifer pentru această garsonieră:`, valoareCurenta);
   if (nou === null) return;
   const n = parseInt(nou);
   if (isNaN(n) || n < 0) { toast('Valoare invalida', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_unitati?id=eq.${unitateId}`, {
+    await sfetch(`${SUPA_URL}/domadami_unitati?id=eq.${unitateId}`, {
       method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
       body: JSON.stringify({ nr_elementi_calorifer: n })
     });
@@ -1678,7 +1821,7 @@ async function salveazaCitiriGaze() {
   });
   if (payload.length === 0) { toast('Nicio citire de salvat', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify(payload)
     });
@@ -1992,7 +2135,7 @@ async function salveazaFacturaEnel() {
   if (total_lei <= 0 || total_kw <= 0) { toast('Completeaza total RON si total kw', 'err'); return; }
   if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify({
         modul: 'ENEL', an, luna,
@@ -2123,7 +2266,7 @@ async function salveazaCitiriEnel() {
   });
   if (payload.length === 0) { toast('Nicio citire de salvat', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify(payload)
     });
@@ -2425,7 +2568,7 @@ async function salveazaFacturaRaja() {
   if (total_lei <= 0 || total_mc <= 0) { toast('Completeaza total RON si total mc', 'err'); return; }
   if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify({
         modul: 'RAJA', an, luna,
@@ -2572,7 +2715,7 @@ async function salveazaCitiriRaja() {
   });
   if (payload.length === 0) { toast('Nicio citire de salvat', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify(payload)
     });
@@ -2821,7 +2964,7 @@ async function salveazaFacturaPolaris() {
   if (total_lei <= 0) { toast('Completeaza total factura', 'err'); return; }
   if (fara_tva && fara_tva > total_lei) { toast('EROARE: Valoarea FARA TVA nu poate fi mai mare decat CU TVA', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_facturi?on_conflict=modul,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE,
       body: JSON.stringify({
         modul: 'POLARIS', an, luna,
@@ -3807,15 +3950,22 @@ function updateNetworkBar() {
 async function flushOfflineQueue() {
   const q = getOfflineQueue();
   if (q.length === 0) return;
+  if (!_sesiune) return;   // se trimit dupa intrarea in aplicatie
   const success = [];
+  let respinse = 0, motivRespingere = '';
   for (const item of q) {
     try {
-      const r = await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+      const r = await sfetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
         method:'POST', headers:HEADERS_WRITE, body:JSON.stringify(item)
-      });
+      }, { arunca: false });
       if (r.ok) success.push(item);
+      else if (r.status === 401) break;                 // sesiune expirata: raman in coada
+      else if (r.status >= 400 && r.status < 500) {     // refuzate: raman in coada, dar anunt
+        respinse++; motivRespingere = mesajEroare(r.status, await r.text().catch(() => ''));
+      }
     } catch { /* nu mai e online */ break; }
   }
+  if (respinse > 0) toast(`${respinse} citiri din coada au fost refuzate: ${motivRespingere}`, 'err');
   if (success.length > 0) {
     const remaining = q.filter(item => !success.includes(item));
     setOfflineQueue(remaining);
@@ -4027,10 +4177,9 @@ async function salveazaContorTeren(contorId) {
   }
 
   try {
-    const r = await fetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
+    await sfetch(`${SUPA_URL}/domadami_citiri?on_conflict=contor_id,an,luna`, {
       method: 'POST', headers: HEADERS_WRITE, body: JSON.stringify(payload)
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
     card.className = card.className.replace(/is-(saving|error|offline)/g, '').trim() + ' is-saved';
     card.querySelector('.teren-status').className = 'teren-status saved';
     card.querySelector('.teren-status').textContent = '✓ salvat';
@@ -4040,10 +4189,33 @@ async function salveazaContorTeren(contorId) {
     document.getElementById('teren-progress-done').textContent = nrCitite;
     document.getElementById('teren-progress-bar').style.width = `${nrCitite/total*100}%`;
   } catch (e) {
-    // Switch to offline mode
-    _terenIsOnline = false;
-    updateNetworkBar();
-    salveazaContorTeren(contorId); // re-run as offline
+    const pastreazaLocal = () => {
+      const q = getOfflineQueue();
+      const exIdx = q.findIndex(x => x.contor_id === contorId && x.an === an && x.luna === luna);
+      if (exIdx >= 0) q[exIdx] = payload; else q.push(payload);
+      setOfflineQueue(q);
+    };
+    const arataEroare = (txt) => {
+      card.className = card.className.replace(/is-(saved|saving|offline)/g, '').trim() + ' is-error';
+      card.querySelector('.teren-status').className = 'teren-status error';
+      card.querySelector('.teren-status').textContent = txt;
+    };
+    if (!e.status) {
+      // Fara raspuns de la server = chiar nu e semnal. Trec pe offline.
+      _terenIsOnline = false;
+      updateNetworkBar();
+      salveazaContorTeren(contorId); // re-run as offline
+    } else if (e.status === 401 || e.status >= 500) {
+      // Sesiune expirata sau server indisponibil: citirea NU se pierde, sta in coada.
+      pastreazaLocal();
+      arataEroare(e.status === 401 ? '🔑 reintra' : '⏳ in coada');
+      toast(e.status === 401 ? 'Sesiune expirata — citirea e pastrata pe telefon, intra din nou'
+                             : 'Serverul nu raspunde — citirea e pastrata si se retrimite', 'err');
+    } else {
+      // Serverul a refuzat (de ex. lipsa drepturi): nu are rost sa retrimit.
+      arataEroare('✕ refuzat');
+      toast('Citirea NU s-a salvat: ' + e.message, 'err');
+    }
   }
 }
 
@@ -4578,9 +4750,9 @@ async function stergeAct(actId, chiriasId){
 Dacă are scan atașat, se șterge și el.`)) return;
   try {
     if (a?.fisier_cale && areAccesLaScanuri()) {
-      await fetch(`${SUPA_BASE}/storage/v1/object/contracte/${encodeURI(a.fisier_cale)}`, {
-        method:'DELETE', headers:{ 'apikey': SUPA_KEY, 'Authorization':'Bearer ' + tokenStocare() }
-      }).catch(()=>{});
+      await sfetch(`${SUPA_BASE}/storage/v1/object/contracte/${encodeURI(a.fisier_cale)}`, {
+        method:'DELETE', headers:{}
+      }, { arunca: false }).catch(()=>{});
     }
     await api(`/domadami_documente?id=eq.${actId}`, { method:'DELETE', headers: HEADERS });
     toast('Act șters','success');
@@ -4609,12 +4781,11 @@ async function incarcaScan(fisier){
 
   toast('Se încarcă...','info');
   try {
-    const r = await fetch(`${SUPA_BASE}/storage/v1/object/contracte/${encodeURI(cale)}`, {
+    const r = await sfetch(`${SUPA_BASE}/storage/v1/object/contracte/${encodeURI(cale)}`, {
       method: 'POST',
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tokenStocare(),
-                 'x-upsert': 'true', 'Content-Type': fisier.type || 'application/octet-stream' },
+      headers: { 'x-upsert': 'true', 'Content-Type': fisier.type || 'application/octet-stream' },
       body: fisier
-    });
+    }, { arunca: false });
     if (!r.ok) throw new Error((await r.text()).slice(0,160));
     await api(`/domadami_documente?id=eq.${_actPentruScan}`, { method:'PATCH',
       headers:{ ...HEADERS, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
@@ -4630,11 +4801,11 @@ async function incarcaScan(fisier){
 async function deschideScan(cale){
   if (!areAccesLaScanuri()) { toast('Ieși și intră din nou — sesiunea pentru documente lipsește','error'); return; }
   try {
-    const r = await fetch(`${SUPA_BASE}/storage/v1/object/sign/contracte/${encodeURI(cale)}`, {
+    const r = await sfetch(`${SUPA_BASE}/storage/v1/object/sign/contracte/${encodeURI(cale)}`, {
       method: 'POST',
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + tokenStocare(), 'Content-Type':'application/json' },
+      headers: { 'Content-Type':'application/json' },
       body: JSON.stringify({ expiresIn: 60 })
-    });
+    }, { arunca: false });
     if (!r.ok) throw new Error((await r.text()).slice(0,160));
     const d = await r.json();
     window.open(SUPA_BASE + '/storage/v1' + d.signedURL, '_blank');
@@ -5021,7 +5192,7 @@ async function renderChiriasi() {
     const nrUnitGoale = nrTotalUnit - nrUnitOcupate;
     const nrFirme = chiriasi.filter(c => c.tip === 'firma').length;
     const nrPF = chiriasi.filter(c => c.tip === 'persoana_fizica').length;
-    const canEditNow = ['admin','manager','operator'].includes(currentUser?.rol);
+    const canEditNow = ['admin','manager','contabilitate'].includes(currentUser?.rol);
 
     let html = `<div class="kpi-grid" style="margin-bottom:16px">
       <div class="kpi"><div class="lbl">Total unitati</div><div class="val">${nrTotalUnit}</div><div class="meta">in cladire</div></div>
@@ -5069,7 +5240,7 @@ async function renderChiriasi() {
 
 // EDIT chirias — modal
 async function editChirias(id) {
-  if (!canEdit()) return;
+  if (!canEditChiriasi()) return;
   try {
     const rows = await api(`/domadami_chiriasi?id=eq.${id}&select=*`);
     if (rows.length === 0) return;
@@ -5108,7 +5279,7 @@ async function editChirias(id) {
 }
 
 async function salveazaChiriasEdit(id) {
-  if (!canEdit()) return;
+  if (!canEditChiriasi()) return;
   const payload = {
     nume: document.getElementById('ed-nume').value.trim(),
     tip: document.getElementById('ed-tip').value,
@@ -5121,7 +5292,7 @@ async function salveazaChiriasEdit(id) {
   };
   if (!payload.nume) { toast('Numele e obligatoriu', 'err'); return; }
   try {
-    await fetch(`${SUPA_URL}/domadami_chiriasi?id=eq.${id}`, {
+    await sfetch(`${SUPA_URL}/domadami_chiriasi?id=eq.${id}`, {
       method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
       body: JSON.stringify(payload)
     });
@@ -5161,17 +5332,18 @@ async function renderSetari() {
 async function salveazaSetari() {
   if (!canEditSetari()) return;
   const inputs = document.querySelectorAll('.setare-inp');
-  let n = 0;
+  let n = 0, esuate = 0, ultimaEroare = '';
   for (const inp of inputs) {
     try {
-      await fetch(`${SUPA_URL}/domadami_setari?cheie=eq.${encodeURIComponent(inp.dataset.cheie)}`, {
+      await sfetch(`${SUPA_URL}/domadami_setari?cheie=eq.${encodeURIComponent(inp.dataset.cheie)}`, {
         method: 'PATCH', headers: { ...HEADERS, 'Content-Type':'application/json' },
         body: JSON.stringify({ valoare: inp.value, modificat_la: new Date().toISOString(), modificat_de: currentUser.id })
       });
       n++;
-    } catch {}
+    } catch (e) { esuate++; ultimaEroare = e.message; }
   }
-  toast(`${n} setari salvate`, 'ok');
+  if (esuate > 0) toast(`${esuate} setari NU s-au salvat: ${ultimaEroare}`, 'err');
+  else toast(`${n} setari salvate`, 'ok');
   bootApp(); // reincarca _setari cache
 }
 
@@ -5180,7 +5352,7 @@ async function salveazaSetari() {
 // ═══════════════════════════════════════════════════════════════
 async function renderUtilizatori() {
   try {
-    const users = await api('/domadami_utilizatori?select=*&order=rol.asc,username.asc');
+    const users = await api('/domadami_utilizatori?select=id,username,nume_afisat,rol,email,activ,ultim_login&order=rol.asc,username.asc');
     const rolColor = { admin: 'red', operator: 'gold', manager: 'gold', viewer: 'blue', contabilitate: 'blue' };
     document.querySelector('#utilizatori-tbl tbody').innerHTML = users.map(u => `<tr>
       <td><b>${escH(u.username)}</b></td>
